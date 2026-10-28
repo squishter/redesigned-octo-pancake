@@ -28,6 +28,7 @@ that turns a source picture into a playable puzzle for either mode.
 | `line_raster.gd` | Polylines or line-art images → line masks; dilation to close gaps. |
 | `region_map.gd` | Flood-fills closed regions, merges tiny ones into the lines, and computes a chamfer distance transform with per-region stats (area, centroid, elongation, principal axis, deepest point). |
 | `slot_packer.gd` | Greedy capsule packing on a "free distance" field: the biggest stone that fits goes where the field peaks, until the region is about 80% covered. Fill styles are cabochon, pavé, petals, flow and mosaic, with an optional rhinestone outline. |
+| `design_plan.gd` | Per-design variety, decided per symmetry group so symmetric copies match. **Fills:** some groups are made sparse on purpose (*scatter*: a few spaced-out stones; *accent*: one stone; *outline*: a rhinestone border only; *bare*: empty negative space). At most 60% of the area goes sparse and 30% bare, and something always stays fully packed. **Line styles:** *full*, *partial* (only some groups' borders), *outer* (silhouette only) or *none* (stones alone). Hidden lines still separate regions for packing; they just aren't drawn. Both are picked per seed unless `sparsity` (0..1) or `line_style` is passed. |
 | `region_paint.gd` | Finds symmetric copies of regions so they share theme colors, samples region colors from photos, snaps to gems, and renders flat images. |
 | `photo_line_art.gd` | Photo → closed line art: blur, quantize to 6–10 colors, majority filter, merge small areas, then trace the color boundaries. |
 | `collage_generator.gd` | Turns a mask into the full collage puzzle (regions, groups, slots and target colors). |
@@ -43,7 +44,10 @@ The generators touch no nodes, so they can run on `WorkerThreadPool`.
 Kit: `{type: "kit", width, height, drill, palette: [{symbol, color, gem_color_id, count}], cells}`.
 `cells` holds one palette index per cell, row-major.
 
-Collage: `{type: "collage", width, height, symmetry, source, lines, regions, slots}`.
+Collage: `{type: "collage", width, height, symmetry, line_style, sparsity, source, lines, lines_visible, regions, slots}`.
+`lines` is every region boundary and `lines_visible` is the part drawn as the
+metal setting. Each region has a `fill` (full, scatter, accent, outline or
+bare) and `outlined`.
 Each slot is `{id, region, shape, x, y, rotation, size, width, target_color, target_gem}`,
 in pixels of `width × height`. `size` is the length along `rotation`. Regions
 that share a `group` are symmetric copies of each other.

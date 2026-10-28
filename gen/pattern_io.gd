@@ -5,7 +5,7 @@ extends RefCounted
 ## Colors are stored as "#rrggbb", byte grids (kit cells, collage line masks)
 ## as base64, and vectors as [x, y] arrays.
 
-const BYTE_KEYS := ["cells", "lines"]
+const BYTE_KEYS := ["cells", "lines", "lines_visible"]
 const COLOR_KEYS := ["color", "target_color"]
 const VECTOR_KEYS := ["centroid"]
 

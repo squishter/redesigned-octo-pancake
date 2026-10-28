@@ -22,6 +22,7 @@ func _init() -> void:
 	test_lab_round_trip()
 	test_mandala_determinism()
 	test_collages()
+	test_design_plans()
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
@@ -72,23 +73,84 @@ func test_collages() -> void:
 		var slots: Array = p["slots"]
 		var regions: Array = p["regions"]
 		var empty := 0
+		var sparse := 0
 		for r in regions:
 			if r["empty"]:
 				empty += 1
+			if r["fill"] != "full":
+				sparse += 1
 		var coverage := CollageGenerator.mean_coverage(p)
 		var img := render_collage(p)
 		var overlaps := count_overlaps(slots, p["width"] * 0.002)
-		print("  seed %d %-9s %3d regions (%d empty) %4d slots  coverage %.0f%%  overlaps %d  stray px %.2f%%  %d ms" % [
-			seed_value, variant, regions.size(), empty, slots.size(), coverage * 100.0, overlaps,
-			img.get_meta("stray") * 100.0, ms])
+		print(("  seed %d %-9s %3d regions (%d empty, %d sparse) lines %-7s %4d slots  coverage %.0f%%"
+				+ "  overlaps %d  stray px %.2f%%  %d ms") % [
+			seed_value, variant, regions.size(), empty, sparse, p["line_style"], slots.size(), coverage * 100.0,
+			overlaps, img.get_meta("stray") * 100.0, ms])
 		check(regions.size() >= 5, "seed %d: only %d regions" % [seed_value, regions.size()])
-		check(slots.size() >= regions.size() - empty, "seed %d: fewer slots than regions" % seed_value)
 		check(float(empty) / regions.size() < 0.25,
 				"seed %d: %d of %d regions too thin for stones" % [seed_value, empty, regions.size()])
 		check(coverage > 0.55, "seed %d: coverage %.2f" % [seed_value, coverage])
 		check(overlaps == 0, "seed %d: %d overlapping slot pairs" % [seed_value, overlaps])
 		check(img.get_meta("stray") < 0.02, "seed %d: slots spill onto lines" % seed_value)
 		img.save_png(out_dir.path_join("collage_%d_%s.png" % [seed_value, variant]))
+
+
+## Sparse fills and hidden lines: explicit settings are honored, sparse
+## regions stay sparse, and every picture keeps something fully packed.
+func test_design_plans() -> void:
+	print("Design plans")
+	var dense := PictureSources.mandala_collage(2001, {"sparsity": 0.0, "line_style": "full"})
+	for r in dense["regions"]:
+		check(r["fill"] == "full", "sparsity 0 gave a %s region" % r["fill"])
+	check(dense["lines_visible"] == dense["lines"], "line_style full should draw every line")
+
+	var bare := PictureSources.mandala_collage(2002, {"sparsity": 1.0, "line_style": "none"})
+	var counts := {}
+	var full_regions := 0
+	var bare_area := 0.0
+	var total_area := 0.0
+	for r in bare["regions"]:
+		counts[r["fill"]] = counts.get(r["fill"], 0) + 1
+		total_area += r["area"]
+		if r["fill"] == "full":
+			full_regions += 1
+		if r["fill"] == "bare":
+			bare_area += r["area"]
+	print("  sparsity 1: fills %s" % counts)
+	check(full_regions > 0, "nothing left fully packed")
+	check(counts.size() >= 3, "expected a mix of fills, got %s" % counts)
+	check(bare_area <= DesignPlan.MAX_BARE_AREA * total_area + 1.0, "too much bare area")
+	check(not 255 in bare["lines_visible"], "line_style none should hide every line")
+	for s in bare["slots"]:
+		check(bare["regions"][s["region"]]["fill"] != "bare", "slot in a bare region")
+	var outlined := 0
+	for r in bare["regions"]:
+		if r["outlined"]:
+			outlined += 1
+	check(outlined == 0, "line_style none outlined %d regions" % outlined)
+	render_collage(bare).save_png(out_dir.path_join("design_sparse_no_lines.png"))
+
+	# Scatter regions are sparser than full ones.
+	var mixed := PictureSources.mandala_collage(2003, {"sparsity": 0.6, "line_style": "partial"})
+	var covered := {}
+	for s in mixed["slots"]:
+		var r: float = s["width"] / 2.0
+		covered[s["region"]] = covered.get(s["region"], 0.0) + PI * r * r + 4.0 * r * (s["size"] / 2.0 - r)
+	for r in mixed["regions"]:
+		if r["fill"] == "scatter":
+			check(covered.get(r["id"], 0.0) / r["area"] < 0.5, "scatter region %d too dense" % r["id"])
+	var visible := 0
+	var all_lines := 0
+	for i in mixed["lines"].size():
+		if mixed["lines"][i]:
+			all_lines += 1
+		if mixed["lines_visible"][i]:
+			visible += 1
+	print("  partial lines: %.0f%% of line pixels drawn" % (100.0 * visible / maxi(1, all_lines)))
+	check(visible > 0 and visible < all_lines, "partial lines should draw some but not all")
+	render_collage(mixed).save_png(out_dir.path_join("design_partial.png"))
+	PictureSources.mandala_image(2003, {"sparsity": 0.6, "line_style": "partial"}).save_png(
+			out_dir.path_join("design_partial_kit_source.png"))
 
 
 func test_kits() -> void:
@@ -179,6 +241,7 @@ func render_collage(p: Dictionary) -> Image:
 	var w: int = p["width"]
 	var h: int = p["height"]
 	var lines: PackedByteArray = p["lines"]
+	var drawn: PackedByteArray = p.get("lines_visible", lines)
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	img.fill(Color("#2a1f3d"))
 	var total := 0
@@ -198,7 +261,7 @@ func render_collage(p: Dictionary) -> Image:
 					img.set_pixel(x, y, c)
 	var gold := Color("#d4af5a")
 	for i in w * h:
-		if lines[i]:
+		if drawn[i]:
 			img.set_pixel(i % w, i / w, gold)
 	img.set_meta("stray", float(stray) / maxi(1, total))
 	return img

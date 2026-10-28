@@ -39,14 +39,27 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictio
 
 ## The mandala filled with a theme palette, for Kit mode. Region colors are
 ## kept exact here; the kit generator snaps them to her gems afterwards.
+## The same design plan as the collage applies (sparsity, line_style options):
+## bare regions take the background color, other sparse fills a pale tint of
+## their color, and hidden lines take the color of the regions beside them.
 static func mandala_image(seed_value: int, options: Dictionary = {}) -> Image:
 	var lines := mandala_lines(seed_value, options)
 	var w: int = lines["width"]
 	var h: int = lines["height"]
+	var symmetry: String = lines["mandala"]["symmetry"]
 	var map := RegionMap.build(lines["mask"], w, h, 0)
 	var palette := Palettes.theme_colors(options.get("theme", "sunset"))
-	var colors := RegionPaint.theme_colors(map, lines["mandala"]["symmetry"], palette, seed_value)
-	return RegionPaint.render(map, colors, options.get("line_color", LINE_COLOR), options.get("background", BACKGROUND))
+	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value)
+	var background: Color = options.get("background", BACKGROUND)
+	var plan := DesignPlan.make(map, RegionPaint.symmetry_groups(map, symmetry), options, seed_value)
+	var fills: PackedStringArray = plan["fills"]
+	for r in colors.size():
+		if fills[r] == "bare":
+			colors[r] = background
+		elif fills[r] != "full":
+			colors[r] = colors[r].lerp(background, 0.6)
+	return RegionPaint.render(map, colors, options.get("line_color", LINE_COLOR), background,
+			DesignPlan.visible_lines(map, plan))
 
 
 ## A Collage puzzle from a photo: photo -> line art, region colors sampled

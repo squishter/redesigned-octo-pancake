@@ -213,6 +213,50 @@ func gradient_angle(x: int, y: int) -> float:
 	return atan2(gy, gx)
 
 
+## For every LINE pixel, the label (region id or BACKGROUND) of the nearest
+## non-line pixel, found by a breadth-first walk through the lines; the image
+## edge counts as BACKGROUND. Other pixels get their own label.
+func line_owners() -> PackedInt32Array:
+	var w := width
+	var h := height
+	var owners := labels.duplicate()
+	var queue := PackedInt32Array()
+	queue.resize(w * h)
+	var tail := 0
+	for i in w * h:
+		if labels[i] != LINE:
+			continue
+		var y := i / w
+		var x := i - y * w
+		var o := LINE
+		if x == 0 or y == 0 or x == w - 1 or y == h - 1:
+			o = BACKGROUND
+		elif labels[i - 1] != LINE:
+			o = labels[i - 1]
+		elif labels[i + 1] != LINE:
+			o = labels[i + 1]
+		elif labels[i - w] != LINE:
+			o = labels[i - w]
+		elif labels[i + w] != LINE:
+			o = labels[i + w]
+		if o != LINE:
+			owners[i] = o
+			queue[tail] = i
+			tail += 1
+	var head := 0
+	while head < tail:
+		var i := queue[head]
+		head += 1
+		var y := i / w
+		var x := i - y * w
+		for j in [i - 1 if x > 0 else -1, i + 1 if x < w - 1 else -1, i - w if y > 0 else -1, i + w if y < h - 1 else -1]:
+			if j >= 0 and owners[j] == LINE:
+				owners[j] = owners[i]
+				queue[tail] = j
+				tail += 1
+	return owners
+
+
 ## Line mask view of the labels (255 on lines, 0 elsewhere): tiny regions
 ## merged into the lines show up as part of the setting.
 func line_mask() -> PackedByteArray:

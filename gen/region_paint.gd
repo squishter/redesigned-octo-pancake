@@ -111,17 +111,25 @@ static func snap_to_gems(colors: PackedColorArray, gems: Array) -> PackedInt32Ar
 
 
 ## Flat render: regions in their colors, lines (and merged tiny regions) in
-## line_color, everything outside the picture in background.
-static func render(map: RegionMap, colors: PackedColorArray, line_color: Color, background: Color) -> Image:
+## line_color, everything outside the picture in background. If `visible` is
+## given, line pixels it leaves out take the color of the nearest region
+## instead, so hidden lines disappear.
+static func render(map: RegionMap, colors: PackedColorArray, line_color: Color, background: Color,
+		visible: PackedByteArray = PackedByteArray()) -> Image:
 	var img := Image.create(map.width, map.height, false, Image.FORMAT_RGBA8)
+	var owners: PackedInt32Array = PackedInt32Array() if visible.is_empty() else map.line_owners()
 	for y in map.height:
 		for x in map.width:
-			var l := map.labels[y * map.width + x]
+			var i := y * map.width + x
+			var l := map.labels[i]
 			var c: Color
 			if l >= 0:
 				c = colors[l]
 			elif l == RegionMap.LINE:
-				c = line_color
+				if visible.is_empty() or visible[i]:
+					c = line_color
+				else:
+					c = colors[owners[i]] if owners[i] >= 0 else background
 			else:
 				c = background
 			img.set_pixel(x, y, c)

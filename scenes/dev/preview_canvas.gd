@@ -17,7 +17,7 @@ func show_collage(picture: Dictionary) -> void:
 	collage = picture
 	kit = {}
 	view = "collage"
-	_lines_tex = _mask_texture(picture["lines"], picture["width"], picture["height"])
+	_lines_tex = _mask_texture(picture.get("lines_visible", picture["lines"]), picture["width"], picture["height"])
 	queue_redraw()
 
 

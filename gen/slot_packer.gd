@@ -23,7 +23,14 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ## petals: a center stone ringed by outward teardrops, then pave
 ## flow: marquises and baguettes along the region's spine
 ## mosaic: mixed squares, hexagons and triangles
-const STYLES := ["cabochon", "pave", "petals", "flow", "mosaic"]
+## Sparse fills, only used when asked for (see DesignPlan):
+## scatter: a few small stones with breathing room between them
+## accent: a single stone at the region's heart
+## outline: only a rhinestone border
+## bare: no stones
+const STYLES := ["cabochon", "pave", "petals", "flow", "mosaic", "scatter", "accent", "outline", "bare"]
+## Share of a scatter region its stones cover.
+const SCATTER_COVERAGE := 0.3
 
 var map: RegionMap
 var rng := RandomNumberGenerator.new()
@@ -96,6 +103,23 @@ func _pack_region(region: Dictionary, forced_style: String) -> void:
 	region["style"] = style
 	var u := unit
 
+	match style:
+		"bare":
+			return
+		"outline":
+			_outline(region, u * 0.45)
+			return
+		"accent":
+			var peak := _argmax()
+			var c := _center(peak)
+			var r := minf(free[peak] - gap, u * 2.2)
+			var placed := false
+			if region["elongation"] > 1.5:
+				placed = _try_capsule("marquise" if region["elongation"] > 2.2 else "oval", c, region["axis"], r * 0.92)
+			if not placed:
+				_place("round", c, 0.0, r, 0.0)
+			return
+
 	if style in ["pave", "mosaic", "petals"] and max_d > u * 3.0 and rng.randf() < outline_chance:
 		_outline(region, u * 0.45)
 
@@ -135,16 +159,24 @@ func _pack_region(region: Dictionary, forced_style: String) -> void:
 			# Thin regions take whatever width they have, down to a floor.
 			if max_d - gap < u * 0.5 and max_d - gap >= u * 0.3:
 				sizes.append(max_d - gap)
+		"scatter":
+			sizes = [u * 0.8, u * 0.6, u * 0.45]
 		_:
 			sizes = [u * 1.2, u * 0.85, u * 0.6, u * 0.45]
 	var r_min: float = sizes[-1]
 	var area: float = region["area"]
-	while _covered < coverage * area:
+	var target := coverage
+	# Scatter keeps each stone this far from its neighbors and the edge.
+	var spacing := 0.0
+	if style == "scatter":
+		target = SCATTER_COVERAGE
+		spacing = u * rng.randf_range(1.0, 1.8)
+	while _covered < target * area:
 		var peak := _argmax()
 		if peak < 0:
 			break
 		_cur_max = free[peak]
-		var avail := free[peak] - gap
+		var avail := free[peak] - gap - spacing
 		if avail < r_min:
 			break
 		var r := r_min

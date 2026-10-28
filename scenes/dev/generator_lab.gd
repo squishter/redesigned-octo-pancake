@@ -9,6 +9,8 @@ var _variant: OptionButton
 var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
+var _sparsity: OptionButton
+var _line_style: OptionButton
 var _seed: SpinBox
 var _wobble: HSlider
 var _detail: HSlider
@@ -35,6 +37,8 @@ func _ready() -> void:
 	_theme = _options(controls, "Theme", Array(Palettes.theme_names()))
 	_mode = _options(controls, "Mode", ["Collage", "Kit", "Line art"])
 	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
+	_sparsity = _options(controls, "Sparse", ["auto", "none", "some", "lots"])
+	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)
 	_seed = _spin(controls, "Seed", 1, 999999, 1)
 	_colors = _spin(controls, "Kit colors", 12, 40, 20)
 	_wobble = _slider(controls, "Wobble", 0.0)
@@ -150,6 +154,8 @@ func _generate() -> void:
 		"mode": _selected(_mode),
 		"kit_size": _selected(_kit_size),
 		"colors": int(_colors.value),
+		"sparsity": {"auto": -1.0, "none": 0.0, "some": 0.3, "lots": 0.6}[_selected(_sparsity)],
+		"line_style": _selected(_line_style),
 	}
 	_status.text = "Generating…"
 	_task_started = Time.get_ticks_msec()
@@ -164,6 +170,8 @@ func _run_job(job: Dictionary) -> void:
 		"theme": job["theme"],
 		"wobble": job["wobble"],
 		"detail": job["detail"],
+		"sparsity": job["sparsity"],
+		"line_style": job["line_style"],
 	}
 	var photo: Image = job["photo"]
 	var out := {"mode": job["mode"]}
@@ -190,11 +198,14 @@ func _process(_delta: float) -> void:
 			var p: Dictionary = out["picture"]
 			_canvas.show_collage(p)
 			var empty := 0
+			var fills := {}
 			for r in p["regions"]:
 				if r["empty"]:
 					empty += 1
-			_status.text = "Collage: %d regions (%d too thin), %d slots, %.0f%% avg coverage — %d ms" % [
-				p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0, ms]
+				fills[r["fill"]] = fills.get(r["fill"], 0) + 1
+			_status.text = "Collage: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
+				p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
+				p["line_style"], fills, ms]
 		"Kit":
 			var k: Dictionary = out["picture"]
 			_canvas.show_kit(k)
