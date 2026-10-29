@@ -56,6 +56,8 @@ const HUB_DEGREE := 4
 ## small ones there. They lie within this share of the picture's reach.
 const BOLD_SIZES := [1.7, 2.3]
 const BOLD_REACH := 0.55
+## How far out bold lines may go when the middle has too few with room.
+const BOLD_REACH_MORE := 0.75
 
 
 ## graph: Contours.centerlines() of the line mask. map: a RegionMap of the
@@ -195,6 +197,8 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 			for e: int in paths[k]["ends"]:
 				if e >= 0:
 					settled[e] = 1
+	if symmetry == "radial":
+		_snap_nodes(at, node_class, center, band_sym, minf(map.width, map.height))
 	for n in nodes.size():
 		if node_paths[n] == 0:
 			continue
@@ -234,6 +238,83 @@ static func _follow_ends(master: Dictionary, copy: Dictionary, xf: Dictionary, a
 				if d < best:
 					best = d
 					at[e] = q
+
+
+## Puts each class of junctions exactly where the symmetry of the lines
+## around them says (see Symmetry.ring_symmetry): one radius, and angles
+## that repeat with the folds (mirrored across the axes). A class can hold
+## more than one set (tips and bases of teeth at the same radius); each set
+## is the junctions that sit at the same angle within their fold, to a few
+## px. Sets that don't line up that well are left as they are.
+static func _snap_nodes(at: Array, node_class: PackedInt32Array, center: Vector2, band_sym: Callable,
+		side: float) -> void:
+	var members := {}
+	for n in at.size():
+		if not members.has(node_class[n]):
+			members[node_class[n]] = []
+		members[node_class[n]].append(n)
+	for c: int in members:
+		var ns: Array = members[c]
+		var rho := 0.0
+		for n: int in ns:
+			rho += (at[n] as Vector2).distance_to(center)
+		rho /= ns.size()
+		if rho < side * 0.02:
+			continue
+		var sym: Dictionary = band_sym.call(Vector2(rho, rho))
+		if sym["folds"] >= Symmetry.MAX_FOLDS:
+			continue
+		var mirrored := not is_nan(sym["axis"])
+		var axis: float = sym["axis"] if mirrored else 0.0
+		var step: float = TAU / sym["folds"]
+		var tol := 3.0 / rho
+		# Each junction's angle within its fold, folded onto one side of the
+		# axis when mirrored (or taken as just before the next fold when it's
+		# near the end of one).
+		var found := []  # [offset within the fold, junction, angle within the fold]
+		for n: int in ns:
+			var a := fposmod((at[n] as Vector2 - center).angle() - axis, step)
+			var t := a
+			if mirrored and a > step / 2.0:
+				t = step - a
+			elif not mirrored and a > step / 2.0:
+				t = a - step
+			found.append([t, n, a])
+		found.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+		var i := 0
+		while i < found.size():
+			var j := i + 1
+			while j < found.size() and found[j][0] - found[j - 1][0] <= tol:
+				j += 1
+			_snap_set(at, found.slice(i, j), center, step, mirrored, tol)
+			i = j
+
+
+## Snaps one set of junctions (see _snap_nodes) to their mean radius and
+## mean angle within the fold, if they agree to within a few px.
+static func _snap_set(at: Array, group: Array, center: Vector2, step: float, mirrored: bool, tol: float) -> void:
+	if group.size() < 2:
+		return
+	var mean := 0.0
+	var rho := 0.0
+	for f: Array in group:
+		mean += f[0]
+		rho += (at[f[1]] as Vector2).distance_to(center)
+	mean /= group.size()
+	rho /= group.size()
+	for f: Array in group:
+		if absf(f[0] - mean) > tol or absf((at[f[1]] as Vector2).distance_to(center) - rho) > 3.0:
+			return
+	for f: Array in group:
+		var n: int = f[1]
+		var a: float = f[2]
+		var base := (at[n] as Vector2 - center).angle() - a
+		var angle := base + mean
+		if mirrored and a > step / 2.0:
+			angle = base + step - mean
+		elif not mirrored and a > step / 2.0:
+			angle = base + step + mean
+		at[n] = center + Vector2.from_angle(angle) * rho
 
 
 ## Lays out the stones along path k (see place; ctx holds its settings).
@@ -421,8 +502,9 @@ static func _radius(field: Dictionary, prof: Dictionary, s: float, i: int) -> fl
 ## Picks the bold lines: classes of lines through the middle (BOLD_REACH),
 ## long enough for a handful of stones, whose areas have room for bigger
 ## stones. A bold stone may take up to half of the narrower neighboring
-## area's width. Up to `count` classes, spread from the center outward and
-## kept apart from each other. Returns {class: stone radius}.
+## area's width (two thirds, a little further out, when that finds too
+## few). Up to `count` classes, spread from the center outward and kept
+## apart from each other. Returns {class: stone radius}.
 static func _bold_classes(paths: Array, path_class: PackedInt32Array, map: RegionMap, r: float, gap: float,
 		center: Vector2, far: float, count: int, seed_value: int) -> Dictionary:
 	var out := {}
@@ -447,37 +529,50 @@ static func _bold_classes(paths: Array, path_class: PackedInt32Array, map: Regio
 		e["dist"] += mid / pts.size()
 		for f in [0.2, 0.4, 0.6, 0.8]:
 			e["rooms"].append(_side_room(pts, closed, length * f, map))
-	var picks := []
+	var targets := {}
 	for c: int in info:
-		var e: Dictionary = info[c]
-		var target: float = r * BOLD_SIZES[rng.randi_range(0, BOLD_SIZES.size() - 1)]
-		var dist: float = e["dist"] / e["n"]
-		if dist > far * BOLD_REACH or e["length"] / e["n"] < r * 10.0:
-			continue
-		var rooms: PackedFloat32Array = e["rooms"]
-		rooms.sort()
-		# The areas beside keep at least half the width they had.
-		var room := rooms[rooms.size() / 4]
-		var big := minf(target, 0.5 * (room + r) - 0.6 * gap)
-		if big >= r * 1.35:
-			picks.append({"class": c, "r": big, "dist": dist, "length": e["length"]})
-	# Spread them through the middle: each aims at its own distance from the
-	# center and takes the nearest class there, longer ones on ties.
-	picks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["length"] > b["length"])
+		targets[c] = r * BOLD_SIZES[rng.randi_range(0, BOLD_SIZES.size() - 1)]
 	var chosen := []
-	for i in count:
-		var aim := far * BOLD_REACH * (i + 0.5) / count
-		var best: Dictionary = {}
-		for p: Dictionary in picks:
-			var near := false
-			for q: Dictionary in chosen:
-				if absf(p["dist"] - q["dist"]) < (p["r"] + q["r"]) * 2.5:
-					near = true
-			if not near and (best.is_empty() or absf(p["dist"] - aim) < absf(best["dist"] - aim) - r):
-				best = p
-		if not best.is_empty():
-			chosen.append(best)
-			out[best["class"]] = best["r"]
+	# First lines through the middle whose areas keep at least half their
+	# width; if that finds too few, lines a little further out whose areas
+	# keep a third.
+	for tries in [[BOLD_REACH, 0.5], [BOLD_REACH_MORE, 0.35]]:
+		var reach: float = far * tries[0]
+		var keep: float = tries[1]
+		var picks := []
+		for c: int in info:
+			var e: Dictionary = info[c]
+			var dist: float = e["dist"] / e["n"]
+			if out.has(c) or dist > reach or e["length"] / e["n"] < r * 10.0:
+				continue
+			var rooms: PackedFloat32Array = e["rooms"]
+			rooms.sort()
+			# A stone of radius R leaves the area beside W - R - 1.2 gap of the
+			# W - r - 1.2 gap it had (W measured from the line's center).
+			var room := rooms[rooms.size() / 4]
+			var big := minf(targets[c], (1.0 - keep) * room + keep * r - (1.0 - keep) * 1.2 * gap)
+			if big >= r * 1.3:
+				picks.append({"class": c, "r": big, "dist": dist, "length": e["length"]})
+		# Spread them through the middle: each aims at its own distance from the
+		# center and takes the nearest class there, longer ones on ties.
+		picks.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return x["length"] > y["length"])
+		for i in count:
+			if chosen.size() >= count:
+				break
+			var aim := far * BOLD_REACH * (i + 0.5) / count
+			var best: Dictionary = {}
+			for p: Dictionary in picks:
+				var near := out.has(p["class"])
+				for q: Dictionary in chosen:
+					if absf(p["dist"] - q["dist"]) < (p["r"] + q["r"]) * 2.0:
+						near = true
+				if not near and (best.is_empty() or absf(p["dist"] - aim) < absf(best["dist"] - aim) - r):
+					best = p
+			if not best.is_empty():
+				chosen.append(best)
+				out[best["class"]] = best["r"]
+		if chosen.size() >= count:
+			break
 	return out
 
 

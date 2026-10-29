@@ -44,6 +44,10 @@ const MIN_SLOTS := 300
 const MAX_SLOTS := 5000
 const SLOTS_LOW_AIM := 450.0
 const SLOTS_HIGH_AIM := 4200.0
+## The channel around gem-line stones is this many stone gaps wider than
+## them. Area stones keep a gap from the channel's edge as well, so this
+## only needs to cover rasterizing.
+const LINE_PAD := 0.5
 ## Gem types (shape + color, any size) a collage aims for.
 const GEM_TYPES_MIN := 25
 const GEM_TYPES_MAX := 30
@@ -141,7 +145,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		for sl in line_slots:
 			if sl["seq"] < 0 and sl["tone"] == 1:
 				bold_lines[sl["part"]] = true
-		area_mask = LineRaster.stamp_slots(mask, w, h, line_slots, gap * 1.2)
+		# Area stones keep their own gap from this edge, so a small pad is enough.
+		area_mask = LineRaster.stamp_slots(mask, w, h, line_slots, gap * LINE_PAD)
 	else:
 		line_gems = ""
 
@@ -158,8 +163,9 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if not pack_options.has("radial_size"):
 		pack_options["radial_size"] = rng.randf() < (0.35 if symmetry == "radial" else 0.15)
 	if not pack_options.has("tiers"):
-		pack_options["tiers"] = rng.randf() < 0.3
+		pack_options["tiers"] = rng.randf() < 0.5
 	pack_options["unit"] = unit
+	pack_options["line_mask"] = mask
 	var styles := DesignPlan.packer_styles(plan)
 	styles.merge(options.get("styles", {}), true)
 	pack_options["styles"] = styles
@@ -412,7 +418,7 @@ static func _bordered_group(slot: Dictionary, map: RegionMap, groups: PackedInt3
 	var c := Vector2(slot["x"], slot["y"])
 	var nrm := Vector2.from_angle(slot["rotation"]).orthogonal()
 	var best := -1
-	for reach in [slot["width"] / 2.0 + gap * 1.2 + 2.0, slot["width"] / 2.0 + gap * 1.2 + 5.0]:
+	for reach in [slot["width"] / 2.0 + gap * LINE_PAD + 2.0, slot["width"] / 2.0 + gap * LINE_PAD + 5.0]:
 		for side in [-1.0, 1.0]:
 			var q: Vector2 = c + nrm * reach * side
 			var l := map.label_at(int(q.x), int(q.y))

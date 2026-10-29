@@ -34,7 +34,7 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ## pave: the old free-form packing of mixed sizes, kept for some variety
 ## Sparse fills, only used when asked for (see DesignPlan):
 ## scatter: an airy lattice of small stones
-## accent: a single stone at the region's heart
+## accent: a single stone at the region's heart, as big as fits
 ## outline: only a row of small stones along the edge
 ## bare: no stones
 const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave"]
@@ -104,6 +104,8 @@ var _axis := NAN
 ## Symmetry.ring_symmetry of the current region when it lies around the
 ## picture's center (or of the lines around it, see _ring_sym), for its rings.
 var _ring := {}
+## The picture's line art (nonzero on lines), for the symmetry around rings.
+var _lines := PackedByteArray()
 ## Which step of the pattern is placing stones (a row, a ring, the center
 ## stone...). Counted from 0 in every region, so symmetric copies agree.
 var _part := 0
@@ -119,7 +121,9 @@ var _part := 0
 ##     its main rows (otherwise only some groups, picked per seed),
 ##   styles (Dictionary region id -> style, to force a style or sparse fill),
 ##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
-##     regions that map onto themselves get patterns as symmetric.
+##     regions that map onto themselves get patterns as symmetric,
+##   line_mask (PackedByteArray, nonzero on lines): the line art, for the
+##     symmetry around round regions (default: the map's lines).
 ## Returns slots: {id, region, shape, x, y, rotation, size, width, tone, part},
 ## in px of the map; size is the length along the rotation, width across it;
 ## tone 1 marks stones in the region's accent color, tone 2 in its feature
@@ -169,6 +173,7 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
 	mirror_axes = options.get("symmetry", "none") != "none"
+	_lines = options.get("line_mask", PackedByteArray())
 	_pic_center = Vector2(region_map.width, region_map.height) / 2.0
 	_pic_reach = side / 2.0
 	free = region_map.dist.duplicate()
@@ -203,7 +208,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 				weights["rosette"] = 0.12
 				weights["sunburst"] = 0.15
 			style = _pick(weights, g_rng)
-	var row_r: float = u * [0.7, 0.85, 1.0, 1.15][g_rng.randi_range(0, 3)]
+	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)]
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
 	var shape: String = ROW_SHAPES[g_rng.randi_range(0, ROW_SHAPES.size() - 1)]
@@ -222,13 +227,13 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"lattice_turn": g_rng.randf() * PI / 3.0 if g_rng.randf() < 0.3 else 0.0,
 		# Size change per row inward (echo, stripes outward from the middle):
 		# below 1 the stones shrink toward the middle, above 1 they grow.
-		"grade": [1.0, 1.0, 0.85, 1.15][g_rng.randi_range(0, 3)],
+		"grade": [1.0, 0.85, 0.8, 1.15, 1.25][g_rng.randi_range(0, 4)],
 		# Honeycomb stones shrink toward the edge, like a halftone.
 		"gradient": g_rng.randf() < 0.35,
 		"scatter_space": u * g_rng.randf_range(1.2, 2.0),
 		# Tiers: big stones (radius) and how many medium ones go in first.
-		"large": u * g_rng.randf_range(2.2, 3.2) if tiers and max_d > u * 2.6 and g_rng.randf() < 0.4 else 0.0,
-		"mediums": g_rng.randi_range(1, 3) if tiers and max_d > u * 1.8 and g_rng.randf() < 0.45 else 0,
+		"large": u * g_rng.randf_range(2.2, 3.2) if tiers and max_d > u * 2.6 and g_rng.randf() < 0.5 else 0.0,
+		"mediums": g_rng.randi_range(1, 3) if tiers and max_d > u * 1.8 and g_rng.randf() < 0.55 else 0,
 		"medium_r": u * g_rng.randf_range(1.2, 1.6),
 		"tier_shape": TIER_SHAPES[g_rng.randi_range(0, TIER_SHAPES.size() - 1)],
 		"center_shape": CENTER_SHAPES[g_rng.randi_range(0, CENTER_SHAPES.size() - 1)],
@@ -342,7 +347,7 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 		"outline":
 			_rows(region, [u * 0.45], ["round"], [0])
 		"accent":
-			_center_stone(region, u * 2.2, design)
+			_center_stone(region, INF, design)
 		"scatter":
 			_lattice(region, u * 0.6, design["scatter_space"], "round", design["lattice_turn"], false)
 		"echo":
@@ -555,7 +560,9 @@ func _ring_sym() -> Dictionary:
 		for p in Symmetry.sample_pixels(map, region, 400):
 			near = minf(near, p.distance_to(_pic_center))
 			reach = maxf(reach, p.distance_to(_pic_center))
-		_ring = Symmetry.ring_near(map, _pic_center, near - unit * 2.5, reach + unit * 2.5)
+		if _lines.is_empty():
+			_lines = map.line_mask()
+		_ring = Symmetry.ring_near(_lines, map.width, map.height, _pic_center, near - unit * 2.5, reach + unit * 2.5)
 	return _ring
 
 

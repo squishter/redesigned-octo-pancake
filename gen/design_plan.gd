@@ -8,7 +8,8 @@ extends RefCounted
 ## Fills:
 ##   full: packed by the region's own style (about 80% covered)
 ##   scatter: a few small stones spread out with breathing room
-##   accent: a single stone at the region's heart
+##   accent: a single stone at the region's heart, nearly filling it (only
+##           compact regions, so it doesn't sit alone in a long empty one)
 ##   outline: only a rhinestone border along the region's edge
 ##   bare: no stones; the background shows through as negative space (only
 ##         regions roomy enough for it to look deliberate)
@@ -34,6 +35,10 @@ const MAX_BARE_AREA := 0.3
 ## Bare regions are at least this deep (in stone units), so they read as
 ## negative space rather than gaps.
 const BARE_MIN_DEPTH := 2.0
+## Accent regions are at most this deep (in stone units) and this spread out
+## (area over the deepest circle's), so their one stone nearly fills them.
+const ACCENT_MAX_DEPTH := 3.0
+const ACCENT_MAX_SPREAD := 2.5
 
 
 ## options:
@@ -63,11 +68,16 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 	var group_depth := PackedFloat32Array()  # smallest max_dist among members
 	group_depth.resize(n_groups)
 	group_depth.fill(INF)
+	# Area over the deepest circle's: 1 for a disc, more the longer or
+	# lumpier the region (largest among members).
+	var group_spread := PackedFloat32Array()
+	group_spread.resize(n_groups)
 	var total_area := 0.0
 	for r in map.regions:
 		var g := groups[r["id"]]
 		group_area[g] += r["area"]
 		group_depth[g] = minf(group_depth[g], r["max_dist"])
+		group_spread[g] = maxf(group_spread[g], r["area"] / (PI * r["max_dist"] * r["max_dist"]))
 		total_area += r["area"]
 
 	var group_fill := PackedStringArray()
@@ -80,7 +90,8 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 			continue
 		var depth := group_depth[g]
 		var choices := []
-		if depth >= unit * 1.6:
+		# One stone that fills most of the region, not one adrift in it.
+		if depth >= unit * 1.6 and depth <= unit * ACCENT_MAX_DEPTH and group_spread[g] <= ACCENT_MAX_SPREAD:
 			choices.append("accent")
 		if depth >= unit * 3.0:
 			choices.append_array(["scatter", "scatter", "outline"])

@@ -11,7 +11,7 @@ extends RefCounted
 ## to angle a lands turned to a + turn, or to 2 * axis - a when mirrored.
 
 ## Most folds a ring is checked for.
-const MAX_FOLDS := 32
+const MAX_FOLDS := 48
 ## Share of a ring's samples that must land back on it under a symmetry.
 const RING_MATCH := 0.97
 ## Samples a ring is checked with, at most.
@@ -176,11 +176,17 @@ static func ring_symmetry(pts: PackedVector2Array, o: Vector2, lands: Callable) 
 		for i in RING_SAMPLES:
 			few.append(pts[i * pts.size() / RING_SAMPLES])
 		pts = few
+	# The largest turn that fits. A ring that also fits a turn that doesn't
+	# divide it (say 17 besides 16) is just round there: its features are
+	# too small to tell, so it counts as round (MAX_FOLDS).
 	var folds := 1
 	for k in range(MAX_FOLDS, 1, -1):
 		if _share(pts, make(o, TAU / k, 0.0, false)["xf"], lands, RING_MATCH) >= RING_MATCH:
-			folds = k
-			break
+			if folds == 1:
+				folds = k
+			elif folds % k != 0:
+				folds = MAX_FOLDS
+				break
 	var axis := NAN
 	var best := RING_MATCH
 	var steps := 60
@@ -193,12 +199,12 @@ static func ring_symmetry(pts: PackedVector2Array, o: Vector2, lands: Callable) 
 	return {"folds": folds, "axis": axis}
 
 
-## ring_symmetry of the lines around a ring: the line pixels of `map`
-## (RegionMap.LINE) between r0 and r1 px from o.
-static func ring_near(map: RegionMap, o: Vector2, r0: float, r1: float) -> Dictionary:
+## ring_symmetry of the lines around a ring: the pixels of the line mask
+## (w x h, nonzero on lines) between r0 and r1 px from o.
+static func ring_near(mask: PackedByteArray, w: int, h: int, o: Vector2, r0: float, r1: float) -> Dictionary:
 	r0 = maxf(0.0, r0)
 	var box := Rect2i(Vector2i(o - Vector2(r1, r1)), Vector2i(ceili(r1 * 2.0) + 1, ceili(r1 * 2.0) + 1))
-	box = box.intersection(Rect2i(0, 0, map.width, map.height))
+	box = box.intersection(Rect2i(0, 0, w, h))
 	# About 1500 samples; lines cover roughly a sixth of a band.
 	var band := PI * (r1 * r1 - r0 * r0) / 6.0
 	var step := maxi(1, int(sqrt(band / 1500.0)))
@@ -207,9 +213,10 @@ static func ring_near(map: RegionMap, o: Vector2, r0: float, r1: float) -> Dicti
 		for x in range(box.position.x, box.end.x, step):
 			var p := Vector2(x + 0.5, y + 0.5)
 			var d := p.distance_to(o)
-			if d >= r0 and d <= r1 and map.labels[y * map.width + x] == RegionMap.LINE:
+			if d >= r0 and d <= r1 and mask[y * w + x] != 0:
 				pts.append(p)
-	return ring_symmetry(pts, o, func(q: Vector2) -> bool: return map.label_at(int(q.x), int(q.y)) == RegionMap.LINE)
+	return ring_symmetry(pts, o, func(q: Vector2) -> bool:
+		return q.x >= 0.0 and q.y >= 0.0 and q.x < w and q.y < h and mask[int(q.y) * w + int(q.x)] != 0)
 
 
 ## Share of the points that `xf` carries to where `lands` is true, with a
