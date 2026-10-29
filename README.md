@@ -34,7 +34,7 @@ mode for trying out new pattern generation.
   Seaside. A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Photos.** *Photo collage…* and *Photo kit…* in the New puzzle panel pick
-  one of her photos (the phone's own picker) and turn it into a collage
+  one of her photos (the phone's own picker; turned upright by its EXIF orientation, see `game/photo_loader.gd`) and turn it into a collage
   (traced into line art) or a kit of drills, in her unlocked colors. Photo
   puzzles can't be recolored: their colors come from the photo.
 - **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,

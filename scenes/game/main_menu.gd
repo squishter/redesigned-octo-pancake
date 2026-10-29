@@ -209,7 +209,7 @@ func _pick_photo(kind: String) -> void:
 func _on_photo_picked(path: String) -> void:
 	if _task_id >= 0:
 		return
-	var photo := Image.load_from_file(path)
+	var photo := PhotoLoader.open(path)
 	if photo == null or photo.is_empty():
 		_busy_label.text = "Couldn't open that photo."
 		_busy.visible = true

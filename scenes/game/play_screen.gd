@@ -368,6 +368,7 @@ func _input(event: InputEvent) -> void:
 		var p := _row_point(event.position)
 		if event.pressed and _row_touch < 0 and Rect2(Vector2.ZERO, _palette.size).has_point(p):
 			_row_touch = event.index
+			_scroll_x = float(_palette.scroll_horizontal)
 			_row_start = event.position
 			_row_last = event.position
 			_row_last_ms = Time.get_ticks_msec()
@@ -376,7 +377,7 @@ func _input(event: InputEvent) -> void:
 		elif not event.pressed and event.index == _row_touch:
 			_row_touch = -1
 			if not _row_moved:
-				_tap_row(p)
+				_tap_row(event.position)
 	elif event is InputEventScreenDrag and event.index == _row_touch:
 		var dx: float = event.position.x - _row_last.x
 		if not _row_moved and absf(event.position.x - _row_start.x) > ROW_DEADZONE:
@@ -408,11 +409,12 @@ func _row_scale() -> float:
 	return _palette.get_global_transform_with_canvas().get_scale().x
 
 
-func _tap_row(p: Vector2) -> void:
-	var at := p + Vector2(_scroll_x, 0.0)
+## Picks the card under screen point `at`, by where the cards really are
+## (the row's scroll can move under it when a card goes).
+func _tap_row(at: Vector2) -> void:
 	for t: int in _items:
 		var b: Control = _items[t]
-		if Rect2(b.position, b.size).has_point(at):
+		if b.get_global_rect().has_point(at):
 			_select(-1 if t == _selected else t)
 			return
 
@@ -725,6 +727,9 @@ func _process(delta: float) -> void:
 		_apply_scroll()
 		if _scroll_x <= 0.0 or _scroll_x >= _row.size.x - _palette.size.x:
 			_fling = 0.0
+	elif _row_touch < 0:
+		# Idle: follow the row's real scroll (it moves back when a card at the end goes).
+		_scroll_x = float(_palette.scroll_horizontal)
 	if not _dirty:
 		return
 	_since_save += delta

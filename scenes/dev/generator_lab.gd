@@ -314,7 +314,7 @@ func _selected(ob: OptionButton) -> Variant:
 
 
 func _on_photo_selected(path: String) -> void:
-	var img := Image.load_from_file(path)
+	var img := PhotoLoader.open(path)
 	if img == null or img.is_empty():
 		_say("Couldn't load %s" % path)
 		return

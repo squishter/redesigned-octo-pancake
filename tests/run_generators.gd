@@ -41,6 +41,7 @@ func _init() -> void:
 	test_packs()
 	test_catalog_complete()
 	test_old_profiles()
+	test_photo_orientation()
 	test_kit_puzzles()
 
 	print("\n%s (%d failures). Previews in %s" % ["FAILED" if failures else "PASSED", failures,
@@ -909,6 +910,82 @@ func test_old_profiles() -> void:
 	# Shader styles of the original cuts never move.
 	check(GemCuts.SHADER_STYLE == {"brilliant": 0, "step": 1, "rose": 2, "checker": 3, "cabochon": 4},
 			"cut shader styles changed: old gems would light differently")
+
+
+## Photos load the right way up: a JPEG carrying each EXIF orientation (in
+## either byte order) comes back turned or mirrored to match.
+func test_photo_orientation() -> void:
+	print("Photo orientation")
+	# A 4x2 picture, as it should look: red top-left, green top-right, blue bottom-left.
+	var want := Image.create(40, 20, false, Image.FORMAT_RGB8)
+	want.fill(Color.WHITE)
+	want.fill_rect(Rect2i(0, 0, 10, 10), Color.RED)
+	want.fill_rect(Rect2i(30, 0, 10, 10), Color.GREEN)
+	want.fill_rect(Rect2i(0, 10, 10, 10), Color.BLUE)
+	for o in range(1, 9):
+		for little in [true, false]:
+			# Store it as the camera would: the inverse of what orientation o fixes.
+			var stored := want.duplicate() as Image
+			match o:
+				2:
+					stored.flip_x()
+				3:
+					stored.rotate_180()
+				4:
+					stored.flip_y()
+				5:
+					stored.flip_x()
+					stored.rotate_90(COUNTERCLOCKWISE)
+				6:
+					stored.rotate_90(COUNTERCLOCKWISE)
+				7:
+					stored.flip_x()
+					stored.rotate_90(CLOCKWISE)
+				8:
+					stored.rotate_90(CLOCKWISE)
+			var jpg := _with_exif(stored.save_jpg_to_buffer(0.95), o, little)
+			check(PhotoLoader.orientation(jpg) == o, "orientation %d read as %d" % [o, PhotoLoader.orientation(jpg)])
+			var got := PhotoLoader.from_bytes(jpg)
+			var ok := got != null and got.get_size() == want.get_size()
+			if ok:
+				for spot: Vector2i in [Vector2i(5, 5), Vector2i(35, 5), Vector2i(5, 15), Vector2i(35, 15)]:
+					var a := got.get_pixelv(spot)
+					var b := want.get_pixelv(spot)
+					if absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) > 0.3:
+						ok = false
+			check(ok, "orientation %d (%s) not upright" % [o, "II" if little else "MM"])
+	check(PhotoLoader.orientation(want.save_png_to_buffer()) == 1, "a PNG has an orientation")
+
+
+## A JPEG with an EXIF block holding just an Orientation tag, put after SOI.
+func _with_exif(jpg: PackedByteArray, o: int, little: bool) -> PackedByteArray:
+	var tiff := PackedByteArray()
+	var u16 := func(v: int) -> PackedByteArray:
+		return PackedByteArray([v & 0xFF, v >> 8]) if little else PackedByteArray([v >> 8, v & 0xFF])
+	var u32 := func(v: int) -> PackedByteArray:
+		var b := PackedByteArray([v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, v >> 24])
+		if not little:
+			b.reverse()
+		return b
+	tiff.append_array("II".to_ascii_buffer() if little else "MM".to_ascii_buffer())
+	tiff.append_array(u16.call(42))
+	tiff.append_array(u32.call(8))
+	tiff.append_array(u16.call(1))
+	tiff.append_array(u16.call(0x0112))
+	tiff.append_array(u16.call(3))
+	tiff.append_array(u32.call(1))
+	tiff.append_array(u16.call(o))
+	tiff.append_array(u16.call(0))
+	tiff.append_array(u32.call(0))
+	var payload := "Exif".to_ascii_buffer()
+	payload.append_array(PackedByteArray([0, 0]))
+	payload.append_array(tiff)
+	var seg := PackedByteArray([0xFF, 0xE1, (payload.size() + 2) >> 8, (payload.size() + 2) & 0xFF])
+	seg.append_array(payload)
+	var out := jpg.slice(0, 2)
+	out.append_array(seg)
+	out.append_array(jpg.slice(2))
+	return out
 
 
 ## Kits and unlocked picture features: a kit uses only unlocked colors and
