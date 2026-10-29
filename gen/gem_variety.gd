@@ -6,8 +6,10 @@ extends RefCounted
 ##
 ## Stones are changed a whole pattern part at a time (a row, a ring, the
 ## center stones, a line's stones), across every symmetric copy at once, so
-## patterns and symmetry survive: a part is the stones of one symmetry group,
-## pattern step and shape.
+## every row and line keeps a single type and symmetry survives: a part is
+## the stones of one symmetry group, pattern step and shape. When parts run
+## out, the caller rebuilds with spacer rows (SlotPacker's `spacers`), which
+## adds thin rows to vary.
 ##
 ## Shapes only swap within a family whose outlines fit the same slot:
 ## round, square, hexagon and triangle fit a circle; oval, marquise and
@@ -15,9 +17,6 @@ extends RefCounted
 
 const ROUND_FAMILY := ["round", "hexagon", "square", "triangle"]  # most fitting first
 const LONG_FAMILY := ["oval", "marquise", "teardrop"]
-## How often a part may be halved into alternating stones (2: repeats of up
-## to four stones, still a regular pattern).
-const MAX_SPLITS := 2
 
 
 ## slots: the collage's slots, each with shape, part, target_color and
@@ -81,11 +80,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			if changed:
 				break
 		if not changed:
-			if not _split(units, unit_keys):
-				break
-			# The new half shares its type until the next round recolors one.
-			var c := _combo(units[unit_keys[unit_keys.size() - 1]])
-			holders[c] += 1
+			break
 
 	# Too many: fold the rarest type into a common one of the same family.
 	guard = 0
@@ -135,43 +130,6 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			s["target_color"] = u["color"]
 			s["target_gem"] = u["gem"]
 	return holders.size()
-
-
-## Splits the biggest part (halved fewer than MAX_SPLITS times) into alternating stones (every other stone of each
-## region, in the order they were placed along the row), so the two halves
-## can take different types, like a two-color bead row. Copies stay alike as
-## each region alternates on its own. False if no part is big enough.
-static func _split(units: Dictionary, unit_keys: Array) -> bool:
-	var best := ""
-	for key in unit_keys:
-		var n: int = units[key]["slots"].size()
-		if units[key].get("depth", 0) >= MAX_SPLITS:
-			continue
-		if n >= 6 and (best == "" or n > units[best]["slots"].size()):
-			best = key
-	if best == "":
-		return false
-	var u: Dictionary = units[best]
-	var by_region := {}
-	for sl in u["slots"]:
-		if not by_region.has(sl["region"]):
-			by_region[sl["region"]] = []
-		by_region[sl["region"]].append(sl)
-	var keep := []
-	var moved := []
-	for r in by_region:
-		var list: Array = by_region[r]
-		list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["id"] < b["id"])
-		for i in list.size():
-			(moved if i % 2 == 1 else keep).append(list[i])
-	if moved.is_empty():
-		return false
-	u["slots"] = keep
-	u["depth"] = u.get("depth", 0) + 1
-	var key := "%s|alt%d" % [best, unit_keys.size()]
-	units[key] = {"slots": moved, "shape": u["shape"], "color": u["color"], "gem": u["gem"], "depth": u["depth"]}
-	unit_keys.append(key)
-	return true
 
 
 ## Every gem type in a list of slots: [{shape, gem, color, count}], most used first.

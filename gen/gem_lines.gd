@@ -22,6 +22,8 @@ extends RefCounted
 ## its stones at every point.
 
 const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "taper", "pulse", "ramp", "radial", "hub"]
+## Junction stones' parts start here, after the lines' own.
+const NODE_PARTS := 100000
 ## Smallest stone, as a share of the full line stone.
 const MIN_SCALE := 0.45
 ## Lines that meet at a hub: at least this many.
@@ -32,7 +34,11 @@ const HUB_DEGREE := 4
 ## lines (its BACKGROUND tells the silhouette apart).
 ## Returns slots ({id, region, shape, x, y, rotation, size, width, tone, part}) with
 ## region 0 for inner lines and 1 for the silhouette; the caller renumbers.
-static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String) -> Array[Dictionary]:
+## `part` is the line's symmetry class (lines that are copies of each other
+## under `symmetry` share one), and junction stones get classes of their own,
+## so a line's stones always stay one gem type.
+static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String,
+		symmetry: String = "none") -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var hash := {}
 	var cell := r * 4.0
@@ -76,14 +82,29 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 	var field := {"style": style, "r": r, "center": center, "far": far, "hubs": hubs,
 			"hub_reach": minf(map.width, map.height) * 0.22}
 
+	var tol := minf(map.width, map.height) * 0.015
+	var path_keys := []
+	for path in paths:
+		var pts: PackedVector2Array = path["points"]
+		# A loop's traversal starts anywhere, so key it by its center instead.
+		var at := pts[pts.size() / 2]
+		if path["closed"]:
+			at = Vector2.ZERO
+			for q in pts:
+				at += q
+			at /= pts.size()
+		path_keys.append(_sym_key(at, center, symmetry, Contours.length(pts, path["closed"])))
+	var path_class := _classes(path_keys, tol)
+	var node_keys := []
+	for n in nodes.size():
+		node_keys.append(_sym_key(nodes[n], center, symmetry, 0.0))
+	var node_class := _classes(node_keys, tol)
+
 	var r_node := r * (1.15 if style == "beads" else 1.0)
 	for n in nodes.size():
 		var silhouette := node_paths[n] > 0 and node_outer[n] * 2 >= node_paths[n]
 		var rn := r_node * _place_scale(field, nodes[n])
-		_add(out, hash, cell, nodes[n], 0.0, rn, 0.0, "round", 1 if silhouette else 0, gap)
-	# Junction stones are their own pattern part, so they can take another gem type.
-	for sl in out:
-		sl["part"] = 1
+		_add(out, hash, cell, nodes[n], 0.0, rn, 0.0, "round", 1 if silhouette else 0, gap, NODE_PARTS + node_class[n])
 	for k in paths.size():
 		var path: Dictionary = paths[k]
 		var pts: PackedVector2Array = path["points"]
@@ -159,7 +180,7 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 			var rot: float = (sample[1] as Vector2).angle()
 			var rr := _radius(field, prof, at, i)
 			var h := rr * (aspect - 1.0)
-			_add(out, hash, cell, sample[0], rot, rr, h, shape, tone, gap)
+			_add(out, hash, cell, sample[0], rot, rr, h, shape, tone, gap, path_class[k])
 	return out
 
 
@@ -205,6 +226,47 @@ static func _place_scale(field: Dictionary, p: Vector2) -> float:
 	return 1.0
 
 
+## Where a point sits up to the picture's symmetry, plus a size: radial uses
+## the distance from the center, mirror the height and distance from the
+## axis, none the position itself.
+static func _sym_key(p: Vector2, center: Vector2, symmetry: String, size: float) -> Array:
+	match symmetry:
+		"radial":
+			return [p.distance_to(center), 0.0, size]
+		"mirror":
+			return [p.y, absf(p.x - center.x), size]
+	return [p.y, p.x, size]
+
+
+## Clusters keys that match within `tol` px (and 15% in size) into classes,
+## numbered in order of the first key; walks the keys sorted by their first
+## value so near-equal copies land together.
+static func _classes(keys: Array, tol: float) -> PackedInt32Array:
+	var order := range(keys.size())
+	order.sort_custom(func(a: int, b: int) -> bool: return keys[a][0] < keys[b][0])
+	var out := PackedInt32Array()
+	out.resize(keys.size())
+	var reps := []  # [key, class]
+	var next := 0
+	for i: int in order:
+		var k: Array = keys[i]
+		var found := -1
+		for j in range(reps.size() - 1, -1, -1):
+			var rk: Array = reps[j][0]
+			if k[0] - rk[0] > tol:
+				break
+			var size_ok: bool = absf(k[2] - rk[2]) <= maxf(tol, 0.15 * maxf(k[2], rk[2]))
+			if absf(k[1] - rk[1]) <= tol and size_ok:
+				found = reps[j][1]
+				break
+		if found < 0:
+			found = next
+			next += 1
+		reps.append([k, found])
+		out[i] = found
+	return out
+
+
 ## True if the background lies within `reach` px on either side of the
 ## path's middle stretch.
 static func _is_outer(pts: PackedVector2Array, map: RegionMap, reach: float) -> bool:
@@ -230,7 +292,7 @@ static func _is_outer(pts: PackedVector2Array, map: RegionMap, reach: float) -> 
 ## Adds a stone unless it would crowd another line stone; crowded stones
 ## shrink to fit (down to 55%) or are left out.
 static func _add(out: Array[Dictionary], hash: Dictionary, cell: float, c: Vector2, rot: float, r: float,
-		h: float, shape: String, region: int, gap: float) -> void:
+		h: float, shape: String, region: int, gap: float, part: int) -> void:
 	var dir := Vector2.from_angle(rot)
 	var cx := floori(c.x / cell)
 	var cy := floori(c.y / cell)
@@ -259,7 +321,7 @@ static func _add(out: Array[Dictionary], hash: Dictionary, cell: float, c: Vecto
 		"size": 2.0 * (r + h),
 		"width": 2.0 * r,
 		"tone": 0,
-		"part": 0,
+		"part": part,
 	}
 	out.append(slot)
 	var key := Vector2i(cx, cy)

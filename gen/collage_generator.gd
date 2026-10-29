@@ -24,6 +24,8 @@ extends RefCounted
 ##   regions: [{id, group, kind, color, gem_color_id, accent_color, accent_gem, fill,
 ##              outlined, style, area, centroid, empty}],
 ##   slots: [{id, region, shape, x, y, rotation, size, width, tone, part, target_color, target_gem}],
+##   spacers: bool, thin rows of small stones between every pattern's main rows
+##            (default: some groups; all when the picture is short of gem types)
 ##   gem_types: how many gem types it uses; gem_kinds: [{shape, gem, color, count}],
 ##   unit, tiers, radial_size: the stone size and design choices used,
 ## }
@@ -61,6 +63,8 @@ const GEM_TYPES_MAX := 30
 ##   radial_size: bool, area stones shrink toward the center (default: picked per seed)
 ##   tiers: bool, some groups get a few large then medium stones before their
 ##          pattern (default: picked per seed)
+##   spacers: bool, thin rows of small stones between every pattern's main rows
+##            (default: some groups; all when the picture is short of gem types)
 ##   gem_types: how many gem types (shape + color, any size) to aim for
 ##              (default: 25-30, picked per seed)
 ##   seed, gap: passed to SlotPacker
@@ -70,16 +74,25 @@ const GEM_TYPES_MAX := 30
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
 	var unit: float = options.get("unit", minf(w, h) * 0.010)
 	var picture := _build(mask, w, h, options, unit)
-	if options.has("unit"):
+	if options.has("unit") and options.has("spacers"):
 		return picture
 	# Stone count goes as 1 / unit^2: rescale toward the range and rebuild.
-	for _attempt in 2:
+	for _attempt in (0 if options.has("unit") else 2):
 		var n: int = picture["slots"].size()
 		if n >= MIN_SLOTS and n <= MAX_SLOTS:
 			break
 		var aim := SLOTS_HIGH_AIM if n > MAX_SLOTS else SLOTS_LOW_AIM
 		unit *= clampf(sqrt(float(n) / aim), 0.5, 2.5)
 		picture = _build(mask, w, h, options, unit)
+	# Short of gem types: thin spacer rows between the main rows give the
+	# variety pass more rows to vary, without breaking up any row.
+	if picture["gem_types"] < GEM_TYPES_MIN and not options.has("spacers"):
+		var opts := options.duplicate()
+		opts["spacers"] = true
+		var spaced := _build(mask, w, h, opts, unit)
+		var n: int = spaced["slots"].size()
+		if spaced["gem_types"] > picture["gem_types"] and n >= MIN_SLOTS and n <= MAX_SLOTS:
+			picture = spaced
 	return picture
 
 
@@ -118,7 +131,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		depths.sort()
 		var typical: float = depths[depths.size() / 2] if not depths.is_empty() else unit * 3.0
 		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
-		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems)
+		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry)
 		area_mask = LineRaster.stamp_slots(mask, w, h, line_slots, gap * 1.2)
 	else:
 		line_gems = ""
@@ -293,6 +306,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"line_colors": ("matched" if line_matched else "neutral") if setting == "gems" else "",
 		"radial_size": pack_options["radial_size"],
 		"tiers": pack_options["tiers"],
+		"spacers": pack_options.get("spacers", false),
 		"unit": unit,
 		"gem_types": gem_types,
 		"gem_kinds": GemVariety.kinds(slots),

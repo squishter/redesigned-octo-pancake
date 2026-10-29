@@ -45,6 +45,8 @@ const ROW_SHAPES := ["round", "round", "round", "hexagon", "square", "marquise",
 ## solid: none; rows: every other row; edge: the outermost row; heart: the
 ## center stone(s).
 const TONINGS := ["solid", "rows", "edge", "heart"]
+## Spacer rows' stones, as a share of the pattern's row stones.
+const SPACER := 0.5
 ## Smallest stone scale at the picture's center when sizes shrink inward.
 const RADIAL_MIN := 0.55
 
@@ -61,6 +63,9 @@ var radial_size := false
 ## Multi-pass designs: a few large stones first, then a few medium ones,
 ## then the group's pattern around them.
 var tiers := false
+## Thin rows of small stones between a pattern's main rows, each its own part,
+## so a picture can use more gem types while every row keeps a single type.
+var spacers := false
 var _pic_center := Vector2.ZERO
 var _pic_reach := 1.0
 
@@ -84,6 +89,8 @@ var _part := 0
 ##   groups (PackedInt32Array: symmetry group per region; copies share a pattern),
 ##   radial_size (bool): rows, lattices and spines shrink toward the picture's center,
 ##   tiers (bool): some groups first get a few large, then a few medium stones,
+##   spacers (bool): every row pattern gets thin rows of small stones between
+##     its main rows (otherwise only some groups, picked per seed),
 ##   styles (Dictionary region id -> style, to force a style or sparse fill).
 ## Returns slots: {id, region, shape, x, y, rotation, size, width, tone, part},
 ## in px of the map; size is the length along the rotation, width across it;
@@ -118,6 +125,7 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	gap = options.get("gap", side * 0.003)
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
+	spacers = options.get("spacers", false)
 	_pic_center = Vector2(region_map.width, region_map.height) / 2.0
 	_pic_reach = side / 2.0
 	free = region_map.dist.duplicate()
@@ -163,7 +171,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"row_r": row_r,
 		"row_shape": shape,
 		# Every other row smaller, like alternating bead sizes.
-		"alternate": style == "echo" and g_rng.randf() < 0.3,
+		"spacers": spacers or g_rng.randf() < 0.25,
 		"toning": TONINGS[g_rng.randi_range(0, TONINGS.size() - 1)],
 		"halo_rows": 1 if g_rng.randf() < 0.6 else 2,
 		"edge_row": g_rng.randf() < 0.5,
@@ -224,14 +232,14 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 		"scatter":
 			_lattice(region, u * 0.6, design["scatter_space"], "round", design["lattice_turn"], false)
 		"echo":
-			var radii := _graded_rows(region, r_row, design["grade"], design["alternate"])
+			var radii := _graded_rows(region, r_row, design["grade"], design["spacers"])
 			var n := radii.size()
 			var shapes := []
 			var tones := []
 			for k in n:
-				var small: bool = design["alternate"] and k % 2 == 1
-				shapes.append("round" if small else design["row_shape"])
-				tones.append(_row_tone(toning, k))
+				var spacer: bool = design["spacers"] and k % 2 == 1
+				shapes.append("round" if spacer else design["row_shape"])
+				tones.append(1 if spacer else _row_tone(toning, k / 2 if design["spacers"] else k))
 			_rows(region, radii, shapes, tones)
 			_tone = 1 if toning == "heart" else 0
 			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
@@ -244,6 +252,10 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 				radii.append(r_row * (1.0 if k == 0 else 0.8))
 				shapes.append(design["row_shape"] if k == 0 else "round")
 				tones.append(_row_tone(toning, k))
+				if design["spacers"]:
+					radii.append(r_row * SPACER)
+					shapes.append("round")
+					tones.append(1)
 			_rows(region, radii, shapes, tones)
 			_tone = 0 if toning == "edge" else 1
 			_center_stone(region, INF)
@@ -260,19 +272,21 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 			var shapes := []
 			var tones := []
 			for k in n:
-				radii.append(r_row)
-				shapes.append(design["row_shape"])
-				tones.append(_row_tone("edge" if toning == "edge" else "solid", k))
+				var spacer: bool = design["spacers"] and k % 2 == 1
+				radii.append(r_row * (SPACER if spacer else 1.0))
+				shapes.append("round" if spacer else design["row_shape"])
+				tones.append(1 if spacer else _row_tone("edge" if toning == "edge" else "solid", k))
 			_rows(region, radii, shapes, tones)
 			_fill_rest([r_row, r_row * 0.7, r_row * 0.5])
 		"honeycomb":
-			if design["edge_row"]:
+			if design["edge_row"] or design["spacers"]:
 				_rows(region, [r_row * 0.6], ["round"], [1 if toning != "solid" else 0])
 			_tone = 0
 			_lattice(region, r_row, gap, design["row_shape"], design["lattice_turn"], design["gradient"])
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"stripes":
-			_stripes(region, r_row, design["row_shape"], design["lattice_turn"] * 1.5, toning != "solid", design["grade"])
+			_stripes(region, r_row, design["row_shape"], design["lattice_turn"] * 1.5, toning != "solid", design["grade"],
+					design["spacers"])
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"sunburst":
 			_tone = 0 if toning == "edge" else 1
@@ -339,20 +353,21 @@ func _row_tone(toning: String, k: int) -> int:
 
 ## Radii of the outline rows that fit from the edge to the middle: each row
 ## `grade` times the one outside it (kept between 0.45 and 1.6 units), every
-## other row smaller when `alternate`. The last row may sit a little past the
+## other row a thin spacer row when `spaced`. The last row may sit a little past the
 ## middle; its stones shrink to fit.
-func _graded_rows(region: Dictionary, r: float, grade: float, alternate: bool) -> Array:
+func _graded_rows(region: Dictionary, r: float, grade: float, spaced: bool) -> Array:
 	var depth: float = region["max_dist"]
 	var d := gap
 	var out := []
 	var base := r
 	while out.size() < 24:
-		var rk := base * (0.62 if alternate and out.size() % 2 == 1 else 1.0)
+		var rk := r * SPACER if spaced and out.size() % 2 == 1 else base
 		if d + rk > depth + rk * 0.35:
 			break
 		out.append(rk)
 		d += 2.0 * rk + gap
-		base = clampf(base * grade, unit * 0.45, unit * 1.6)
+		if not (spaced and out.size() % 2 == 0):
+			base = clampf(base * grade, unit * 0.45, unit * 1.6)
 	return out
 
 
@@ -487,7 +502,8 @@ func _lattice(region: Dictionary, r: float, spacing: float, shape: String, turn:
 ## `turn`), each clipped to the region and evenly spaced inside, with the
 ## middle row through the centroid; rows away from the middle are `grade`
 ## times the size of the row before. Rows alternate tones when `banded`.
-func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded: bool, grade: float) -> void:
+func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded: bool, grade: float,
+		spaced: bool) -> void:
 	var c: Vector2 = region["centroid"]
 	var dir := Vector2.from_angle(region["axis"] + turn)
 	var nrm := dir.orthogonal()
@@ -495,20 +511,33 @@ func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded:
 	var reach := Vector2(bbox.size).length() / 2.0 + 2.0
 	# Row offsets from the middle row outward on both sides, each row `grade`
 	# times the size of the one nearer the middle.
+	# With spacers, every other row is a thin row of small stones.
 	var offsets := [0.0]
 	var sizes := [r0]
 	var off := 0.0
 	var r := r0
+	var main := r0
+	var i := 0
 	while off < reach and offsets.size() < 200:
-		var nr := clampf(r * grade, unit * 0.45, unit * 1.6)
+		i += 1
+		var nr: float
+		if spaced and i % 2 == 1:
+			nr = r0 * SPACER
+		else:
+			main = clampf(main * grade, unit * 0.45, unit * 1.6)
+			nr = main
 		off += r + gap + nr
 		r = nr
 		offsets.append_array([off, -off])
 		sizes.append_array([r, r])
+	var part0 := _part
 	for k in offsets.size():
 		r = sizes[k]
-		_tone = (((k + 1) / 2) % 2) if banded else 0
-		_part += 1
+		# Rows the same distance from the middle are one part, so the stripes
+		# stay mirror-symmetric when parts change type.
+		var ring := (k + 1) / 2
+		_tone = (1 if spaced and ring % 2 == 1 else ((ring % 2) if banded else 0))
+		_part = part0 + 1 + ring
 		var base: Vector2 = c + nrm * float(offsets[k])
 		# Inside stretches of this row, where a full stone could sit.
 		var run_start := NAN
@@ -523,6 +552,7 @@ func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded:
 				_along(pts, false, r, shape)
 				run_start = NAN
 			t += 1.0
+	_part = part0 + 1 + (offsets.size() + 1) / 2
 	_tone = 0
 
 
