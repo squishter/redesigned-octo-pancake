@@ -8,7 +8,8 @@ const LINE_COLOR := Color("#3a2a4a")
 const BACKGROUND := Color("#f4eee6")
 
 
-## Mandala options: variant, wobble (see MandalaGenerator), template and recent
+## Mandala options: variant, wobble (see MandalaGenerator), silhouette,
+## extras, zoom and recent for mandalas (see MandalaDesign), template and recent
 ## for flowers (see FlowerGenerator), shape, collar, patterns and recent for
 ## hearts (see HeartGenerator), shape, border, body, antennae and recent for
 ## butterflies (see ButterflyGenerator), center, arm, tip, between, details
@@ -46,6 +47,8 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictio
 		opts["source"]["butterfly"] = mandala["butterfly"]
 	if mandala.has("snowflake"):
 		opts["source"]["snowflake"] = mandala["snowflake"]
+	if mandala.has("mandala"):
+		opts["source"]["mandala"] = mandala["mandala"]
 	return CollageGenerator.generate(lines["mask"], lines["width"], lines["height"], opts)
 
 

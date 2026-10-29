@@ -21,6 +21,7 @@ func _init() -> void:
 
 	test_lab_round_trip()
 	test_mandala_determinism()
+	test_mandalas()
 	test_flowers()
 	test_hearts()
 	test_butterflies()
@@ -57,6 +58,57 @@ func test_mandala_determinism() -> void:
 		var c := MandalaGenerator.generate(43, {"variant": variant, "wobble": 0.5})
 		check(a["polylines"] == b["polylines"], "%s: same seed gave different lines" % variant)
 		check(a["polylines"] != c["polylines"], "%s: different seeds gave the same lines" % variant)
+
+
+## 24 mandalas in a row: every silhouette, center, extra and ring pattern
+## shows up, many rings combine patterns, and each has plenty of closed
+## regions. Two are forced to the zoomed-in crop. Writes a contact sheet.
+func test_mandalas() -> void:
+	print("Mandalas")
+	var count := 24
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 4, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	var rings := 0
+	var combined := 0
+	for i in count:
+		var seed_value := 7000 + i
+		var opts := {"variant": "mandala", "recent": recent}
+		if i == 5 or i == 17:
+			opts["zoom"] = true
+		var lines := PictureSources.mandala_lines(seed_value, opts)
+		var md: Dictionary = lines["mandala"]["mandala"]
+		recent.append(md)
+		seen[md["silhouette"]] = true
+		seen[md["center"]] = true
+		for e in md["extras"]:
+			seen[e] = true
+		var names := PackedStringArray()
+		for ring in md["rings"]:
+			rings += 1
+			if ring.size() >= 2:
+				combined += 1
+			for p in ring:
+				seen[p] = true
+			names.append("+".join(PackedStringArray(ring)))
+		if md["zoom"]:
+			check(lines["mandala"]["symmetry"] == "none", "seed %d: a zoomed crop should not be symmetric" % seed_value)
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
+		print("  seed %d %2d-fold %-10s %-8s extras %-20s%s %3d regions  %s" % [seed_value, md["folds"],
+				md["silhouette"], md["center"], " + ".join(PackedStringArray(md["extras"])),
+				" zoom" if md["zoom"] else "     ", map.regions.size(), " | ".join(names)])
+		check(map.regions.size() >= 10, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		sheet_cell(sheet, lines, i, cell)
+	var expected := (MandalaDesign.SILHOUETTES + MandalaDesign.CENTERS + MandalaDesign.EXTRAS + MandalaDesign.SINGULAR
+			+ MandalaDesign.RISING + MandalaDesign.HANGING + MandalaDesign.FLOATING)
+	for choice in expected:
+		check(seen.has(choice), "%s never showed up in %d mandalas" % [choice, count])
+	check(combined * 3 >= rings, "only %d of %d rings combine patterns" % [combined, rings])
+	sheet.save_png(out_dir.path_join("mandalas_contact_sheet.png"))
 
 
 ## 24 flowers in a row, as a pack's picture choices would make them: every

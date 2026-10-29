@@ -8,6 +8,8 @@ var _source: OptionButton
 var _variant: OptionButton
 var _template: OptionButton
 var _collar: OptionButton
+var _silhouette: OptionButton
+var _zoom: OptionButton
 var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
@@ -38,6 +40,8 @@ func _ready() -> void:
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
 	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS)
+	_silhouette = _options(controls, "Outline", ["random"] + MandalaDesign.SILHOUETTES)
+	_zoom = _options(controls, "Zoom", ["auto", "off", "on"])
 	_theme = _options(controls, "Theme", Array(Palettes.theme_names()))
 	_mode = _options(controls, "Mode", ["Collage", "Kit", "Line art"])
 	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
@@ -154,6 +158,8 @@ func _generate() -> void:
 		"variant": _selected(_variant),
 		"template": _selected(_template),
 		"collar": _selected(_collar),
+		"silhouette": _selected(_silhouette),
+		"zoom": _selected(_zoom),
 		"theme": _selected(_theme),
 		"wobble": _wobble.value,
 		"detail": _detail.value,
@@ -175,12 +181,15 @@ func _run_job(job: Dictionary) -> void:
 		"variant": job["variant"],
 		"template": job["template"],
 		"collar": job["collar"],
+		"silhouette": job["silhouette"],
 		"theme": job["theme"],
 		"wobble": job["wobble"],
 		"detail": job["detail"],
 		"sparsity": job["sparsity"],
 		"line_style": job["line_style"],
 	}
+	if job["zoom"] != "auto":
+		opts["zoom"] = job["zoom"] == "on"
 	var photo: Image = job["photo"]
 	var out := {"mode": job["mode"]}
 	match job["mode"]:
@@ -221,6 +230,10 @@ func _process(_delta: float) -> void:
 				var b: Dictionary = p["source"]["butterfly"]
 				flower = ", %s wings, %s border, fore %s, hind %s" % [b["shape"], b["border"],
 						" + ".join(PackedStringArray(b["fore"])), " + ".join(PackedStringArray(b["hind"]))]
+			if p["source"].has("mandala"):
+				var md: Dictionary = p["source"]["mandala"]
+				flower = ", %d-fold, %s outline, extras %s%s" % [md["folds"], md["silhouette"],
+						" + ".join(PackedStringArray(md["extras"])), ", zoomed in" if md["zoom"] else ""]
 			if p["source"].has("snowflake"):
 				var f: Dictionary = p["source"]["snowflake"]
 				flower = ", %s center, %s arms, %s tips, between %s, details %s" % [f["center"], f["arm"], f["tip"],
