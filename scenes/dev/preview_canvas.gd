@@ -11,7 +11,7 @@ extends Control
 const VELVET := Color("#2a1f3d")
 const GOLD := Color("#d4af5a")
 const CANVAS := Color("#f4eee6")
-const MAX_ZOOM := 12.0
+const MAX_ZOOM := 40.0
 const DOUBLE_TAP_MS := 300
 const DOUBLE_TAP_SLOP := 60.0
 

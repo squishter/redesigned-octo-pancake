@@ -82,17 +82,18 @@ The board in 3D: real faceted gems on white paper, under a fixed camera
 looking straight down. The light drifts slowly over time and hangs still in
 the room while the phone moves: tilting, rolling or turning it (in any pose,
 upright too) moves the light across the stones, so facets catch it, glint
-and flare into star sparkles. It always stays generally overhead (at least
-43° above the paper, swinging at most about 30° from where it rests). The
-camera never moves. Caustics depend on the light's direction only, so they
+and flare into star sparkles. Turns count twice over, so tilting the phone
+about 30° (flat, side to side) or turning it about 30° (upright) swings the
+light over the stones from one side to the other, while it always stays
+generally overhead (at least 40° above the paper). The camera never moves. Caustics depend on the light's direction only, so they
 hold still when it does.
 
 | File | What it does |
 | --- | --- |
-| `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The swing eases off toward its limit and the lights glide to new directions; glow blooms the glints. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
+| `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
 | `gem_mesh.gd` | Builds a stone's crown in 3D from its outline: the girdle resampled so corners stay sharp, then rings of points pulled in and raised (every 1st, 2nd or 4th point, half a step apart for brilliants) zipped into flat triangular facets up to a table or a point. Cached per shape and cut. |
 | `gem.gdshader` | Facets mirror a small studio (a key softbox with window bars, a fill, a ring of low lamps, the paper below); light also refracts in, bounces off two pavilion facets (sectors under a brilliant, nested rectangles under a step cut), comes back out tinted by the gem and split a little per color for fire, with soft light playing through the body (shifting as the light moves) and a darker rim. Cabochons glow smoothly toward the light. |
-| `gem_shadow.gdshader` | Each stone's soft shadow on the paper, cast away from the light by how high it stands, with the colored caustic light it focuses inside it, shifting as the light moves; both fade out before the edge of their plane. |
+| `gem_shadow.gdshader` | Each stone's soft shadow on the paper (lighter under the tiniest stones), cast away from the light by how high it stands, with the colored caustic light it focuses inside it, shifting as the light moves; both fade out before the edge of their plane. |
 | `gem_sparkle.gdshader` | Four-point star flares when one of a stone's two brightest facets turns a light straight up at the viewer; planes for unlit stones collapse to nothing. |
 | `paper.gdshader` | The paper's faint grain, lit by the key; metal-setting lines as gold ridges that shine toward the light. |
 | `gem_light.gdshaderinc` | The light and studio shared by all of them. |
@@ -126,7 +127,8 @@ hold still when it does.
   lines, bead lines changing size along strokes, elements left out over the
   stone limit, gem cuts (every shape's mesh in every cut covers its outline
   with facets facing up; stones of one part share a cut), the board's light
-  following a phone held still, turned upright, tilted and rolled, and
+  following a phone held still or tilted, crossing over the stones when it
+  is tilted 30° either way flat or turned 30° either way upright, and
   staying overhead however it's held, kits at every size (owned colors only), photo line art and a JSON
   round trip:
 

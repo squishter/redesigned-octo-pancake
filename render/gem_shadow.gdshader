@@ -29,7 +29,9 @@ void vertex() {
 
 void fragment() {
 	float d = length(lp - off * 0.8);
-	float shade = (1.0 - smoothstep(0.6, 1.3, d)) * 0.42 * clamp(light_strength, 0.0, 1.0) * shadow_strength;
+	// Lighter under the tiniest stones, which barely stand off the paper.
+	float small = mix(0.6, 1.0, smoothstep(1.5, 4.5, stone.y));
+	float shade = (1.0 - smoothstep(0.6, 1.3, d)) * 0.36 * small * clamp(light_strength, 0.0, 1.0) * shadow_strength;
 	// The light the stone gathers lands in the far half of its shadow.
 	float focus = 1.0 - smoothstep(0.05, 0.85, length(lp - off * 1.25));
 	float edge = 1.0 - smoothstep(span * 0.7, span * 0.97, max(abs(lp.x), abs(lp.y)));

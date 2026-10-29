@@ -20,7 +20,7 @@ const SHADOW_SHADER := preload("res://render/gem_shadow.gdshader")
 const SPARKLE_SHADER := preload("res://render/gem_sparkle.gdshader")
 const PAPER_SHADER := preload("res://render/paper.gdshader")
 const BACKGROUND := Color("#2a1f3d")
-const MAX_ZOOM := 12.0
+const MAX_ZOOM := 40.0
 const DOUBLE_TAP_MS := 300
 const DOUBLE_TAP_SLOP := 60.0
 ## Room around the picture when fitted, as a share of its size.
@@ -31,7 +31,7 @@ const GIRDLE_HEIGHT := 0.45
 const CROWN_HEIGHT := 0.3
 ## Shadow and sparkle planes, in stone half-sizes (shadows must cover the
 ## farthest the light can push them).
-const SHADOW_SPAN := 2.2
+const SHADOW_SPAN := 2.6
 const SPARKLE_SPAN := 1.7
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
@@ -45,11 +45,12 @@ const DRIFT := 0.45
 ## The fill light's height, and the lowest the key and fill go (radians):
 ## however the phone turns, the light stays generally overhead.
 const FILL_ELEVATION := 0.6
-const MIN_KEY_ELEVATION := 0.75
+const MIN_KEY_ELEVATION := 0.7
 const MIN_FILL_ELEVATION := 0.4
-## The farthest the phone's turn swings a light from where it would hang
-## (radians); bigger turns ease toward it rather than stopping hard.
-const MAX_SWING := 0.55
+## The phone's turns count this many times over, so tilting it about 30
+## degrees (flat, side to side) or turning it about 30 degrees (upright)
+## swings the light over the stones from one side to the other.
+const TURN_GAIN := 2.0
 ## How quickly gravity readings and the light settle (per second).
 const SENSOR_SMOOTH := 6.0
 const LIGHT_SMOOTH := 8.0
@@ -191,16 +192,16 @@ func update_light(delta := 0.0) -> void:
 		m.set_shader_parameter("fill_dir", fill_dir)
 
 
-## A light direction (board space) after the phone's turn: into the phone's
-## axes (board x right, y toward the viewer, z down the picture are its x,
-## z and -y), turned, and back. The swing from where it would hang eases off
-## toward MAX_SWING, and it stays at least `lowest` (radians) above the paper.
+## A light direction (board space) after the phone's turn (TURN_GAIN times
+## over): into the phone's axes (board x right, y toward the viewer, z down
+## the picture are its x, z and -y), turned, and back, staying at least
+## `lowest` (radians) above the paper.
 func _turned(board_dir: Vector3, lowest: float) -> Vector3:
-	var d := turn * Vector3(board_dir.x, -board_dir.z, board_dir.y)
+	var d := Vector3(board_dir.x, -board_dir.z, board_dir.y)
+	var q := turn.get_rotation_quaternion()
+	if q.get_angle() > 1e-5:
+		d = Basis(q.get_axis(), minf(q.get_angle() * TURN_GAIN, PI)) * d
 	var b := Vector3(d.x, d.z, -d.y).normalized()
-	var swing := board_dir.angle_to(b)
-	if swing > 1e-4:
-		b = board_dir.slerp(b, MAX_SWING * tanh(swing / MAX_SWING) / swing).normalized()
 	if b.y < sin(lowest):
 		var flat := Vector2(b.x, b.z)
 		flat = (flat.normalized() if flat.length() > 1e-4 else Vector2(board_dir.x, board_dir.z).normalized())

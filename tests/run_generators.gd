@@ -624,35 +624,48 @@ func test_gem_cuts() -> void:
 
 func test_board_light() -> void:
 	print("Board light")
-	# Poses of a phone held upright: which way is up in its axes (x right,
-	# y up the screen, z out of it) and how far it spun about the vertical.
+	# Poses: which way is up in the phone's axes (x right, y up the screen,
+	# z out of it) when the picture appeared and now, and how far it spun
+	# about the vertical on the way.
 	var upright := Vector3(0.0, 1.0, 0.0)
+	var flat := Vector3(0.0, 0.0, 1.0)
+	var tilt := func(up: Vector3, axis: Vector3, degrees: float) -> Vector3: return up.rotated(axis, deg_to_rad(degrees))
 	var poses := {
-		"held still": [upright, 0.0],
-		"turned 30 degrees upright": [upright, deg_to_rad(30.0)],
-		"tilted back 20 degrees": [upright.rotated(Vector3.RIGHT, deg_to_rad(20.0)), 0.0],
-		"rolled 20 degrees": [upright.rotated(Vector3.BACK, deg_to_rad(20.0)), 0.0],
-		"upside down": [-upright, 0.0],
-		"lying face down": [Vector3(0.0, 0.0, -1.0), 0.0],
-		"spun half round": [upright, PI],
+		"held still": [upright, upright, 0.0],
+		"upright, tilted back 20 degrees": [upright, tilt.call(upright, Vector3.RIGHT, 20.0), 0.0],
+		"upright, turned 30 degrees left": [upright, upright, deg_to_rad(30.0)],
+		"upright, turned 30 degrees right": [upright, upright, deg_to_rad(-30.0)],
+		"flat, tilted 30 degrees left": [flat, tilt.call(flat, Vector3.UP, -30.0), 0.0],
+		"flat, tilted 30 degrees right": [flat, tilt.call(flat, Vector3.UP, 30.0), 0.0],
+		"upside down": [upright, -upright, 0.0],
+		"lying face down": [upright, Vector3(0.0, 0.0, -1.0), 0.0],
+		"spun half round": [upright, upright, PI],
 	}
 	var board := GemBoard3D.new()
 	board.use_sensor = false
 	board.update_light()
 	var rest := board.key_dir
+	var side := {}
 	for what: String in poses:
-		board.turn = GemBoard3D.phone_turn(upright, poses[what][0], poses[what][1])
+		board.turn = GemBoard3D.phone_turn(poses[what][0], poses[what][1], poses[what][2])
 		board.update_light()
 		var key := board.key_dir
 		var moved := rad_to_deg(key.angle_to(rest))
 		var height := rad_to_deg(asin(key.y))
-		print("  %s: light moves %.0f degrees, %.0f degrees above the paper" % [what, moved, height])
+		side[what] = key.x
+		print("  %s: light moves %.0f degrees, %.0f degrees above the paper, from x %.2f" % [what, moved, height, key.x])
 		if what == "held still":
 			check(moved < 0.5, "the light moved %.1f degrees with the phone held still" % moved)
-		elif what in ["turned 30 degrees upright", "tilted back 20 degrees", "rolled 20 degrees"]:
-			check(moved > 8.0, "the light moved only %.1f degrees with the phone %s" % [moved, what])
+		elif what == "upright, tilted back 20 degrees":
+			check(moved > 15.0, "the light moved only %.1f degrees with the phone %s" % [moved, what])
 		check(height >= rad_to_deg(GemBoard3D.MIN_KEY_ELEVATION) - 0.5, "the light fell to %.0f degrees, %s" % [height, what])
-		check(moved <= rad_to_deg(GemBoard3D.MAX_SWING) + 0.5, "the light swung %.0f degrees, %s" % [moved, what])
+	# Side to side: the light crosses over the stones.
+	for pair in [["flat, tilted 30 degrees left", "flat, tilted 30 degrees right"],
+			["upright, turned 30 degrees left", "upright, turned 30 degrees right"]]:
+		var a: float = side[pair[0]]
+		var b: float = side[pair[1]]
+		check(a * b < 0.0 and minf(absf(a), absf(b)) > 0.25, "%s and %s leave the light on one side (x %.2f, %.2f)"
+				% [pair[0], pair[1], a, b])
 	board.free()
 
 
