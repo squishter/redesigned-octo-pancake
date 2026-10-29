@@ -4,10 +4,12 @@ extends RefCounted
 ## different from each other rather than like one flower at different sizes.
 ##
 ## Each flower picks a template and draws 1-4 rings of petals around a center.
-## A ring of 6 or more (an even count) alternates 2 wobbled versions of its
-## template (ABAB), so it stays symmetric but not uniform; others repeat one.
-## Every ring, and the center, keeps a turn the first ring has (the
-## flower's turns), so the whole flower repeats around.
+## Most flowers (SYMMETRIC_CHANCE) repeat around: a ring of 6 or more (an
+## even count) alternates 2 wobbled versions of its template (ABAB), so it
+## stays symmetric but not uniform, others repeat one, and every ring and
+## the center keep a turn the first ring has (the flower's turns). The rest
+## are free-form: each ring mixes 2 or 3 versions (ABAB or ABCABC, or a
+## mirrored sequence for odd counts) and picks its own petal count.
 ## Inner rings sit in front of outer ones and each petal overlaps the next
 ## like a pinwheel; hidden parts of outlines are clipped away, and every
 ## visible piece ends on another outline, so all regions stay closed.
@@ -51,9 +53,12 @@ const MIN_HALF_WIDTH := 0.024
 ## Fewest turns a flower keeps when a ring can't share all of its first
 ## ring's (unless that has fewer).
 const MIN_TURNS := 4
+## Share of flowers that repeat around; the rest are free-form.
+const SYMMETRIC_CHANCE := 0.8
 
 var rng := RandomNumberGenerator.new()
 var wobble := 0.0
+var symmetric := true
 var polylines: Array[PackedVector2Array] = []
 var closed := PackedByteArray()
 
@@ -65,19 +70,28 @@ var closed := PackedByteArray()
 ##           again, and the least used of the rest are preferred, so a run of
 ##           flowers works through every template.
 ##   wobble: 0..1, per-petal jitter for the semi-symmetric look (default 0)
-## Returns {"seed", "template", "rings": [{"template", "petals"}], "center",
-## "polylines", "closed"}.
+##   symmetric: true or false to force a flower that repeats around or a
+##              free-form one (default: SYMMETRIC_CHANCE)
+## Returns {"seed", "template", "symmetric", "rings": [{"template",
+## "petals"}], "center", "polylines", "closed"}.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var g := FlowerGenerator.new()
 	g.rng.seed = seed_value
 	g.wobble = clampf(options.get("wobble", 0.0), 0.0, 1.0)
+	# Drawn apart from the flower's own numbers, so a free-form flower comes
+	# out as it always did.
+	var pick := RandomNumberGenerator.new()
+	pick.seed = hash([seed_value, "symmetric"])
+	var wanted: Variant = options.get("symmetric", "auto")
+	g.symmetric = wanted if wanted is bool else pick.randf() < SYMMETRIC_CHANCE
 	var template: String = options.get("template", "random")
 	if not TEMPLATES.has(template):
 		template = g._pick_template(options.get("recent", []))
 	var rings := g._build(template)
 	var turns := 0
-	for r in rings:
-		turns = _gcd(turns, _turns(r["petals"]))
+	if g.symmetric:
+		for r in rings:
+			turns = _gcd(turns, _turns(r["petals"]))
 	var center := g._build_center(rings[0]["rc"], turns)
 	var ring_info := []
 	for r in rings:
@@ -85,6 +99,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	return {
 		"seed": seed_value,
 		"template": template,
+		"symmetric": g.symmetric,
 		"rings": ring_info,
 		"center": center,
 		"polylines": g.polylines,
@@ -131,8 +146,12 @@ func _build(template: String) -> Array:
 	for _ring in _range(TEMPLATES[template]["rings"]):
 		var p: Dictionary = TEMPLATES[t]
 		var width := rng.randf_range(p["width"][0], p["width"][1])
-		n = _fitting(n, _max_petals(p, width, reach, rc), turns)
-		turns = _gcd(turns, _turns(n))
+		var cap := _max_petals(p, width, reach, rc)
+		if symmetric:
+			n = _fitting(n, cap, turns)
+			turns = _gcd(turns, _turns(n))
+		else:
+			n = mini(n, cap)
 		rings.append({"template": t, "petals": n, "reach": reach, "rotation": rotation, "width": width, "rc": rc})
 		reach = rc + (reach - rc) * rng.randf_range(0.55, 0.8)
 		rotation += PI / n
@@ -204,7 +223,17 @@ static func _versions(n: int) -> int:
 	return 2 if n % 2 == 0 and n >= 6 else 1
 
 
-## Turns of a ring of n petals: it repeats every _versions petals.
+## Which version petal i of n uses: repeating ABAB or ABCABC, or for an odd
+## count with 2 versions (free-form flowers), a sequence mirrored across
+## petal 0's axis.
+static func _version_index(i: int, n: int, k: int) -> int:
+	if k != 2 or n % 2 == 0:
+		return i % k
+	return mini(i, n - i) % 2
+
+
+## Turns of a symmetric flower's ring of n petals: it repeats every
+## _versions petals.
 static func _turns(n: int) -> int:
 	return n / _versions(n)
 
@@ -232,7 +261,7 @@ static func _max_petals(p: Dictionary, width: float, reach: float, rc: float) ->
 func _ring_petals(ring: Dictionary, rc: float) -> Array:
 	var p: Dictionary = TEMPLATES[ring["template"]]
 	var n: int = ring["petals"]
-	var k := _versions(n)
+	var k := _versions(n) if symmetric else (3 if n % 3 == 0 else 2)
 	var versions := []
 	for _v in k:
 		versions.append(_wobbled(p))
@@ -240,7 +269,7 @@ func _ring_petals(ring: Dictionary, rc: float) -> Array:
 	var base_r := rc * 0.6
 	var out := []
 	for i in n:
-		var q: Dictionary = versions[i % k]
+		var q: Dictionary = versions[_version_index(i, n, k)]
 		var jitter_angle := rng.randf_range(-1.0, 1.0) * deg_to_rad(2.0) * wobble
 		var jitter_length := 1.0 + rng.randf_range(-1.0, 1.0) * 0.04 * wobble
 		var length: float = (ring["reach"] - base_r) / MAX_LENGTH_SCALE * q["length_scale"] * jitter_length
@@ -374,17 +403,26 @@ static func _crossing(a: Vector2, b: Vector2, rc: float, polys: Array[PackedVect
 
 
 ## Draws the flower's center inside its disc of radius rc, repeating with
-## the flower's turns. Returns its kind.
+## the flower's turns (0 for a free-form flower). Returns its kind.
 func _build_center(rc: float, turns: int) -> String:
 	var kind: String = CENTERS[rng.randi_range(0, CENTERS.size() - 1)]
 	match kind:
 		"seeds":
-			# Seed dots in two staggered rings around one.
-			var n := _count(3, 6, turns)
-			_add(MandalaGenerator.circle(Vector2.ZERO, rc * 0.16, 20), true)
-			for i in n:
-				_add(MandalaGenerator.circle(Vector2.from_angle(TAU * i / n) * rc * 0.42, rc * 0.12, 20), true)
-				_add(MandalaGenerator.circle(Vector2.from_angle(TAU * (i + 0.5) / n) * rc * 0.74, rc * 0.14, 20), true)
+			if turns == 0:
+				# A sunflower-style spiral of seed dots.
+				var n := rng.randi_range(7, 12)
+				var golden := PI * (3.0 - sqrt(5.0))
+				for i in n:
+					var f := sqrt((i + 0.5) / n)
+					_add(MandalaGenerator.circle(Vector2.from_angle(i * golden) * rc * 0.78 * f,
+							rc * 0.16 * (0.75 + 0.25 * f), 20), true)
+			else:
+				# Seed dots in two staggered rings around one.
+				var n := _count(3, 6, turns)
+				_add(MandalaGenerator.circle(Vector2.ZERO, rc * 0.16, 20), true)
+				for i in n:
+					_add(MandalaGenerator.circle(Vector2.from_angle(TAU * i / n) * rc * 0.42, rc * 0.12, 20), true)
+					_add(MandalaGenerator.circle(Vector2.from_angle(TAU * (i + 0.5) / n) * rc * 0.74, rc * 0.14, 20), true)
 		"stamens":
 			_add(MandalaGenerator.circle(Vector2.ZERO, rc * 0.5), true)
 			var n := _count(6, 10, turns)

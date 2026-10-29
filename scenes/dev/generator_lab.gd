@@ -353,7 +353,7 @@ func _process(_delta: float) -> void:
 				fills[r["fill"]] = fills.get(r["fill"], 0) + 1
 			var flower := ""
 			if p["source"].has("template"):
-				flower = ", %s petals" % p["source"]["template"]
+				flower = ", %s petals%s" % [p["source"]["template"], " (free-form)" if p["source"].get("free_form") else ""]
 			if p["source"].has("heart"):
 				var heart: Dictionary = p["source"]["heart"]
 				flower = ", %s heart, %s collar, %s" % [heart["shape"], heart["collar"], " + ".join(PackedStringArray(heart["patterns"]))]

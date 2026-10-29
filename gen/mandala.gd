@@ -23,7 +23,7 @@ const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 ## "closed", "frame"} ("frame" is FrameDesign's choices, or empty), plus the
 ## design's choices under the variant's name: "mandala"
 ## (folds, silhouette, center, rings, extras, zoom), "flower" (template,
-## rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
+## symmetric, rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
 ## (shape, border, body, antennae, fore, hind) or "snowflake" (center, arm,
 ## tip, between, details).
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
@@ -38,7 +38,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	match variant:
 		"flower":
 			design = FlowerGenerator.generate(seed_value, options)
-			keys = ["template", "rings", "center"]
+			keys = ["template", "symmetric", "rings", "center"]
 		"snowflake":
 			design = SnowflakeGenerator.generate(seed_value, options)
 			keys = ["center", "arm", "tip", "between", "details"]

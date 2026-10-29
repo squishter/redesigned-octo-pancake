@@ -306,6 +306,11 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var type_target: int = options.get("gem_types", type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
 	var gem_types := GemVariety.balance(slots, group_of,
 			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value)
+	# The centerpiece may have changed shape: stand it upright again.
+	for s in slots:
+		if s.get("centerpiece", false):
+			s["rotation"] = SlotPacker.upright(s["shape"])
+			s.erase("centerpiece")
 
 	var regions := []
 	for r in map.regions:

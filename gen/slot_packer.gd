@@ -73,10 +73,6 @@ const GAP := 0.3
 ## The region holding a mandala's center, when at most this deep (in
 ## units), holds a single stone: the picture's focus.
 const CENTERPIECE := 3.0
-## Shapes a centerpiece may take, by how many times each repeats around: one
-## that repeats with the picture's folds (round fits any).
-const CENTERPIECE_TURNS := {"round": 0, "hexagon": 6, "flower": 6, "octagon": 8, "cushion": 4, "square": 4,
-		"pentagon": 5, "star": 5, "trillion": 3}
 
 var map: RegionMap
 var rng := RandomNumberGenerator.new()
@@ -355,27 +351,32 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 	var hub: bool = map.label_at(int(_pic_center.x), int(_pic_center.y)) == region["id"]
 	if central and hub and region["max_dist"] <= unit * CENTERPIECE and design["style"] != "bare":
 		region["style"] = "accent"
-		var piece := design.duplicate()
-		piece["center_shape"] = _centerpiece_shape(design["center_shape"], folds)
-		_center_stone(region, INF, piece)
-	else:
-		_pack_pattern(region, design)
+		_centerpiece(design)
+		return
+	_pack_pattern(region, design)
 	SlotMirror.symmetrize(self, region, first, design["style"] in PATTERNS, folds, _axis)
 
 
-## The design's center shape if it repeats with `folds` (any mirrored shape
-## when the center has no turns, any rounded one when it is round), else
-## one that does.
-func _centerpiece_shape(wanted: String, folds: int) -> String:
-	var round_ring: bool = _ring.get("folds", 0) >= Symmetry.MAX_FOLDS
-	if folds <= 1 and not round_ring:
-		return wanted
-	var fits := []
-	for shape: String in CENTERPIECE_TURNS:
-		var turns: int = CENTERPIECE_TURNS[shape]
-		if turns == 0 or round_ring or turns % folds == 0:
-			fits.append(shape)
-	return wanted if wanted in fits else fits[rng.randi_range(0, fits.size() - 1)]
+## The picture's centerpiece: the design's center shape (any of them; one
+## stone needn't repeat with the folds around it) right on the center, as
+## big as fits, standing upright. Marked "centerpiece" so it can be stood
+## upright again if its shape changes later (see upright).
+func _centerpiece(design: Dictionary) -> void:
+	_part += 1
+	var shape: String = design["center_shape"]
+	# The center is a pixel corner; the free field is measured from pixel centers.
+	var r := _free_at(_pic_center) - gap - 0.75
+	if r < unit * 0.3:
+		return
+	_place(shape, _pic_center, upright(shape), r, 0.0)
+	slots[slots.size() - 1]["centerpiece"] = true
+
+
+## The rotation that stands the centerpiece upright: a heart point down,
+## anything with a point (star, pentagon, trillion) point up. Hearts
+## elsewhere follow their pattern.
+static func upright(shape: String) -> float:
+	return PI / 2.0 if shape == "heart" else -PI / 2.0
 
 
 func _pack_pattern(region: Dictionary, design: Dictionary) -> void:

@@ -46,6 +46,7 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 	}
 	if mandala.has("flower"):
 		opts["source"]["template"] = mandala["flower"]["template"]
+		opts["source"]["free_form"] = not mandala["flower"]["symmetric"]
 	if mandala.has("heart"):
 		opts["source"]["heart"] = mandala["heart"]
 	if mandala.has("butterfly"):
