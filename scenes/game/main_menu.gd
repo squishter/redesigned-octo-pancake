@@ -3,11 +3,14 @@ extends Control
 ## color theme), or pick up a saved one. Every puzzle keeps its own save, so
 ## a new one never overwrites one in progress. Each saved puzzle can be
 ## continued, restarted, recolored (the same picture made again in another
-## unlocked theme, as a new puzzle beside it) or deleted. Settings (how
-## placed gems go in) and the generator lab, a debug mode, are at the bottom.
+## unlocked theme, as a new puzzle beside it) or deleted. Collection & packs
+## shows what she has and opens packs for more (with her coins and free
+## picks shown beside it). Settings (how placed gems go in, the finale) and
+## the generator lab, a debug mode, are at the bottom.
 
 signal play_requested(id: String)
 signal lab_requested
+signal collection_requested
 
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
 const THUMB_PX := 220
@@ -50,6 +53,19 @@ func _ready() -> void:
 	var new_button := _button(root, "New puzzle", func() -> void: _open_new({}))
 	new_button.custom_minimum_size.y = LabTheme.TAP_HEIGHT * 1.3
 
+	var wallet := HBoxContainer.new()
+	root.add_child(wallet)
+	var coins := Label.new()
+	coins.text = "%d coins · %d free pick%s" % [Packs.coins(profile), Packs.picks(profile),
+			"" if Packs.picks(profile) == 1 else "s"]
+	coins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	coins.add_theme_color_override("font_color", LabTheme.GOLD)
+	wallet.add_child(coins)
+	var packs := _button(wallet, "Collection & packs", func() -> void: collection_requested.emit())
+	if Packs.picks(profile) > 0:
+		packs.text = "Collection & packs (%d free!)" % Packs.picks(profile)
+		packs.add_theme_color_override("font_color", LabTheme.GOLD)
+
 	# Choosing what to make: hidden until asked for.
 	var panel := PanelContainer.new()
 	panel.visible = false
@@ -90,16 +106,8 @@ func _ready() -> void:
 	var settings_grid := GridContainer.new()
 	settings_grid.columns = 2
 	_settings_panel.add_child(settings_grid)
-	var fill := _options(settings_grid, "Placing gems")
-	var settings: Dictionary = profile["settings"]
-	for key: String in SaveStore.FILL_ANIMATIONS:
-		fill.add_item(SaveStore.FILL_ANIMATIONS[key])
-		fill.set_item_metadata(fill.item_count - 1, key)
-		if key == settings["fill_animation"]:
-			fill.select(fill.item_count - 1)
-	fill.item_selected.connect(func(i: int) -> void:
-		settings["fill_animation"] = fill.get_item_metadata(i)
-		SaveStore.save_profile(profile))
+	_setting(settings_grid, "Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
+	_setting(settings_grid, "Finale", "finale", GemCatalog.FINALES, "finales")
 
 	var footer := HBoxContainer.new()
 	root.add_child(footer)
@@ -255,6 +263,22 @@ func _card(meta: Dictionary) -> Control:
 		SaveStore.delete_puzzle(profile, id)
 		_refresh_list()))
 	return card
+
+
+## A settings row choosing `key` among the unlocked entries of `catalog`
+## (unlock list `unlocked`), saved as soon as it changes.
+func _setting(parent: Control, label: String, key: String, catalog: Dictionary, unlocked: String) -> void:
+	var ob := _options(parent, label)
+	var settings: Dictionary = profile["settings"]
+	for id: String in catalog:
+		if id in profile["unlocks"].get(unlocked, []):
+			ob.add_item(catalog[id]["name"])
+			ob.set_item_metadata(ob.item_count - 1, id)
+			if id == settings.get(key, ""):
+				ob.select(ob.item_count - 1)
+	ob.item_selected.connect(func(i: int) -> void:
+		settings[key] = ob.get_item_metadata(i)
+		SaveStore.save_profile(profile))
 
 
 ## Runs `action` on a second tap within CONFIRM_MS; the first asks "Sure?".

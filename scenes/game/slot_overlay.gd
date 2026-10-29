@@ -112,8 +112,9 @@ func place(i: int) -> void:
 	_labels.queue_redraw()
 
 
-## The open slot of `gem_type` under board point `at` (within `tolerance`
-## board units of its outline), nearest its center first; -1 if none.
+## The open slot of `gem_type` (-1: any) under board point `at` (within
+## `tolerance` board units of its outline), nearest its center first; -1 if
+## none.
 func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
 	var cell := Vector2i((at / _cell).floor())
 	var best := -1
@@ -121,7 +122,7 @@ func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
 	for gy in range(cell.y - 1, cell.y + 2):
 		for gx in range(cell.x - 1, cell.x + 2):
 			for i: int in _grid.get(Vector2i(gx, gy), []):
-				if placed[i] != 0 or type_of[i] != gem_type:
+				if placed[i] != 0 or (gem_type >= 0 and type_of[i] != gem_type):
 					continue
 				var s: Dictionary = slots[i]
 				var d := (at - Vector2(s["x"], s["y"])).rotated(-float(s["rotation"]))
@@ -132,6 +133,28 @@ func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
 					best_q = q
 					best = i
 	return best
+
+
+## Every open slot of `gem_type` (-1: any) whose center is within `radius`
+## board units of `at`.
+func slots_near(at: Vector2, gem_type: int, radius: float) -> Array:
+	var out := []
+	var lo := Vector2i(((at - Vector2(radius, radius)) / _cell).floor())
+	var hi := Vector2i(((at + Vector2(radius, radius)) / _cell).floor())
+	for gy in range(lo.y, hi.y + 1):
+		for gx in range(lo.x, hi.x + 1):
+			for i: int in _by_center.get(Vector2i(gx, gy), []):
+				if placed[i] != 0 or (gem_type >= 0 and type_of[i] != gem_type):
+					continue
+				var s: Dictionary = slots[i]
+				if Vector2(s["x"], s["y"]).distance_to(at) <= radius:
+					out.append(i)
+	return out
+
+
+## The open slots of a gem type.
+func open_of_type(gem_type: int) -> Array:
+	return _of_type[gem_type].filter(func(i: int) -> bool: return placed[i] == 0)
 
 
 func _process(_delta: float) -> void:

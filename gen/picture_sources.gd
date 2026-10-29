@@ -73,7 +73,8 @@ static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dict
 	var h: int = lines["height"]
 	var symmetry: String = lines["mandala"]["symmetry"]
 	var map := RegionMap.build(lines["mask"], w, h, 0)
-	var palette := Palettes.theme_colors(options.get("theme", "sunset"))
+	var palette: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
+			else Palettes.theme_colors(options.get("theme", "sunset")))
 	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value)
 	var background: Color = options.get("background", BACKGROUND)
 	var plan := DesignPlan.make(map, RegionPaint.symmetry_groups(map, symmetry), options, seed_value)

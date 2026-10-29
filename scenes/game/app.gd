@@ -1,11 +1,13 @@
 extends Control
-## The game's root: shows the menu, a puzzle being played, or the generator
-## lab (a debug mode for trying out new pattern generation), one at a time.
-## Holds her profile (SaveStore), shared by the menu and the puzzles.
+## The game's root: shows the menu, a puzzle being played, Collection &
+## packs, or the generator lab (a debug mode for trying out new pattern
+## generation), one at a time. Holds her profile (SaveStore), shared by all
+## of them, and gives the day's free pick for opening the game (see Packs).
 
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
 const MainMenu := preload("res://scenes/game/main_menu.gd")
 const PlayScreen := preload("res://scenes/game/play_screen.gd")
+const CollectionScreen := preload("res://scenes/game/collection_screen.gd")
 const LAB_SCENE := preload("res://scenes/dev/generator_lab.tscn")
 
 var profile: Dictionary = {}
@@ -20,11 +22,22 @@ func _ready() -> void:
 
 
 func _show_menu() -> void:
+	# A new day (the game may have stayed open overnight): a free pick.
+	if Packs.daily_open(profile):
+		SaveStore.save_profile(profile)
 	var menu := MainMenu.new()
 	menu.profile = profile
 	menu.play_requested.connect(_play)
 	menu.lab_requested.connect(_show_lab)
+	menu.collection_requested.connect(_show_collection)
 	_swap(menu)
+
+
+func _show_collection() -> void:
+	var screen := CollectionScreen.new()
+	screen.profile = profile
+	screen.back_requested.connect(_show_menu)
+	_swap(screen)
 
 
 func _play(id: String) -> void:

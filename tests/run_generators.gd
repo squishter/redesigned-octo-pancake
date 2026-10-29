@@ -38,6 +38,8 @@ func _init() -> void:
 	test_json_round_trip()
 	test_game_puzzles()
 	test_saves()
+	test_packs()
+	test_kit_puzzles()
 
 	print("\n%s (%d failures). Previews in %s" % ["FAILED" if failures else "PASSED", failures,
 			ProjectSettings.globalize_path(out_dir)])
@@ -761,6 +763,74 @@ func test_game_puzzles() -> void:
 	for s in restricted:
 		check(s["shape"] == "round" and s["size"] == s["width"], "restrict gave %s %.1f x %.1f" % [s["shape"], s["size"],
 				s["width"]])
+
+
+## Packs give only new things, sell out once empty, take a pick or coins;
+## daily picks come once a day and puzzle coins once per puzzle.
+func test_packs() -> void:
+	print("Packs")
+	var profile := {"unlocks": GemCatalog.default_unlocks(), "wallet": {"coins": 0, "picks": 0},
+			"daily": {"opened": "", "completed": ""}, "powers": {}}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	check(Packs.open(profile, "colors", true, rng).is_empty(), "opened a pack with no picks")
+	check(Packs.daily_open(profile) and not Packs.daily_open(profile), "daily pick not exactly once a day")
+	var got := Packs.open(profile, "colors", true, rng)
+	check(got.get("kind") == "color" and Packs.picks(profile) == 0, "free pick didn't open a color pack")
+	var meta := {}
+	var r1 := Packs.puzzle_finished(profile, meta, false)
+	var r2 := Packs.puzzle_finished(profile, meta, false)
+	check(r1["coins"] == Packs.COINS_PER_PUZZLE and r1["pick"] and r2["coins"] == 0, "puzzle rewards %s then %s" % [r1, r2])
+	check(Packs.puzzle_finished(profile, {}, true)["coins"] == 2 * Packs.COINS_PER_PUZZLE, "double coins didn't double")
+	# Every 3 puzzles pay for a pack.
+	check(Packs.PACK_PRICE == 3 * Packs.COINS_PER_PUZZLE, "a pack isn't 3 puzzles' coins")
+	# Open every category until it sells out: never a repeat, and it all ends up unlocked.
+	for pack: String in Packs.PACKS:
+		if pack in ["powers", "all"]:
+			continue
+		var seen := {}
+		var guard := 0
+		while not Packs.sold_out(pack, profile) and guard < 200:
+			guard += 1
+			profile["wallet"]["coins"] = 1000
+			var item := Packs.open(profile, pack, false, rng)
+			check(not seen.has(item["id"]), "%s pack repeated %s" % [pack, item["id"]])
+			seen[item["id"]] = true
+		check(Packs.sold_out(pack, profile), "%s pack never sold out" % pack)
+	var unlocks: Dictionary = profile["unlocks"]
+	check(unlocks["colors"].size() == GemCatalog.all_colors().size(), "not every color unlocked")
+	check(unlocks["shapes"].size() == GemCatalog.ALL_SHAPES.size(), "not every shape unlocked")
+	for pair: Array in GemCatalog.all_cuts():
+		check(GemCatalog.has_cut(unlocks, pair[0], pair[1]), "cut %s not unlocked" % [pair])
+	# With everything else out, the Everything and power-up packs still give charges.
+	profile["wallet"]["coins"] = 1000
+	var power := Packs.open(profile, "all", false, rng)
+	check(power.get("kind") == "power" and Packs.charges(profile, power["id"]) > 0, "everything pack gave %s" % power)
+	check(Packs.spend(profile, power["id"]), "couldn't spend a power-up charge")
+
+
+## Kits and unlocked picture features: a kit uses only unlocked colors and
+## drills, and unlocked frames show up.
+func test_kit_puzzles() -> void:
+	print("Kit puzzles")
+	var unlocks := GemCatalog.default_unlocks()
+	var colors := {}
+	for g in GemCatalog.unlocked_gems(unlocks):
+		colors[g["id"]] = true
+	var kit := PuzzleMaker.make({"type": "kit", "seed": 12, "pattern_seed": 3, "theme": "ocean"}, unlocks)
+	check(kit.get("kind") == "kit" and kit["slots"].size() >= 2000, "kit has %d slots" % kit["slots"].size())
+	var bad := 0
+	for s in kit["slots"]:
+		if not s["shape"] in ["round", "square"] or not colors.has(str(s["target_gem"])):
+			bad += 1
+	check(bad == 0, "kit: %d drills in locked shapes or colors" % bad)
+	var framed := 0
+	unlocks["features"] = ["frames", "backgrounds"]
+	for seed_value in [1, 2, 3, 4]:
+		var p := PuzzleMaker.make({"type": "flower", "seed": seed_value, "pattern_seed": 1, "theme": "garden"}, unlocks)
+		if p["source"].has("frame"):
+			framed += 1
+	check(framed > 0, "no frames with frames unlocked")
 
 
 ## Progress saves bit by bit and comes back the same.

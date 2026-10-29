@@ -51,7 +51,8 @@ static func _encode(v: Variant) -> Variant:
 				out.append(_encode(item))
 			return out
 		TYPE_PACKED_BYTE_ARRAY:
-			return Marshalls.raw_to_base64(v)
+			# Empty grids (a kit board has no lines) stay empty strings.
+			return Marshalls.raw_to_base64(v) if not (v as PackedByteArray).is_empty() else ""
 		TYPE_COLOR:
 			return "#" + (v as Color).to_html(false)
 		TYPE_VECTOR2, TYPE_VECTOR2I:
@@ -82,7 +83,7 @@ static func _decode(v: Variant, key: String = "") -> Variant:
 			return out
 		TYPE_STRING:
 			if key in BYTE_KEYS:
-				return Marshalls.base64_to_raw(v)
+				return Marshalls.base64_to_raw(v) if v != "" else PackedByteArray()
 			if key in COLOR_KEYS:
 				return Color(v)
 	return v

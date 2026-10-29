@@ -1,9 +1,11 @@
 class_name SaveStore
 extends RefCounted
 ## Her saved games, under user://saves:
-##   profile.json: {version, unlocks (see GemCatalog), settings, puzzles: [meta]},
-##     where each meta is {id, type, seed, pattern_seed, theme, created,
-##     updated, total, filled, done}, newest first;
+##   profile.json: {version, unlocks (see GemCatalog), settings, wallet
+##     {coins, picks}, daily {opened, completed}, powers {power: charges}
+##     (see Packs), puzzles: [meta]}, where each meta is {id, type, seed,
+##     pattern_seed, theme, created, updated, total, filled, done, rewarded,
+##     powers (the whole-puzzle power-ups on for it)}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
 ##   <id>.progress: which stones are placed, one bit per slot;
 ##   <id>.png: a small thumbnail for the menu.
@@ -13,10 +15,9 @@ extends RefCounted
 
 const DIR := "user://saves"
 const VERSION := 1
-## Her settings and their defaults. fill_animation: how a placed gem goes
-## in, "fly" (from the gem row into the slot) or "pop" (grows in place).
-const DEFAULT_SETTINGS := {"fill_animation": "fly"}
-const FILL_ANIMATIONS := {"fly": "Fly in from the gem row", "pop": "Pop in place"}
+## Her settings and their defaults: how a placed gem goes in and the
+## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES).
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
 
 
 static func load_profile() -> Dictionary:
@@ -38,6 +39,18 @@ static func load_profile() -> Dictionary:
 		if not settings.has(key):
 			settings[key] = DEFAULT_SETTINGS[key]
 	profile["settings"] = settings
+	var wallet: Dictionary = profile.get("wallet", {})
+	for key in ["coins", "picks"]:
+		wallet[key] = int(wallet.get(key, 0))
+	profile["wallet"] = wallet
+	var daily: Dictionary = profile.get("daily", {})
+	for key in ["opened", "completed"]:
+		daily[key] = str(daily.get(key, ""))
+	profile["daily"] = daily
+	var powers: Dictionary = profile.get("powers", GemCatalog.STARTING_POWERS.duplicate())
+	for key: String in powers:
+		powers[key] = int(powers[key])
+	profile["powers"] = powers
 	var puzzles: Array = profile.get("puzzles", [])
 	for meta: Dictionary in puzzles:
 		for key in ["seed", "pattern_seed", "created", "updated", "total", "filled"]:
