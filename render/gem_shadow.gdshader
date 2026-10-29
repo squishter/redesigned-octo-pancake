@@ -1,0 +1,39 @@
+// Under each stone, on the paper: its soft shadow, cast away from the key
+// light by how high the stone stands, and inside it the colored light the
+// stone focuses (caustics), drifting as the light moves. Drawn on a plane
+// SPAN stone half-sizes across (the board scales each plane to its stone's
+// half-length and half-width), so local units are the stone's own.
+shader_type spatial;
+render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled;
+
+#include "res://render/gem_light.gdshaderinc"
+
+// Per stone (INSTANCE_CUSTOM): x random 0..1, y height of its top above the
+// paper (board units). COLOR is the gem color.
+varying vec2 off;
+varying vec2 lp;
+varying vec4 stone;
+
+void vertex() {
+	stone = INSTANCE_CUSTOM;
+	lp = VERTEX.xz;
+	vec3 lean = -vec3(key_dir.x, 0.0, key_dir.z) / max(key_dir.y, 0.25) * stone.y;
+	off = (inverse(mat3(MODEL_MATRIX)) * lean).xz;
+}
+
+void fragment() {
+	float d = length(lp - off * 0.8);
+	float shade = (1.0 - smoothstep(0.6, 1.3, d)) * 0.42 * clamp(light_strength, 0.0, 1.0);
+	// The light the stone gathers lands in the far half of its shadow.
+	float focus = 1.0 - smoothstep(0.05, 0.85, length(lp - off * 1.25));
+	if (shade < 0.004 && focus <= 0.0) {
+		discard;
+	}
+	vec3 light = vec3(0.0);
+	if (focus > 0.0) {
+		float web = caustic(lp * 0.42 + stone.x * 7.0, gem_time * 0.45 + stone.x * 9.0);
+		light = pow(COLOR.rgb, vec3(2.2)) * paper_color * focus * (0.18 + 0.9 * web) * light_strength;
+	}
+	ALBEDO = light;
+	ALPHA = shade;
+}

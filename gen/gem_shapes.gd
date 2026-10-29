@@ -2,8 +2,8 @@ class_name GemShapes
 extends RefCounted
 ## Outline polygons for slot and gem shapes, in local space: the shape's long
 ## axis is +x (a teardrop points toward +x), centered on the origin.
-## The real gem art (masks and normal maps) comes with the gem rendering
-## milestone; these outlines draw slots and previews until then.
+## They draw slots and flat previews, and GemMesh builds the 3D gems on
+## them (one per cut, see GemCuts).
 ##
 ## Shapes that fit a circle of diameter `length` (`width` is ignored):
 ## round, square, hexagon, triangle, cushion, octagon, pentagon, heart,

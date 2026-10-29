@@ -4,7 +4,9 @@ extends Control
 ## Laid out for phones: the picture fills the screen (pinch to zoom, drag to
 ## pan, double-tap to fit), with the main actions in a bar at the bottom and
 ## every setting in an Options panel above it. The Lines box above the
-## picture flips to the line art it was made from, without regenerating.
+## picture flips to the line art it was made from, without regenerating, and
+## the 3D box shows collages and kits as real gems (GemBoard3D) instead of
+## flat shapes.
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
@@ -31,7 +33,12 @@ var _colors: SpinBox
 var _status: Label
 var _summary: Label
 var _show_lines: CheckBox
+var _show_3d: CheckBox
 var _canvas: PreviewCanvas
+var _board: GemBoard3D
+## The picture the 3D board should show (built when it first shows it).
+var _board_picture: Dictionary = {}
+var _board_stale := false
 var _options_panel: Control
 var _options_button: Button
 var _file_dialog: FileDialog
@@ -62,14 +69,28 @@ func _ready() -> void:
 	_show_lines = CheckBox.new()
 	_show_lines.text = "Lines"
 	_show_lines.custom_minimum_size.y = LabTheme.TAP_HEIGHT
-	_show_lines.toggled.connect(func(on: bool) -> void: _canvas.line_art = on)
+	_show_lines.toggled.connect(func(on: bool) -> void:
+		_canvas.line_art = on
+		_refresh_view())
 	top.add_child(_show_lines)
-	_button(top, "Fit", func() -> void: _canvas.reset_view()).size_flags_horizontal = Control.SIZE_SHRINK_END
+	_show_3d = CheckBox.new()
+	_show_3d.text = "3D"
+	_show_3d.button_pressed = true
+	_show_3d.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	_show_3d.toggled.connect(func(_on: bool) -> void: _refresh_view())
+	top.add_child(_show_3d)
+	_button(top, "Fit", func() -> void:
+		_canvas.reset_view()
+		_board.reset_view()).size_flags_horizontal = Control.SIZE_SHRINK_END
 
 	_canvas = PreviewCanvas.new()
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_canvas.clip_contents = true
 	root.add_child(_canvas)
+	_board = GemBoard3D.new()
+	_board.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_board.visible = false
+	root.add_child(_board)
 
 	# Options: hidden until asked for, and scrolls when taller than its share.
 	var panel := PanelContainer.new()
@@ -152,6 +173,20 @@ func _avoid_cutouts(root: Control) -> void:
 	var bottom := (window.y - safe.end.y) * px.y
 	root.offset_top = maxf(root.offset_top, top)
 	root.offset_bottom = minf(root.offset_bottom, -bottom)
+
+
+## Shows the 3D board or the flat canvas: the board for collages and kits
+## while 3D is on (unless the line art is showing).
+func _refresh_view() -> void:
+	var on_board := _show_3d.button_pressed and not _show_lines.button_pressed and not _board_picture.is_empty()
+	_board.visible = on_board
+	_canvas.visible = not on_board
+	if on_board and _board_stale:
+		_board_stale = false
+		if _board_picture.has("slots"):
+			_board.show_collage(_board_picture)
+		else:
+			_board.show_kit(_board_picture)
 
 
 func _toggle_options() -> void:
@@ -345,6 +380,7 @@ func _process(_delta: float) -> void:
 		"Collage":
 			var p: Dictionary = out["picture"]
 			_canvas.show_collage(p)
+			_show_on_board(p)
 			var empty := 0
 			var fills := {}
 			for r in p["regions"]:
@@ -391,10 +427,19 @@ func _process(_delta: float) -> void:
 		"Kit":
 			var k: Dictionary = out["picture"]
 			_canvas.show_kit(k)
+			_show_on_board(k)
 			_say("Kit: %d×%d, %d colors — %d ms" % [k["width"], k["height"], k["palette"].size(), ms])
 		_:
 			_canvas.show_lines(art["mask"], art["width"], art["height"])
+			_show_on_board({})
 			_say("Line art %d×%d — %d ms" % [art["width"], art["height"], ms])
+
+
+## Hands a collage or kit to the 3D board (empty for none).
+func _show_on_board(picture: Dictionary) -> void:
+	_board_picture = picture
+	_board_stale = true
+	_refresh_view()
 
 
 func _save() -> void:

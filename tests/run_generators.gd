@@ -31,6 +31,7 @@ func _init() -> void:
 	test_design_plans()
 	test_pattern_seeds()
 	test_symmetry()
+	test_gem_cuts()
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
@@ -577,6 +578,47 @@ static func turn_match(p: Dictionary) -> float:
 		if found:
 			hit += 1
 	return float(hit) / maxi(1, counted)
+
+
+func test_gem_cuts() -> void:
+	print("Gem cuts")
+	# Every shape's mesh in every cut covers its outline once, facets facing up.
+	var meshes := 0
+	for shape: String in GemCuts.BY_SHAPE:
+		var girdle := GemMesh.girdle_points(shape)
+		var outline := 0.0
+		for i in girdle.size():
+			outline += (girdle[i][1] as Vector2).cross(girdle[(i + 1) % girdle.size()][1])
+		outline = absf(outline) / 2.0
+		for cut: String in GemCuts.ALL:
+			var arrays := GemMesh.build(shape, cut).surface_get_arrays(0)
+			var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+			var covered := 0.0
+			var down := 0
+			for t in range(0, v.size(), 3):
+				var a := Vector2(v[t].x, v[t].z)
+				covered += absf((Vector2(v[t + 1].x, v[t + 1].z) - a).cross(Vector2(v[t + 2].x, v[t + 2].z) - a)) / 2.0
+				if n[t].y <= 0.0:
+					down += 1
+			check(absf(covered / outline - 1.0) < 0.02 and down == 0, "%s %s mesh covers %.3f of its outline, %d facets down"
+					% [shape, cut, covered / outline, down])
+			meshes += 1
+	# Every stone gets a cut its shape has; stones of one part share it.
+	var cuts := {}
+	for i in 3:
+		var p := PictureSources.mandala_collage(3300 + i, {"variant": MandalaGenerator.VARIANTS[i], "pattern_seed": i})
+		var by_part := {}
+		for sl in p["slots"]:
+			check(sl.get("cut", "") in GemCuts.for_shape(sl["shape"]), "a %s stone cut %s" % [sl["shape"], sl.get("cut")])
+			cuts[sl["cut"]] = true
+			var key := "%d|%d|%s|%s" % [p["regions"][sl["region"]]["group"], sl["part"], sl["shape"],
+					(sl["target_color"] as Color).to_html()]
+			if by_part.has(key):
+				check(by_part[key] == sl["cut"], "seed %d: one part in two cuts" % (3300 + i))
+			by_part[key] = sl["cut"]
+	print("  %d meshes, cuts used %s" % [meshes, cuts.keys()])
+	check(cuts.size() >= 3, "only %d cuts used in 3 pictures" % cuts.size())
 
 
 func test_kits() -> void:

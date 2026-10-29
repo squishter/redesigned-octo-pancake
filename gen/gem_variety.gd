@@ -1,8 +1,10 @@
 class_name GemVariety
 extends RefCounted
-## Steers how many gem types a collage uses. A gem type is a shape in a gem
-## color (a small and a big round ruby are the same type), so a picture's
-## variety comes from its shapes and colors, while sizes vary freely.
+## Steers how many gem types a collage uses. A gem type is a shape, cut in
+## one of its facet styles (see GemCuts), in a gem color (a small and a big
+## brilliant round ruby are the same type), so a picture's variety comes
+## from its shapes, cuts and colors, while sizes vary freely. Each shape in
+## a color starts with its own seeded cut, so all its stones look alike.
 ##
 ## Stones are changed a whole pattern part at a time (a row, a ring, the
 ## center stones, a line's stones), across every symmetric copy at once, so
@@ -26,7 +28,7 @@ const LONG_FAMILY := ["oval", "marquise", "lozenge", "kite", "teardrop"]
 ##   target_gem; `group_of` gives each slot's region a group id.
 ## colors: Array of {"color", "gem"} to recolor with, best first (gem may be
 ##   null when colors aren't snapped to gems); empty to only swap shapes.
-## Returns the number of gem types afterwards.
+## Sets every slot's "cut". Returns the number of gem types afterwards.
 static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, target: int, seed_value: int) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "variety"])
@@ -37,7 +39,8 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				_gem_key(s["target_gem"], s["target_color"])]
 		if not units.has(key):
 			units[key] = {"slots": [], "shape": s["shape"], "color": s["target_color"], "gem": s["target_gem"],
-					"locked": s.get("seq", -1) >= 0}
+					"locked": s.get("seq", -1) >= 0,
+					"cut": GemCuts.pick(s["shape"], _gem_key(s["target_gem"], s["target_color"]), seed_value)}
 			unit_keys.append(key)
 		units[key]["slots"].append(s)
 	unit_keys.sort()
@@ -63,19 +66,31 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			if holders[_combo(u)] < 2:
 				continue
 			# A new shape in the part's own color first, so the palette stays calm,
-			# then a new color (colors are ordered best first).
+			# then a new cut of it, then a new color (colors are ordered best first).
 			var shape: String = u["shape"]
+			var gem_key := _gem_key(u["gem"], u["color"])
 			for alt in _family(shape):
-				if alt != shape and not holders.has(_combo_of(alt, u["gem"], u["color"])):
+				var alt_cut := GemCuts.pick(alt, gem_key, seed_value)
+				if alt != shape and not holders.has(_combo_of(alt, alt_cut, u["gem"], u["color"])):
 					_count(holders, stones, u, -1)
 					u["shape"] = alt
+					u["cut"] = alt_cut
+					_count(holders, stones, u, 1)
+					changed = true
+					break
+			if changed:
+				break
+			for cut: String in GemCuts.for_shape(shape):
+				if not holders.has(_combo_of(shape, cut, u["gem"], u["color"])):
+					_count(holders, stones, u, -1)
+					u["cut"] = cut
 					_count(holders, stones, u, 1)
 					changed = true
 					break
 			if changed:
 				break
 			for c: Dictionary in colors:
-				if not holders.has(_combo_of(shape, c["gem"], c["color"])):
+				if not holders.has(_combo_of(shape, u["cut"], c["gem"], c["color"])):
 					_count(holders, stones, u, -1)
 					u["color"] = c["color"]
 					u["gem"] = c["gem"]
@@ -133,6 +148,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			if _combo(u) == rare:
 				_count(holders, stones, u, -1)
 				u["shape"] = into["shape"]
+				u["cut"] = into["cut"]
 				u["color"] = into["color"]
 				u["gem"] = into["gem"]
 				_count(holders, stones, u, 1)
@@ -141,18 +157,20 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 		var u: Dictionary = units[key]
 		for s in u["slots"]:
 			s["shape"] = u["shape"]
+			s["cut"] = u["cut"]
 			s["target_color"] = u["color"]
 			s["target_gem"] = u["gem"]
 	return holders.size()
 
 
-## Every gem type in a list of slots: [{shape, gem, color, count}], most used first.
+## Every gem type in a list of slots: [{shape, cut, gem, color, count}], most used first.
 static func kinds(slots: Array) -> Array:
 	var by := {}
 	for s in slots:
-		var combo := _combo_of(s["shape"], s["target_gem"], s["target_color"])
+		var cut: String = s.get("cut", "")
+		var combo := _combo_of(s["shape"], cut, s["target_gem"], s["target_color"])
 		if not by.has(combo):
-			by[combo] = {"shape": s["shape"], "gem": s["target_gem"], "color": s["target_color"], "count": 0}
+			by[combo] = {"shape": s["shape"], "cut": cut, "gem": s["target_gem"], "color": s["target_color"], "count": 0}
 		by[combo]["count"] += 1
 	var out := by.values()
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["count"] > b["count"])
@@ -175,12 +193,12 @@ static func _gem_key(gem: Variant, color: Color) -> String:
 	return str(gem) if gem != null else color.to_html(false)
 
 
-static func _combo_of(shape: String, gem: Variant, color: Color) -> String:
-	return shape + "|" + _gem_key(gem, color)
+static func _combo_of(shape: String, cut: String, gem: Variant, color: Color) -> String:
+	return shape + "|" + cut + "|" + _gem_key(gem, color)
 
 
 static func _combo(u: Dictionary) -> String:
-	return _combo_of(u["shape"], u["gem"], u["color"])
+	return _combo_of(u["shape"], u["cut"], u["gem"], u["color"])
 
 
 static func _count(holders: Dictionary, stones: Dictionary, u: Dictionary, delta: int) -> void:
