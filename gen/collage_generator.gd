@@ -76,8 +76,9 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	var picture := _build(mask, w, h, options, unit)
 	if options.has("unit") and options.has("spacers"):
 		return picture
-	# Stone count goes as 1 / unit^2: rescale toward the range and rebuild.
-	for _attempt in (0 if options.has("unit") else 2):
+	# Stone count goes roughly as 1 / unit^2 (line stones change less): rescale
+	# toward the range and rebuild, a few times for the busiest pictures.
+	for _attempt in (0 if options.has("unit") else 4):
 		var n: int = picture["slots"].size()
 		if n >= MIN_SLOTS and n <= MAX_SLOTS:
 			break
