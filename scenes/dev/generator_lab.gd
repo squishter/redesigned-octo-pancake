@@ -16,7 +16,10 @@ var _mode: OptionButton
 var _kit_size: OptionButton
 var _sparsity: OptionButton
 var _line_style: OptionButton
+var _setting: OptionButton
+var _line_gems: OptionButton
 var _seed: SpinBox
+var _pattern: SpinBox
 var _wobble: HSlider
 var _detail: HSlider
 var _colors: SpinBox
@@ -49,11 +52,15 @@ func _ready() -> void:
 	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
 	_sparsity = _options(controls, "Sparse", ["auto", "none", "some", "lots"])
 	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)
+	_setting = _options(controls, "Setting", ["auto"] + CollageGenerator.SETTINGS)
+	_line_gems = _options(controls, "Line gems", ["auto"] + _unique(GemLines.STYLES))
 	_seed = _spin(controls, "Seed", 1, 999999, 1)
+	_pattern = _spin(controls, "Pattern", 0, 999999, 0)
 	_colors = _spin(controls, "Kit colors", 12, 40, 20)
 	_wobble = _slider(controls, "Wobble", 0.0)
 	_detail = _slider(controls, "Detail", 0.5)
 	_button(controls, "New seed", _new_seed)
+	_button(controls, "New pattern", _new_pattern)
 	_button(controls, "Photo…", func() -> void: _file_dialog.popup_centered_ratio(0.8))
 	_button(controls, "Generate", _generate)
 	_button(controls, "Save JSON", _save)
@@ -81,6 +88,20 @@ func _ready() -> void:
 func _new_seed() -> void:
 	_seed.value = randi_range(1, 999999)
 	_generate()
+
+
+## Same lines, another gem collage.
+func _new_pattern() -> void:
+	_pattern.value = randi_range(1, 999999)
+	_generate()
+
+
+static func _unique(items: Array) -> Array:
+	var out := []
+	for item in items:
+		if not item in out:
+			out.append(item)
+	return out
 
 
 func _options(parent: Control, label: String, items: Array) -> OptionButton:
@@ -171,6 +192,9 @@ func _generate() -> void:
 		"colors": int(_colors.value),
 		"sparsity": {"auto": -1.0, "none": 0.0, "some": 0.3, "lots": 0.6}[_selected(_sparsity)],
 		"line_style": _selected(_line_style),
+		"setting": _selected(_setting),
+		"line_gems": _selected(_line_gems),
+		"pattern_seed": int(_pattern.value),
 	}
 	_status.text = "Generating…"
 	_task_started = Time.get_ticks_msec()
@@ -190,7 +214,11 @@ func _run_job(job: Dictionary) -> void:
 		"detail": job["detail"],
 		"sparsity": job["sparsity"],
 		"line_style": job["line_style"],
+		"setting": job["setting"],
+		"pattern_seed": job["pattern_seed"],
 	}
+	if job["line_gems"] != "auto":
+		opts["line_gems"] = job["line_gems"]
 	if job["zoom"] != "auto":
 		opts["zoom"] = job["zoom"] == "on"
 	if job["frame"] != "auto":
@@ -247,9 +275,18 @@ func _process(_delta: float) -> void:
 				var fr: Dictionary = p["source"]["frame"]
 				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],
 						fr["background"]]
-			_status.text = "Collage%s: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
-				flower, p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
-				p["line_style"], fills, ms]
+			var patterns := {}
+			for r in p["regions"]:
+				if r["kind"] == "area":
+					patterns[r["style"]] = patterns.get(r["style"], 0) + 1
+			var setting: String = p["setting"]
+			if setting == "gems":
+				setting = "gem lines (%s, %s colors)" % [p["line_gems"], p["line_colors"]]
+			_status.text = ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %.0f%% avg coverage, "
+					+ "lines %s, fills %s, patterns %s%s — %d ms") % [
+				flower, setting, p["pattern_seed"], p["regions"].size(), empty, p["slots"].size(),
+				CollageGenerator.mean_coverage(p) * 100.0, p["line_style"], fills, patterns,
+				", sizes shrink inward" if p["radial_size"] else "", ms]
 		"Kit":
 			var k: Dictionary = out["picture"]
 			_canvas.show_kit(k)

@@ -1,1 +1,2 @@
 max-line-length: 130
+max-public-methods: 25

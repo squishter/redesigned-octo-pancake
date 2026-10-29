@@ -4,8 +4,10 @@ A cozy Android game in Godot 4.7 where you place sparkly gems to make pretty
 pictures. There are no timers, no fail states and no ads. There are two modes:
 
 - **Diamond Kit:** a picture becomes a numbered grid of round or square drills.
-- **Gem Collage:** line art becomes regions packed with gem slots of mixed
-  shapes, set in metal lines.
+- **Gem Collage:** line art becomes gem slots laid out in patterns. Most
+  pictures turn the lines themselves into rows of slotted gems; some keep
+  them as a metal setting. One line art makes many collages: change the
+  `pattern_seed`.
 
 This first step is the **puzzle generators**: pure-logic GDScript in `gen/`
 that turns a source picture into a playable puzzle for either mode.
@@ -31,13 +33,15 @@ that turns a source picture into a playable puzzle for either mode.
 | `snowflake.gd` | Six-fold snowflakes from: 6 **centers** (hexagon, nested, star, rosette, spoked, flower), 7 **arm styles** (plain, branched, fern, plates, arrows, spear, crystal), 5 **tips** (point, plate, diamond, fork, ring), **content between the arms** (stellar plate, webs, spikes, petals, diamonds or dots; one or two kinds on all but about 8% of snowflakes) and 0–2 **details** (ribs, dots, inner outlines). Arms, branches, webs and plates merge into one clean silhouette; centers, plates, tips and petals keep their own outlines, so every region stays closed. Pass `recent` to skip recent choices and favor the least used. |
 | `kit_generator.gd` | Kit pipeline: crop to the board aspect, area-average downscale (40×50 / 70×90 / 100×130), k-means in Lab, snap to the gem colors she owns (only those), clean up isolated cells, then build a legend with a symbol per color. |
 | `color_quantizer.gd`, `lab_color.gd` | Weighted k-means++ in Lab over a color histogram, plus sRGB ↔ Lab conversion. |
-| `line_raster.gd` | Polylines or line-art images → line masks; dilation to close gaps. |
+| `line_raster.gd` | Polylines or line-art images → line masks; dilation to close gaps; carving channels around line stones. |
+| `contours.gd` | Vector paths from rasters: iso-lines of a region's edge distance (marching squares) and centerlines of a line mask (thinning, spur pruning, split at junctions). |
+| `gem_lines.gd` | Gem lines: stones slotted along every line's centerline, one on each junction, evenly spaced between, narrowing toward loose ends. 10 styles: beads, pearls (big/small), marquise, baguette, taper (swells mid-stroke), pulse (grows and shrinks in waves left to right), ramp (small→large then large→small on alternating lines around the picture), radial (shrinks toward the picture's center) and hub (shrinks toward the nearest hub where 4+ lines meet). The channel around the stones is carved to their sizes, so a line is as wide as its stones at every point. |
 | `region_map.gd` | Flood-fills closed regions, merges tiny ones into the lines, and computes a chamfer distance transform with per-region stats (area, centroid, elongation, principal axis, deepest point). |
-| `slot_packer.gd` | Greedy capsule packing on a "free distance" field: the biggest stone that fits goes where the field peaks, until the region is about 80% covered. Fill styles are cabochon, pavé, petals, flow and mosaic, with an optional rhinestone outline. |
+| `slot_packer.gd` | Patterned fills, chosen per symmetry group so copies match. **echo**: rows of stones following the outline inward (round, hexagon, square, marquise or oval; optionally alternating big/small rows, or graded smaller or bigger row by row); **halo**: 1–2 outline rows around a big center stone shaped to the region; **rosette**: center stone, ring of teardrops, outline rows; **honeycomb**: an even lattice lined up with the region's axis, optionally graded smaller toward the rim; **stripes**: straight parallel rows, optionally graded from the middle; **sunburst**: a center stone with spokes of stones growing outward; **spine**: a chain along the region's medial axis, each stone as wide as the region there, so petals taper; **solitaire**: one shaped stone; **pave**: the old free-form packing, kept for some variety. Patterns can use the region's accent color (alternate rows, outer row or center stone), and a picture can shrink all its stones toward its center. Every stone shrinks to the room left where it lands (a "free distance" field), or is left out. |
 | `design_plan.gd` | Per-design variety, decided per symmetry group so symmetric copies match. **Fills:** some groups are made sparse on purpose (*scatter*: a few spaced-out stones; *accent*: one stone; *outline*: a rhinestone border only; *bare*: empty negative space). At most 60% of the area goes sparse and 30% bare, and something always stays fully packed. **Line styles:** *full*, *partial* (only some groups' borders), *outer* (silhouette only) or *none* (stones alone). Hidden lines still separate regions for packing; they just aren't drawn. Both are picked per seed unless `sparsity` (0..1) or `line_style` is passed. |
 | `region_paint.gd` | Finds symmetric copies of regions so they share theme colors, samples region colors from photos, snaps to gems, and renders flat images. |
 | `photo_line_art.gd` | Photo → closed line art: blur, quantize to 6–10 colors, majority filter, merge small areas, then trace the color boundaries. |
-| `collage_generator.gd` | Turns a mask into the full collage puzzle (regions, groups, slots and target colors). |
+| `collage_generator.gd` | Turns a mask into the full collage puzzle (regions, groups, slots and target colors). Picks the **setting** per pattern seed: *gems* (about 3 in 4; lines become gem lines, sized to how roomy the areas are, colored in one or two sparkly neutrals or each in the accent color of the area it borders) or *metal* (lines drawn as before). `pattern_seed` reseeds everything but the lines. |
 | `picture_sources.gd` | Convenience entry points for each source. |
 | `pattern_io.gd` | JSON save and load (colors as hex, grids as base64). |
 | `gem_shapes.gd` | Outline polygons for slot shapes (round, oval, teardrop, marquise, baguette, square, hexagon, triangle). |
@@ -50,19 +54,23 @@ The generators touch no nodes, so they can run on `WorkerThreadPool`.
 Kit: `{type: "kit", width, height, drill, palette: [{symbol, color, gem_color_id, count}], cells}`.
 `cells` holds one palette index per cell, row-major.
 
-Collage: `{type: "collage", width, height, symmetry, line_style, sparsity, source, lines, lines_visible, regions, slots}`.
-`lines` is every region boundary and `lines_visible` is the part drawn as the
-metal setting. Each region has a `fill` (full, scatter, accent, outline or
-bare) and `outlined`.
-Each slot is `{id, region, shape, x, y, rotation, size, width, target_color, target_gem}`,
-in pixels of `width × height`. `size` is the length along `rotation`. Regions
-that share a `group` are symmetric copies of each other.
+Collage: `{type: "collage", version: 2, width, height, symmetry, setting, pattern_seed, line_gems, line_colors, radial_size, line_style, sparsity, source, lines, lines_visible, regions, slots}`.
+`lines` is every region boundary (with gem lines, the channel the line stones
+sit in) and `lines_visible` is the part drawn as the metal setting (none with
+gem lines). Each region has a `kind` (`area`, or `line` for gem-line stones),
+a `fill` (full, scatter, accent, outline, bare; `line` for line regions),
+`style` (its pattern), `color` and `accent_color`, and `outlined`.
+Each slot is `{id, region, shape, x, y, rotation, size, width, tone, target_color, target_gem}`,
+in pixels of `width × height`. `size` is the length along `rotation`; `tone`
+1 means the region's accent color. Regions that share a `group` are symmetric
+copies of each other.
 
 ## Trying it
 
 - Open the project in Godot 4.7. The main scene, `scenes/dev/generator_lab.tscn`,
   is a dev screen. Pick a mandala shape, theme, seed and wobble, or load a
-  photo. Then view it as a collage, a kit or plain line art, and save the JSON.
+  photo. *New pattern* (or the Pattern box) makes another collage of the same
+  lines; Setting and Line gems force a choice. Then view it as a collage, a kit or plain line art, and save the JSON.
 - Headless checks with preview PNGs. The checks cover 20 seeds across all
   shapes, contact sheets of 24 framed pictures (every frame shape, band,
   corner and background; about 3 in 4 framed by default), 24 mandalas (every silhouette, center, extra and
@@ -78,6 +86,12 @@ that share a `group` are symmetric copies of each other.
   ```sh
   godot --headless --import
   godot --headless -s res://tests/run_generators.gd -- --out=/tmp/previews --seeds=20
+  ```
+
+- One line art under several pattern seeds, side by side:
+
+  ```sh
+  godot --headless -s res://tests/collage_sheet.gd -- --out=/tmp/sheet --seeds=1000,1003 --patterns=3
   ```
 
 Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen scenes tests`.

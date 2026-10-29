@@ -441,7 +441,7 @@ func _build_extra(kind: String, reach: float, n: int) -> void:
 				_add(sparkle, true)
 		"corners":
 			# A fan in each corner of the picture, closed against its edges.
-			for corner in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
+			for corner: Vector2 in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
 				var a0 := (-corner).angle() - PI / 4.0
 				for rr in [0.32, 0.22]:
 					var arc := PackedVector2Array()

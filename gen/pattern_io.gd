@@ -6,7 +6,7 @@ extends RefCounted
 ## as base64, and vectors as [x, y] arrays.
 
 const BYTE_KEYS := ["cells", "lines", "lines_visible"]
-const COLOR_KEYS := ["color", "target_color"]
+const COLOR_KEYS := ["color", "target_color", "accent_color"]
 const VECTOR_KEYS := ["centroid"]
 
 
@@ -66,7 +66,7 @@ static func _decode(v: Variant, key: String = "") -> Variant:
 			for k in v:
 				out[k] = _decode(v[k], k)
 			# JSON numbers come back as floats; restore the ints we rely on.
-			for int_key in ["version", "width", "height", "id", "region", "group", "area", "count", "seed"]:
+			for int_key in ["version", "width", "height", "id", "region", "group", "area", "count", "seed", "pattern_seed", "tone"]:
 				if out.has(int_key) and out[int_key] is float:
 					out[int_key] = int(out[int_key])
 			return out

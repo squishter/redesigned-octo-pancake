@@ -29,6 +29,7 @@ func _init() -> void:
 	test_frames()
 	test_collages()
 	test_design_plans()
+	test_pattern_seeds()
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
@@ -339,7 +340,11 @@ func test_collages() -> void:
 		var regions: Array = p["regions"]
 		var empty := 0
 		var sparse := 0
+		var areas := 0
 		for r in regions:
+			if r["kind"] != "area":
+				continue
+			areas += 1
 			if r["empty"]:
 				empty += 1
 			if r["fill"] != "full":
@@ -349,11 +354,11 @@ func test_collages() -> void:
 		var overlaps := count_overlaps(slots, p["width"] * 0.002)
 		print(("  seed %d %-9s %3d regions (%d empty, %d sparse) lines %-7s %4d slots  coverage %.0f%%"
 				+ "  overlaps %d  stray px %.2f%%  %d ms") % [
-			seed_value, variant, regions.size(), empty, sparse, p["line_style"], slots.size(), coverage * 100.0,
+			seed_value, variant, areas, empty, sparse, p["line_style"], slots.size(), coverage * 100.0,
 			overlaps, img.get_meta("stray") * 100.0, ms])
-		check(regions.size() >= 5, "seed %d: only %d regions" % [seed_value, regions.size()])
-		check(float(empty) / regions.size() < 0.25,
-				"seed %d: %d of %d regions too thin for stones" % [seed_value, empty, regions.size()])
+		check(areas >= 5, "seed %d: only %d regions" % [seed_value, areas])
+		check(float(empty) / areas < 0.25,
+				"seed %d: %d of %d regions too thin for stones" % [seed_value, empty, areas])
 		check(coverage > 0.55, "seed %d: coverage %.2f" % [seed_value, coverage])
 		check(overlaps == 0, "seed %d: %d overlapping slot pairs" % [seed_value, overlaps])
 		check(img.get_meta("stray") < 0.02, "seed %d: slots spill onto lines" % seed_value)
@@ -364,12 +369,12 @@ func test_collages() -> void:
 ## regions stay sparse, and every picture keeps something fully packed.
 func test_design_plans() -> void:
 	print("Design plans")
-	var dense := PictureSources.mandala_collage(2001, {"sparsity": 0.0, "line_style": "full"})
+	var dense := PictureSources.mandala_collage(2001, {"sparsity": 0.0, "line_style": "full", "setting": "metal"})
 	for r in dense["regions"]:
 		check(r["fill"] == "full", "sparsity 0 gave a %s region" % r["fill"])
 	check(dense["lines_visible"] == dense["lines"], "line_style full should draw every line")
 
-	var bare := PictureSources.mandala_collage(2002, {"sparsity": 1.0, "line_style": "none"})
+	var bare := PictureSources.mandala_collage(2002, {"sparsity": 1.0, "line_style": "none", "setting": "metal"})
 	var counts := {}
 	var full_regions := 0
 	var bare_area := 0.0
@@ -396,7 +401,7 @@ func test_design_plans() -> void:
 	render_collage(bare).save_png(out_dir.path_join("design_sparse_no_lines.png"))
 
 	# Scatter regions are sparser than full ones.
-	var mixed := PictureSources.mandala_collage(2003, {"sparsity": 0.6, "line_style": "partial"})
+	var mixed := PictureSources.mandala_collage(2003, {"sparsity": 0.6, "line_style": "partial", "setting": "metal"})
 	var covered := {}
 	for s in mixed["slots"]:
 		var r: float = s["width"] / 2.0
@@ -416,6 +421,49 @@ func test_design_plans() -> void:
 	render_collage(mixed).save_png(out_dir.path_join("design_partial.png"))
 	PictureSources.mandala_image(2003, {"sparsity": 0.6, "line_style": "partial"}).save_png(
 			out_dir.path_join("design_partial_kit_source.png"))
+
+
+## One line art, many collages: pattern seeds change the gems, not the lines;
+## gem lines replace the metal; every line style and pattern shows up.
+func test_pattern_seeds() -> void:
+	print("Pattern seeds")
+	var a := PictureSources.mandala_collage(2004, {"variant": "heart", "pattern_seed": 1})
+	var b := PictureSources.mandala_collage(2004, {"variant": "heart", "pattern_seed": 1})
+	var c := PictureSources.mandala_collage(2004, {"variant": "heart", "pattern_seed": 2})
+	check(a["slots"].size() == b["slots"].size() and a["slots"][0]["x"] == b["slots"][0]["x"],
+			"same pattern seed gave a different collage")
+	check(a["slots"].size() != c["slots"].size() or a["slots"][0]["x"] != c["slots"][0]["x"],
+			"another pattern seed gave the same collage")
+	check(a["source"] == c["source"], "pattern seed changed the line art")
+
+	var styles := {}
+	var settings := {}
+	for line_style in GemLines.STYLES:
+		var p := PictureSources.mandala_collage(2005, {"variant": "snowflake", "setting": "gems", "line_gems": line_style})
+		check(p["setting"] == "gems" and p["line_gems"] == line_style, "line_gems %s not honored" % line_style)
+		check(not 255 in p["lines_visible"], "gem lines should draw no metal")
+		var line_slots := 0
+		var sizes := {}
+		for s in p["slots"]:
+			if p["regions"][s["region"]]["kind"] == "line":
+				line_slots += 1
+				sizes[snappedf(s["width"], 0.5)] = true
+		check(line_slots > 50, "line_gems %s placed only %d line stones" % [line_style, line_slots])
+		if line_style in ["taper", "pulse", "ramp", "radial", "hub", "pearls"]:
+			check(sizes.size() >= 3, "line_gems %s should vary stone sizes" % line_style)
+		var overlaps := count_overlaps(p["slots"], p["width"] * 0.002)
+		check(overlaps == 0, "line_gems %s: %d overlapping slot pairs" % [line_style, overlaps])
+		render_collage(p).save_png(out_dir.path_join("lines_%s.png" % line_style))
+	for i in 12:
+		var p := PictureSources.mandala_collage(2010 + i % 4, {"pattern_seed": i})
+		settings[p["setting"]] = settings.get(p["setting"], 0) + 1
+		for r in p["regions"]:
+			if r["kind"] == "area":
+				styles[r["style"]] = true
+	print("  settings %s, patterns %s" % [settings, styles.keys()])
+	check(settings.get("gems", 0) > settings.get("metal", 0), "gem lines should be the usual setting")
+	for style in ["echo", "halo", "spine", "solitaire"]:
+		check(styles.has(style), "pattern %s never used" % style)
 
 
 func test_kits() -> void:
@@ -543,6 +591,8 @@ func render_collage(p: Dictionary) -> Image:
 	var total := 0
 	var stray := 0
 	for slot in p["slots"]:
+		# Line gems sit in the line channel on purpose.
+		var on_line: bool = p["regions"][slot["region"]].get("kind", "area") == "line"
 		var poly := GemShapes.slot_polygon(slot, 16)
 		var box := Rect2(poly[0], Vector2.ZERO)
 		for v in poly:
@@ -551,9 +601,10 @@ func render_collage(p: Dictionary) -> Image:
 		for y in range(maxi(0, int(box.position.y)), mini(h, int(box.end.y) + 1)):
 			for x in range(maxi(0, int(box.position.x)), mini(w, int(box.end.x) + 1)):
 				if Geometry2D.is_point_in_polygon(Vector2(x + 0.5, y + 0.5), poly):
-					total += 1
-					if lines[y * w + x]:
-						stray += 1
+					if not on_line:
+						total += 1
+						if lines[y * w + x]:
+							stray += 1
 					img.set_pixel(x, y, c)
 	var gold := Color("#d4af5a")
 	for i in w * h:
@@ -579,27 +630,30 @@ func render_kit(kit: Dictionary, cell: int = 8) -> Image:
 ## Pairs of slots in the same region whose capsules come closer than
 ## `tolerance` px of touching.
 func count_overlaps(slots: Array, tolerance: float) -> int:
-	var by_region := {}
+	var cell := 32.0
+	var grid := {}
 	for s in slots:
-		if not by_region.has(s["region"]):
-			by_region[s["region"]] = []
-		by_region[s["region"]].append(s)
+		var key := Vector2i(floori(s["x"] / cell), floori(s["y"] / cell))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(s)
 	var n := 0
-	for list in by_region.values():
-		for i in list.size():
-			for j in range(i + 1, list.size()):
-				var a: Dictionary = list[i]
-				var b: Dictionary = list[j]
-				var ra: float = a["width"] / 2.0
-				var rb: float = b["width"] / 2.0
-				var reach: float = a["size"] / 2.0 + b["size"] / 2.0
-				var ca := Vector2(a["x"], a["y"])
-				var cb := Vector2(b["x"], b["y"])
-				if ca.distance_to(cb) > reach:
-					continue
-				var ha := Vector2.from_angle(a["rotation"]) * (a["size"] / 2.0 - ra)
-				var hb := Vector2.from_angle(b["rotation"]) * (b["size"] / 2.0 - rb)
-				var pts := Geometry2D.get_closest_points_between_segments(ca - ha, ca + ha, cb - hb, cb + hb)
-				if pts[0].distance_to(pts[1]) < ra + rb - tolerance:
-					n += 1
+	for a: Dictionary in slots:
+		var ka := Vector2i(floori(a["x"] / cell), floori(a["y"] / cell))
+		var ra: float = a["width"] / 2.0
+		var ca := Vector2(a["x"], a["y"])
+		var ha: Vector2 = Vector2.from_angle(a["rotation"]) * (a["size"] / 2.0 - ra)
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				for b: Dictionary in grid.get(ka + Vector2i(dx, dy), []):
+					if b["id"] <= a["id"] or b["region"] != a["region"]:
+						continue
+					var rb: float = b["width"] / 2.0
+					var cb := Vector2(b["x"], b["y"])
+					if ca.distance_to(cb) > a["size"] / 2.0 + b["size"] / 2.0:
+						continue
+					var hb: Vector2 = Vector2.from_angle(b["rotation"]) * (b["size"] / 2.0 - rb)
+					var pts := Geometry2D.get_closest_points_between_segments(ca - ha, ca + ha, cb - hb, cb + hb)
+					if pts[0].distance_to(pts[1]) < ra + rb - tolerance:
+						n += 1
 	return n

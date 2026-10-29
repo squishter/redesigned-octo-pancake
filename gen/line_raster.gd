@@ -82,6 +82,74 @@ static func dilate(mask: PackedByteArray, w: int, h: int, radius: int) -> Packed
 	return out
 
 
+## Thickens lines by `radius` px in every direction (a round brush), using a
+## two-pass 3-4 chamfer distance to the nearest line pixel.
+static func dilate_round(mask: PackedByteArray, w: int, h: int, radius: float) -> PackedByteArray:
+	if radius <= 0.0:
+		return mask
+	const BIG := 1 << 28
+	var d := PackedInt32Array()
+	d.resize(w * h)
+	for i in w * h:
+		d[i] = 0 if mask[i] else BIG
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			if d[i] == 0:
+				continue
+			var best := d[i]
+			if x > 0:
+				best = mini(best, d[i - 1] + 3)
+			if y > 0:
+				best = mini(best, d[i - w] + 3)
+				if x > 0:
+					best = mini(best, d[i - w - 1] + 4)
+				if x < w - 1:
+					best = mini(best, d[i - w + 1] + 4)
+			d[i] = best
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var i := y * w + x
+			if d[i] == 0:
+				continue
+			var best := d[i]
+			if x < w - 1:
+				best = mini(best, d[i + 1] + 3)
+			if y < h - 1:
+				best = mini(best, d[i + w] + 3)
+				if x < w - 1:
+					best = mini(best, d[i + w + 1] + 4)
+				if x > 0:
+					best = mini(best, d[i + w - 1] + 4)
+			d[i] = best
+	var limit := int(radius * 3.0)
+	var out := PackedByteArray()
+	out.resize(w * h)
+	for i in w * h:
+		if d[i] <= limit:
+			out[i] = 255
+	return out
+
+
+## Marks every slot's capsule, grown by `pad` px, as line in a copy of `mask`.
+## Gem lines use it to carve a channel that is exactly as wide as their stones.
+static func stamp_slots(mask: PackedByteArray, w: int, h: int, slots: Array, pad: float) -> PackedByteArray:
+	var out := mask.duplicate()
+	for s: Dictionary in slots:
+		var r: float = s["width"] / 2.0 + pad
+		var hl: float = s["size"] / 2.0 - s["width"] / 2.0
+		var c := Vector2(s["x"], s["y"])
+		var dir := Vector2.from_angle(s["rotation"])
+		var reach := r + hl
+		for y in range(maxi(0, int(c.y - reach)), mini(h, int(c.y + reach) + 2)):
+			for x in range(maxi(0, int(c.x - reach)), mini(w, int(c.x + reach) + 2)):
+				var p := Vector2(x + 0.5, y + 0.5) - c
+				var t := clampf(p.dot(dir), -hl, hl)
+				if (p - dir * t).length_squared() <= r * r:
+					out[y * w + x] = 255
+	return out
+
+
 ## Adds a border so regions touching the picture's edge count as closed.
 static func add_frame(source: PackedByteArray, w: int, h: int, thickness: int) -> PackedByteArray:
 	var mask := source.duplicate()

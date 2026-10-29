@@ -72,6 +72,26 @@ static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorA
 	return out
 
 
+## A second color per region for its pattern's accent stones: a palette
+## color other than the region's own, shared by symmetric copies.
+static func accent_colors(map: RegionMap, groups: PackedInt32Array, colors: PackedColorArray,
+		palette: PackedColorArray, seed_value: int) -> PackedColorArray:
+	var out := PackedColorArray()
+	var by_group := {}
+	for r in map.regions.size():
+		var g := groups[r]
+		if not by_group.has(g):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([seed_value, g, "accent"])
+			var choices := []
+			for c in palette:
+				if not c.is_equal_approx(colors[r]):
+					choices.append(c)
+			by_group[g] = choices[rng.randi_range(0, choices.size() - 1)] if not choices.is_empty() else colors[r]
+		out.append(by_group[g])
+	return out
+
+
 ## The mean color of `img` over each region. The image is scaled to the map.
 static func image_colors(map: RegionMap, img: Image) -> PackedColorArray:
 	var src := img.duplicate() as Image

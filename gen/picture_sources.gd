@@ -26,7 +26,9 @@ static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictiona
 
 
 ## A Collage puzzle from a seeded mandala. Options as mandala_lines plus
-## CollageGenerator's (theme, gems, coverage, ...).
+## CollageGenerator's (theme, gems, setting, line_gems, ...). The seed picks
+## the lines; `pattern_seed` picks how they become gems, so one line art
+## makes many collages.
 static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var lines := mandala_lines(seed_value, options)
 	var mandala: Dictionary = lines["mandala"]
@@ -92,6 +94,7 @@ static func photo_collage(photo: Image, options: Dictionary = {}) -> Dictionary:
 
 ## A Collage puzzle from a bundled line-art image (dark lines on a light or
 ## transparent background). close_gaps dilates the lines by that many px first.
+## Pass a different `pattern_seed` for another collage of the same art.
 static func line_art_collage(img: Image, options: Dictionary = {}) -> Dictionary:
 	var src := img.duplicate() as Image
 	if src.is_compressed():
