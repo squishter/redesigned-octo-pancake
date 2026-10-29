@@ -159,7 +159,7 @@ static func _place(out: Array[Dictionary], hash: Dictionary, cell: float, gap: f
 		turns: Array, r: float, h: float) -> void:
 	var k := 1.0
 	for i in at.size():
-		k = minf(k, _room(hash, cell, gap, at[i], turns[i], h) / r)
+		k = minf(k, room_at(hash, cell, gap, at[i], turns[i], h) / r)
 		for j in i:
 			var d: float = (at[i] as Vector2).distance_to(at[j])
 			if d < 2.0 * (r + h) + gap:
@@ -182,7 +182,7 @@ static func _place(out: Array[Dictionary], hash: Dictionary, cell: float, gap: f
 
 ## Room for a stone (a capsule: center c, rotation rot, half-length h) among
 ## the stones placed so far: the distance to the nearest one, less the gap.
-static func _room(hash: Dictionary, cell: float, gap: float, c: Vector2, rot: float, h: float) -> float:
+static func room_at(hash: Dictionary, cell: float, gap: float, c: Vector2, rot: float, h: float) -> float:
 	var dir := Vector2.from_angle(rot)
 	var cx := floori(c.x / cell)
 	var cy := floori(c.y / cell)

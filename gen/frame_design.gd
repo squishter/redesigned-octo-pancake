@@ -29,6 +29,10 @@ const SAMPLES := 480
 ## How much of the inner half-size a picture may use, for shapes narrower
 ## than a circle of that radius.
 const ROOM := {"oval": 0.84, "hexagon": 0.866}
+## Each shape's turns: its outline repeats this many times around (and
+## every shape mirrors across the vertical). Beads, ticks and waves along
+## the band come in multiples of twice this, so they share both.
+const FOLDS := {"square": 4, "rounded": 4, "octagon": 4, "circle": 4, "hexagon": 6, "oval": 2, "arch": 1}
 ## Gap between the picture and its halo.
 const HALO_MARGIN := 0.05
 ## Shapes, bands and backgrounds used by this many previous frames in a row
@@ -144,7 +148,7 @@ func _build(lines: Array[PackedVector2Array], line_closed: PackedByteArray, info
 	for edge in [_outer, _inner]:
 		_add_loop(edge)
 	_mode = 1
-	_build_band(info["band"], mid, bw)
+	_build_band(info["band"], mid, bw, FOLDS[shape])
 	if background != "plain":
 		_halo = _envelope(content, line_closed, HALO_MARGIN)
 		_add(_halo, true)
@@ -152,14 +156,15 @@ func _build(lines: Array[PackedVector2Array], line_closed: PackedByteArray, info
 		_build_background(background)
 
 
-## A frame shape's closed outline at half-size h, evenly spaced.
+## A frame shape's closed outline at half-size h, evenly spaced, starting
+## at its top on the vertical axis (so point i mirrors point SAMPLES - i).
 static func _shape(kind: String, h: float) -> PackedVector2Array:
 	var poly := PackedVector2Array()
 	match kind:
 		"circle", "oval":
 			var sx := 0.84 if kind == "oval" else 1.0
 			for i in SAMPLES:
-				var a := TAU * i / SAMPLES
+				var a := -PI / 2.0 + TAU * i / SAMPLES
 				poly.append(Vector2(sx * h * cos(a), h * sin(a)))
 			return poly
 		"square":
@@ -183,7 +188,25 @@ static func _shape(kind: String, h: float) -> PackedVector2Array:
 			poly = PackedVector2Array([Vector2(h, 0.0), Vector2(h, h), Vector2(-h, h), Vector2(-h, 0.0)])
 			for j in range(1, 40):
 				poly.append(Vector2.from_angle(PI + PI * j / 40.0) * h)
-	return _resample(poly, SAMPLES)
+	return _resample(_from_top(poly), SAMPLES)
+
+
+## A closed outline (clockwise on screen, around the center) restarted
+## where it crosses the vertical axis at the top.
+static func _from_top(poly: PackedVector2Array) -> PackedVector2Array:
+	var m := poly.size()
+	for i in m:
+		var a := poly[i]
+		var b := poly[(i + 1) % m]
+		if a.x < 0.0 and b.x >= 0.0 and a.y + b.y < 0.0:
+			var out := PackedVector2Array()
+			var t := -a.x / (b.x - a.x)
+			if t < 1.0 - 1e-6:
+				out.append(a.lerp(b, t))
+			for j in m:
+				out.append(poly[(i + 1 + j) % m])
+			return out
+	return poly
 
 
 ## Where corner ornaments go on a frame shape's band (at half-size h).
@@ -265,7 +288,7 @@ func _build_corners(kind: String, shape: String, bw: float) -> void:
 			_add(MandalaGenerator.circle(c, r * 0.45, 20), true)
 
 
-func _build_band(kind: String, mid: PackedVector2Array, bw: float) -> void:
+func _build_band(kind: String, mid: PackedVector2Array, bw: float, folds: int) -> void:
 	var normals := _normals(mid)
 	var n := mid.size()
 	var perimeter := 0.0
@@ -276,30 +299,29 @@ func _build_band(kind: String, mid: PackedVector2Array, bw: float) -> void:
 			_add_loop(mid)
 		"beaded":
 			var r := bw * 0.3
-			for i in _along(n, perimeter, r * 2.7):
-				if _clear(mid[i], r + 0.012):
-					_add(MandalaGenerator.circle(mid[i], r, 20), true)
+			for at: Array in _along(mid, normals, perimeter, r * 2.7, folds):
+				if _clear(at[0], r + 0.012):
+					_add(MandalaGenerator.circle(at[0], r, 20), true)
 		"rope", "weave":
-			var idx := _along(n, perimeter, bw * 1.1)
-			idx.append(idx[0])
+			var spots := _along(mid, normals, perimeter, bw * 1.1, folds)
+			spots.append(spots[0])
 			for side in ([1.0] if kind == "rope" else [1.0, -1.0]):
 				var zig := PackedVector2Array()
-				for j in idx.size():
-					var i: int = idx[j]
-					zig.append(mid[i] + normals[i] * (side * (1.0 if j % 2 == 0 else -1.0) * bw * 0.62))
+				for j in spots.size():
+					zig.append(spots[j][0] + spots[j][1] * (side * (1.0 if j % 2 == 0 else -1.0) * bw * 0.62))
 				_add_clipped(zig)
 		"segments":
-			for i in _along(n, perimeter, bw * 1.4):
-				_add_clipped(PackedVector2Array([mid[i] - normals[i] * bw, mid[i] + normals[i] * bw]))
+			for at: Array in _along(mid, normals, perimeter, bw * 1.4, folds):
+				_add_clipped(PackedVector2Array([at[0] - at[1] * bw, at[0] + at[1] * bw]))
 		"scallops":
-			var m := maxi(8, int(perimeter / (bw * 1.6)))
+			var m := _multiple(perimeter / (bw * 1.6), folds)
 			var wave := PackedVector2Array()
 			for j in n + 1:
 				var i := j % n
 				wave.append(mid[i] + normals[i] * (-bw * 0.5 + bw * 0.75 * absf(sin(PI * m * j / n))))
 			_add_clipped(wave)
 		"braid":
-			var m := maxi(8, int(perimeter / (bw * 2.2)))
+			var m := _multiple(perimeter / (bw * 2.2), folds)
 			for phase in [0.0, PI]:
 				var wave := PackedVector2Array()
 				for j in n + 1:
@@ -308,22 +330,34 @@ func _build_band(kind: String, mid: PackedVector2Array, bw: float) -> void:
 				_add_clipped(wave)
 
 
-## Indices of points spaced about `step` apart along a closed outline of n
-## evenly spaced points.
-static func _along(n: int, perimeter: float, step: float) -> Array:
-	var k := maxi(8, int(perimeter / step))
+## Spots about `step` apart along a closed outline of evenly spaced points
+## that starts on its mirror axis, as [point, outward normal]: an even
+## multiple of the shape's folds, starting on the axis, so they share the
+## frame's symmetry.
+static func _along(pts: PackedVector2Array, normals: PackedVector2Array, perimeter: float, step: float,
+		folds: int) -> Array:
+	var n := pts.size()
+	var k := _multiple(perimeter / step / 2.0, folds) * 2
 	var out := []
 	for i in k:
-		out.append(int(float(i) * n / k))
+		var f := float(i) * n / k
+		var j := floori(f)
+		var t := f - j
+		out.append([pts[j].lerp(pts[(j + 1) % n], t), normals[j].lerp(normals[(j + 1) % n], t).normalized()])
 	return out
+
+
+## The multiple of `folds` nearest x, and at least 4.
+static func _multiple(x: float, folds: int) -> int:
+	return folds * maxi(ceili(4.0 / folds), roundi(x / folds))
 
 
 func _build_background(kind: String) -> void:
 	match kind:
 		"stripes":
 			var step := rng.randf_range(0.2, 0.26)
-			var angles := [PI / 4.0, -PI / 4.0, 0.0]
-			_parallel(angles[rng.randi_range(0, 2)], step, 8)
+			# Across or along the vertical, to keep its mirror.
+			_parallel(0.0 if rng.randf() < 0.5 else PI / 2.0, step, 8)
 		"grid", "lattice":
 			var step := rng.randf_range(0.24, 0.3)
 			var a := 0.0 if kind == "grid" else PI / 4.0
@@ -353,14 +387,15 @@ func _build_background(kind: String) -> void:
 				_add_clipped(wave)
 				y += step
 		"polka", "sparkles":
+			# A staggered grid centered on the picture.
 			var step := rng.randf_range(0.26, 0.32)
 			var r := step * 0.16
-			var row := 0
-			var y := -1.0 + step / 2.0
-			while y < 1.0:
-				var x := -1.0 + (step / 2.0 if row % 2 == 1 else 0.0)
-				while x < 1.0:
-					var c := Vector2(x, y)
+			var rows := ceili(1.0 / step)
+			for row in range(-rows, rows + 1):
+				for col in range(-rows - 1, rows + 1):
+					var c := Vector2((col + (0.5 if absi(row) % 2 == 1 else 0.0)) * step, row * step)
+					if absf(c.x) > 1.0:
+						continue
 					if _clear(c, r * 2.2):
 						if kind == "polka":
 							_add(MandalaGenerator.circle(c, r, 18), true)
@@ -369,9 +404,6 @@ func _build_background(kind: String) -> void:
 							for j in 8:
 								sparkle.append(c + Vector2.from_angle(PI * j / 4.0) * (r * 2.0 if j % 2 == 0 else r * 0.7))
 							_add(sparkle, true)
-					x += step
-				y += step
-				row += 1
 
 
 ## Parallel lines at `angle`, `step` apart, `count` on each side of the
@@ -379,7 +411,7 @@ func _build_background(kind: String) -> void:
 func _parallel(angle: float, step: float, count: int) -> void:
 	var d := Vector2.from_angle(angle)
 	var across := Vector2(-d.y, d.x)
-	for i in range(-count, count + 1):
+	for i in range(-count, count):
 		var o := across * step * (i + 0.5)
 		_add_clipped(PackedVector2Array([o - d * 2.0, o + d * 2.0]))
 

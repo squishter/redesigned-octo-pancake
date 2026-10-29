@@ -4,8 +4,10 @@ extends RefCounted
 ## different from each other rather than like one flower at different sizes.
 ##
 ## Each flower picks a template and draws 1-4 rings of petals around a center.
-## A ring mixes 2 or 3 wobbled versions of its template (ABAB or ABCABC, or a
-## mirrored sequence for odd counts), so it stays symmetric but not uniform.
+## A ring of 6 or more (an even count) alternates 2 wobbled versions of its
+## template (ABAB), so it stays symmetric but not uniform; others repeat one.
+## Every ring, and the center, keeps a turn the first ring has (the
+## flower's turns), so the whole flower repeats around.
 ## Inner rings sit in front of outer ones and each petal overlaps the next
 ## like a pinwheel; hidden parts of outlines are clipped away, and every
 ## visible piece ends on another outline, so all regions stay closed.
@@ -46,6 +48,9 @@ const MAX_LENGTH_SCALE := 1.15 * 1.04
 ## Narrowest petal half-width (unit space) a ring may have, so even thin rays
 ## leave room for a row of stones; rings with too many petals get fewer.
 const MIN_HALF_WIDTH := 0.024
+## Fewest turns a flower keeps when a ring can't share all of its first
+## ring's (unless that has fewer).
+const MIN_TURNS := 4
 
 var rng := RandomNumberGenerator.new()
 var wobble := 0.0
@@ -70,7 +75,10 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	if not TEMPLATES.has(template):
 		template = g._pick_template(options.get("recent", []))
 	var rings := g._build(template)
-	var center := g._build_center(rings[0]["rc"])
+	var turns := 0
+	for r in rings:
+		turns = _gcd(turns, _turns(r["petals"]))
+	var center := g._build_center(rings[0]["rc"], turns)
 	var ring_info := []
 	for r in rings:
 		ring_info.append({"template": r["template"], "petals": r["petals"]})
@@ -119,10 +127,12 @@ func _build(template: String) -> Array:
 	var reach := 1.0
 	var rotation := rng.randf() * TAU
 	var rings := []
+	var turns := 0
 	for _ring in _range(TEMPLATES[template]["rings"]):
 		var p: Dictionary = TEMPLATES[t]
 		var width := rng.randf_range(p["width"][0], p["width"][1])
-		n = mini(n, _max_petals(p, width, reach, rc))
+		n = _fitting(n, _max_petals(p, width, reach, rc), turns)
+		turns = _gcd(turns, _turns(n))
 		rings.append({"template": t, "petals": n, "reach": reach, "rotation": rotation, "width": width, "rc": rc})
 		reach = rc + (reach - rc) * rng.randf_range(0.55, 0.8)
 		rotation += PI / n
@@ -170,6 +180,43 @@ func _build(template: String) -> Array:
 	return rings
 
 
+## The petal count nearest `want`, at most `cap`, whose ring keeps the
+## flower's turns so far (all of them if any count does, else at least
+## MIN_TURNS of them).
+static func _fitting(want: int, cap: int, turns: int) -> int:
+	if turns == 0:
+		return mini(want, cap)
+	var best := mini(want, cap)
+	var best_cost := INF
+	for c in range(3, cap + 1):
+		var kept := _gcd(_turns(c), turns)
+		if kept < mini(turns, MIN_TURNS):
+			continue
+		var cost: float = absi(c - want) + (0.0 if kept == turns else float(want))
+		if cost < best_cost:
+			best_cost = cost
+			best = c
+	return best
+
+
+## Wobbled versions a ring of n petals alternates.
+static func _versions(n: int) -> int:
+	return 2 if n % 2 == 0 and n >= 6 else 1
+
+
+## Turns of a ring of n petals: it repeats every _versions petals.
+static func _turns(n: int) -> int:
+	return n / _versions(n)
+
+
+static func _gcd(a: int, b: int) -> int:
+	while b != 0:
+		var t := a % b
+		a = b
+		b = t
+	return a
+
+
 ## Most petals a ring can hold while its narrowest wobbled version keeps
 ## MIN_HALF_WIDTH at its widest point.
 static func _max_petals(p: Dictionary, width: float, reach: float, rc: float) -> int:
@@ -185,7 +232,7 @@ static func _max_petals(p: Dictionary, width: float, reach: float, rc: float) ->
 func _ring_petals(ring: Dictionary, rc: float) -> Array:
 	var p: Dictionary = TEMPLATES[ring["template"]]
 	var n: int = ring["petals"]
-	var k := 3 if n % 3 == 0 else 2
+	var k := _versions(n)
 	var versions := []
 	for _v in k:
 		versions.append(_wobbled(p))
@@ -193,7 +240,7 @@ func _ring_petals(ring: Dictionary, rc: float) -> Array:
 	var base_r := rc * 0.6
 	var out := []
 	for i in n:
-		var q: Dictionary = versions[_version_index(i, n, k)]
+		var q: Dictionary = versions[i % k]
 		var jitter_angle := rng.randf_range(-1.0, 1.0) * deg_to_rad(2.0) * wobble
 		var jitter_length := 1.0 + rng.randf_range(-1.0, 1.0) * 0.04 * wobble
 		var length: float = (ring["reach"] - base_r) / MAX_LENGTH_SCALE * q["length_scale"] * jitter_length
@@ -215,14 +262,6 @@ func _wobbled(p: Dictionary) -> Dictionary:
 	q["curl"] = p["curl"] + rng.randf_range(-10.0, 10.0)
 	q["skew"] = p["skew"] + rng.randf_range(-6.0, 6.0)
 	return q
-
-
-## Which version petal i of n uses: repeating ABAB or ABCABC, or for an odd
-## count with 2 versions, a sequence mirrored across petal 0's axis.
-static func _version_index(i: int, n: int, k: int) -> int:
-	if k == 3 or n % 2 == 0:
-		return i % k
-	return mini(i, n - i) % 2
 
 
 ## A petal outline in local space: x runs from the base (0) to the tip
@@ -334,29 +373,46 @@ static func _crossing(a: Vector2, b: Vector2, rc: float, polys: Array[PackedVect
 	return a.lerp(b, hi)
 
 
-## Draws the flower's center inside its disc of radius rc. Returns its kind.
-func _build_center(rc: float) -> String:
+## Draws the flower's center inside its disc of radius rc, repeating with
+## the flower's turns. Returns its kind.
+func _build_center(rc: float, turns: int) -> String:
 	var kind: String = CENTERS[rng.randi_range(0, CENTERS.size() - 1)]
 	match kind:
 		"seeds":
-			# A sunflower-style spiral of seed dots.
-			var n := rng.randi_range(7, 12)
-			var golden := PI * (3.0 - sqrt(5.0))
+			# Seed dots in two staggered rings around one.
+			var n := _count(3, 6, turns)
+			_add(MandalaGenerator.circle(Vector2.ZERO, rc * 0.16, 20), true)
 			for i in n:
-				var f := sqrt((i + 0.5) / n)
-				_add(MandalaGenerator.circle(Vector2.from_angle(i * golden) * rc * 0.78 * f, rc * 0.16 * (0.75 + 0.25 * f), 20), true)
+				_add(MandalaGenerator.circle(Vector2.from_angle(TAU * i / n) * rc * 0.42, rc * 0.12, 20), true)
+				_add(MandalaGenerator.circle(Vector2.from_angle(TAU * (i + 0.5) / n) * rc * 0.74, rc * 0.14, 20), true)
 		"stamens":
 			_add(MandalaGenerator.circle(Vector2.ZERO, rc * 0.5), true)
-			var n := rng.randi_range(6, 10)
+			var n := _count(6, 10, turns)
 			for i in n:
 				_add(MandalaGenerator.circle(Vector2.from_angle(TAU * i / n) * rc * 0.76, rc * 0.13, 18), true)
 		"nested":
 			for s in [0.68, 0.38]:
 				_add(MandalaGenerator.circle(Vector2.ZERO, rc * s), true)
 		_:
-			var k := rng.randi_range(5, 8)
+			var k := _count(5, 8, turns)
 			var star := PackedVector2Array()
 			for i in 2 * k:
 				star.append(Vector2.from_angle(PI * i / k) * rc * (0.72 if i % 2 == 0 else 0.36))
 			_add(star, true)
 	return kind
+
+
+## A count from lo..hi that repeats with `turns` (a multiple of it, else a
+## divisor of it of at least 3), or any when none does.
+func _count(lo: int, hi: int, turns: int) -> int:
+	var fits := []
+	for c in range(lo, hi + 1):
+		if turns > 0 and c % turns == 0:
+			fits.append(c)
+	if fits.is_empty():
+		for c in range(3, hi + 1):
+			if turns > 0 and turns % c == 0:
+				fits.append(c)
+	if fits.is_empty():
+		return rng.randi_range(lo, hi)
+	return fits[rng.randi_range(0, fits.size() - 1)]

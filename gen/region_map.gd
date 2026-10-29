@@ -20,19 +20,21 @@ var dist := PackedFloat32Array()
 var regions: Array[Dictionary] = []
 
 
-## min_area: regions smaller than this many px become part of the lines.
-static func build(mask: PackedByteArray, w: int, h: int, min_area: int) -> RegionMap:
+## min_area: regions smaller than this many px become part of the lines,
+## except the one holding the pixel `keep` (say a mandala's center).
+static func build(mask: PackedByteArray, w: int, h: int, min_area: int, keep := Vector2i(-1, -1)) -> RegionMap:
 	var map := RegionMap.new()
 	map.width = w
 	map.height = h
-	map._label(mask, min_area)
+	map._label(mask, min_area, keep)
 	map._distance()
 	return map
 
 
-func _label(mask: PackedByteArray, min_area: int) -> void:
+func _label(mask: PackedByteArray, min_area: int, keep: Vector2i) -> void:
 	var w := width
 	var h := height
+	var kept := keep.y * w + keep.x if Rect2i(0, 0, w, h).has_point(keep) else -1
 	var raw := PackedInt32Array()
 	raw.resize(w * h)
 	raw.fill(-1)
@@ -54,6 +56,7 @@ func _label(mask: PackedByteArray, min_area: int) -> void:
 		var syy := 0.0
 		var sxy := 0.0
 		var border := false
+		var held := false
 		var x0 := w
 		var y0 := h
 		var x1 := 0
@@ -64,6 +67,7 @@ func _label(mask: PackedByteArray, min_area: int) -> void:
 			var y := i / w
 			var x := i - y * w
 			area += 1
+			held = held or i == kept
 			sx += x
 			sy += y
 			sxx += x * x
@@ -104,6 +108,7 @@ func _label(mask: PackedByteArray, min_area: int) -> void:
 		raw_info.append({
 			"area": area,
 			"border": border,
+			"held": held,
 			"centroid": Vector2(cx + 0.5, cy + 0.5),
 			"bbox": Rect2i(x0, y0, x1 - x0 + 1, y1 - y0 + 1),
 			"elongation": sqrt(l1 / l2),
@@ -117,11 +122,12 @@ func _label(mask: PackedByteArray, min_area: int) -> void:
 		var info: Dictionary = raw_info[r]
 		if info["border"]:
 			remap[r] = BACKGROUND
-		elif info["area"] < min_area:
+		elif info["area"] < min_area and not info["held"]:
 			remap[r] = LINE
 		else:
 			remap[r] = regions.size()
 			info.erase("border")
+			info.erase("held")
 			info["id"] = regions.size()
 			regions.append(info)
 	labels.resize(w * h)

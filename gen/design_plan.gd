@@ -45,7 +45,7 @@ const ACCENT_MAX_SPREAD := 2.5
 ##   sparsity: 0..1, the chance each group gets a sparse fill (default -1:
 ##             picked from AUTO_SPARSITY by the seed)
 ##   line_style: one of LINE_STYLES or "auto" (default "auto")
-##   unit: base stone radius in px, as for SlotPacker (default 1% of the picture)
+##   unit: base stone radius in px, as for SlotPacker (default SlotPacker.UNIT of the picture)
 ## Returns {sparsity, line_style, fills: PackedStringArray per region,
 ##          outlined: PackedByteArray per region, keep_outer: bool}.
 static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, seed_value: int) -> Dictionary:
@@ -58,7 +58,7 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 	var line_style: String = options.get("line_style", "auto")
 	if not line_style in LINE_STYLES:
 		line_style = _weighted_pick(AUTO_LINE_WEIGHTS, rng)
-	var unit: float = options.get("unit", minf(map.width, map.height) * 0.010)
+	var unit: float = options.get("unit", minf(map.width, map.height) * SlotPacker.UNIT)
 
 	var n_groups := 0
 	for g in groups:

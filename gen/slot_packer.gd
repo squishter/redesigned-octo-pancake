@@ -65,6 +65,18 @@ const RADIAL_MIN := 0.55
 ## Smallest stone radius (in units) in thin places: chains along slivers
 ## and rows where a region pinches.
 const MIN_STONE := 0.25
+## The stone unit (a base stone's radius) as a share of the picture's
+## shorter side: small enough that the line art's details are bigger than
+## its stones. And the space between stones, in units.
+const UNIT := 0.0075
+const GAP := 0.3
+## The region holding a mandala's center, when at most this deep (in
+## units), holds a single stone: the picture's focus.
+const CENTERPIECE := 3.0
+## Shapes a centerpiece may take, by how many times each repeats around: one
+## that repeats with the picture's folds (round fits any).
+const CENTERPIECE_TURNS := {"round": 0, "hexagon": 6, "flower": 6, "octagon": 8, "cushion": 4, "square": 4,
+		"pentagon": 5, "star": 5, "trillion": 3}
 
 var map: RegionMap
 var rng := RandomNumberGenerator.new()
@@ -114,8 +126,8 @@ var _part := 0
 
 
 ## Packs every region. options:
-##   seed (int), unit (base stone radius in px, default 1% of the picture),
-##   gap (px between stones, default 0.3%),
+##   seed (int), unit (base stone radius in px, default UNIT of the picture),
+##   gap (px between stones, default GAP units),
 ##   groups (PackedInt32Array: symmetry group per region; copies share a pattern),
 ##   radial_size (bool): rows, lattices and spines shrink toward the picture's center,
 ##   tiers (bool): some groups first get a few large, then a few medium stones,
@@ -178,8 +190,8 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	map = region_map
 	seed_value = options.get("seed", 1)
 	rng.seed = seed_value
-	unit = options.get("unit", side * 0.010)
-	gap = options.get("gap", side * 0.003)
+	unit = options.get("unit", side * UNIT)
+	gap = options.get("gap", unit * GAP)
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
@@ -327,8 +339,9 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 	# when those lines are only circles; elsewhere its own mirror axis.
 	_axis = NAN
 	var folds := 1
+	var central := mirror_axes and (region["centroid"] as Vector2).distance_to(_pic_center) <= unit
 	if mirror_axes:
-		if (region["centroid"] as Vector2).distance_to(_pic_center) <= unit:
+		if central:
 			_ring_sym()
 			if _ring["folds"] >= Symmetry.MAX_FOLDS:
 				var id: int = region["id"]
@@ -339,8 +352,30 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 		else:
 			_axis = Symmetry.self_axis(map, region, _pic_center)
 	var first := slots.size()
-	_pack_pattern(region, design)
+	var hub: bool = map.label_at(int(_pic_center.x), int(_pic_center.y)) == region["id"]
+	if central and hub and region["max_dist"] <= unit * CENTERPIECE and design["style"] != "bare":
+		region["style"] = "accent"
+		var piece := design.duplicate()
+		piece["center_shape"] = _centerpiece_shape(design["center_shape"], folds)
+		_center_stone(region, INF, piece)
+	else:
+		_pack_pattern(region, design)
 	SlotMirror.symmetrize(self, region, first, design["style"] in PATTERNS, folds, _axis)
+
+
+## The design's center shape if it repeats with `folds` (any mirrored shape
+## when the center has no turns, any rounded one when it is round), else
+## one that does.
+func _centerpiece_shape(wanted: String, folds: int) -> String:
+	var round_ring: bool = _ring.get("folds", 0) >= Symmetry.MAX_FOLDS
+	if folds <= 1 and not round_ring:
+		return wanted
+	var fits := []
+	for shape: String in CENTERPIECE_TURNS:
+		var turns: int = CENTERPIECE_TURNS[shape]
+		if turns == 0 or round_ring or turns % folds == 0:
+			fits.append(shape)
+	return wanted if wanted in fits else fits[rng.randi_range(0, fits.size() - 1)]
 
 
 func _pack_pattern(region: Dictionary, design: Dictionary) -> void:

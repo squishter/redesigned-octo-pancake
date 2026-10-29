@@ -65,7 +65,8 @@ const GEM_TYPES_MAX := 30
 ##   colors_image: Image to sample region colors from instead of a theme
 ##   gems: Array of {"id", "color"} to snap target colors to (default starter gems;
 ##         pass [] to keep exact colors)
-##   min_area: px; smaller regions merge into the lines (default 0.05% of the picture)
+##   min_area: px; smaller regions merge into the lines (default 0.05% of the picture),
+##             except a symmetric picture's center
 ##   setting: "gems" | "metal" | "auto" (default "auto": picked per seed)
 ##   line_gems: one of GemLines.STYLES (default: picked per seed)
 ##   bold_lines: how many classes of lines through the middle get medium or
@@ -81,7 +82,7 @@ const GEM_TYPES_MAX := 30
 ##   gem_types: how many gem types (shape + color, any size) to aim for
 ##              (default: 25-30, picked per seed)
 ##   seed, gap: passed to SlotPacker
-##   unit: base stone radius in px; by default 1% of the picture, then scaled
+##   unit: base stone radius in px; by default SlotPacker.UNIT of the picture, then scaled
 ##         so the collage has MIN_SLOTS..MAX_SLOTS stones (gem-line pictures
 ##         first leave out their busiest classes of lines, see MAX_DROPPED)
 ##   max_slots: the most stones (default MAX_SLOTS)
@@ -89,7 +90,7 @@ const GEM_TYPES_MAX := 30
 ##     out (set when over max_slots)
 ##   source: Dictionary describing where the lines came from, stored as is
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
-	var unit: float = options.get("unit", minf(w, h) * 0.010)
+	var unit: float = options.get("unit", minf(w, h) * SlotPacker.UNIT)
 	var picture := _build(mask, w, h, options, unit)
 	if options.has("unit") and options.has("spacers"):
 		return picture
@@ -143,8 +144,10 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	rng.seed = hash([seed_value, "setting"])
 	var symmetry: String = options.get("symmetry", "none")
 	var min_area: int = options.get("min_area", int(w * h * 0.0005))
+	# A symmetric picture's center region stays, however small: it is the focus.
+	var center := Vector2i(w / 2, h / 2) if symmetry != "none" else Vector2i(-1, -1)
 	var side := float(mini(w, h))
-	var gap: float = options.get("gap", side * 0.003)
+	var gap: float = options.get("gap", unit * SlotPacker.GAP)
 
 	var setting: String = options.get("setting", "auto")
 	if not setting in SETTINGS:
@@ -161,7 +164,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		# Stones go along the lines' centerlines; the lines then become a channel
 		# shaped to those stones, so the areas shrink exactly where the stones are big.
 		graph = Contours.centerlines(mask, w, h, unit * 1.5)
-		var outline_map := RegionMap.build(mask, w, h, min_area)
+		var outline_map := RegionMap.build(mask, w, h, min_area, center)
 		# Line stones scale with how roomy the areas are, so busy pictures keep
 		# room for their area patterns.
 		var depths := []
@@ -181,7 +184,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	else:
 		line_gems = ""
 
-	var map := RegionMap.build(area_mask, w, h, min_area)
+	var map := RegionMap.build(area_mask, w, h, min_area, center)
 	var groups := RegionPaint.symmetry_groups(map, symmetry)
 	var plan_options := options.duplicate()
 	plan_options["unit"] = unit

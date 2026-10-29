@@ -63,6 +63,11 @@ const GRADED := ["grow", "shrink", "swell"]
 ## Lines carry on through a junction (as one stroke) when they meet within
 ## this many radians of a straight line.
 const STROKE_TURN := 0.52
+## A line's stones are at most this share of the room beside it (the width
+## of the narrower area there, from the line's center), and at least
+## MIN_FIT of the full line stone.
+const FIT_SHARE := 0.45
+const MIN_FIT := 0.35
 ## Lines that meet at a hub: at least this many.
 const HUB_DEGREE := 4
 ## Bold lines: a few classes of lines through the middle of the picture take
@@ -151,6 +156,21 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 		node_keys.append(_sym_key(nodes[n], center, symmetry, 0.0))
 	var node_class := _classes(node_keys, tol)
 	var bold_r := _bold_classes(paths, path_class, map, r, gap, center, far, bold, seed_value)
+	# Each line's stones fit the room beside it, so lines drawn close
+	# together (small curly details) still get a run of small stones instead
+	# of crowding each other out; a junction takes its smallest line's size.
+	var path_r := PackedFloat32Array()
+	var node_r := PackedFloat32Array()
+	node_r.resize(nodes.size())
+	node_r.fill(INF)
+	for k in paths.size():
+		var pr: float = bold_r.get(path_class[k], r)
+		if not bold_r.has(path_class[k]):
+			pr = r * clampf(FIT_SHARE * _line_room(paths[k], map) / r, MIN_FIT, 1.0)
+		path_r.append(pr)
+		for e: int in paths[k]["ends"]:
+			if e >= 0:
+				node_r[e] = minf(node_r[e], minf(pr, r))
 	for c: int in bold_r:
 		cell = maxf(cell, (bold_r[c] + r) * 1.2 + gap)
 
@@ -228,15 +248,16 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 		if node_paths[n] == 0:
 			continue
 		var silhouette := node_outer[n] * 2 >= node_paths[n]
-		var rn := r_node * _place_scale(field, at[n])
+		var rn := minf(r, node_r[n]) * (r_node / r) * _place_scale(field, at[n])
 		# A junction inside a stroke takes the stroke's size there.
 		if strokes["node_t"].has(n):
 			var nt: Array = strokes["node_t"][n]
-			rn = r_node * _scale(strokes["list"][nt[0]]["profile"], nt[1])
+			rn = minf(r, node_r[n]) * (r_node / r) * _scale(strokes["list"][nt[0]]["profile"], nt[1])
 		_add(out, hash, cell, at[n], 0.0, rn, 0.0, "round", 1 if silhouette else 0, gap, NODE_PARTS + node_class[n])
 	var ctx := {
 		"field": field, "r": r, "r_node": r_node, "gap": gap, "cell": cell, "style": style, "outer": outer,
 		"path_class": path_class, "bold_r": bold_r, "seed": seed_value, "rings": rings, "strokes": strokes,
+		"path_r": path_r, "node_r": node_r,
 	}
 	var laid := {}
 	for c: int in by_class:
@@ -247,6 +268,12 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 				var before := out.size()
 				_lay_line(out, hash, paths[k], k, ctx)
 				laid[k] = out.slice(before)
+	# Details drawn smaller than a run of stones (a little tulip, a petal,
+	# lines cut short by junctions) still get stones wherever one fits along
+	# them, so the drawing stays legible.
+	for c: int in by_class:
+		for k: int in by_class[c]:
+			_fill_line(out, hash, cell, gap, paths[k], path_r[k], outer[k], path_class[k])
 	if line_mask.is_empty():
 		line_mask = map.line_mask()
 	return LineMirror.apply(out, line_mask, map.width, map.height, symmetry, r, gap, cell)
@@ -378,7 +405,7 @@ static func _lay_line(out: Array[Dictionary], hash: Dictionary, path: Dictionary
 		"pts": pts,
 		"closed": closed,
 		"length": length,
-		"r": bold_r.get(path_class[k], r),
+		"r": ctx["path_r"][k],
 		"bold": bold_r.has(path_class[k]),
 		"loose": [not closed and ends[0] < 0, not closed and ends[1] < 0],
 		"ring": ctx["rings"].has(k),
@@ -391,9 +418,9 @@ static func _lay_line(out: Array[Dictionary], hash: Dictionary, path: Dictionary
 	var s1 := length
 	if not closed:
 		if ends[0] >= 0:
-			s0 = r_node * _place_scale(field, pts[0]) + gap + _radius(field, prof, 0.0, 0) * aspect
+			s0 = _end_r(ctx, ends[0], r_node) * _place_scale(field, pts[0]) + gap + _radius(field, prof, 0.0, 0) * aspect
 		if ends[1] >= 0:
-			s1 = length - (r_node * _place_scale(field, pts[pts.size() - 1]) + gap
+			s1 = length - (_end_r(ctx, ends[1], r_node) * _place_scale(field, pts[pts.size() - 1]) + gap
 					+ _radius(field, prof, length, 0) * aspect)
 	var span := s1 - s0
 	if span < -r:
@@ -492,6 +519,45 @@ static func _copy_line(out: Array[Dictionary], hash: Dictionary, cell: float, la
 		var step: int = s["seq"]
 		_add(out, hash, cell, t * Vector2(s["x"], s["y"]), rot, r, s["size"] / 2.0 - r, s["shape"], s["region"], gap,
 				s["part"], step, step < 0 and s["tone"] == 1)
+
+
+## Round stones wherever they still fit along a line (as big as its stones,
+## shrunk to the room left, down to MIN_FIT of that).
+static func _fill_line(out: Array[Dictionary], hash: Dictionary, cell: float, gap: float, path: Dictionary, pr: float,
+		region: int, part: int) -> void:
+	var pts: PackedVector2Array = path["points"]
+	var closed: bool = path["closed"]
+	var length := Contours.length(pts, closed)
+	var least := maxf(1.5, pr * MIN_FIT)
+	var s := 0.0
+	while s <= length:
+		var p: Vector2 = Contours.sample(pts, closed, s)[0]
+		var room := LineMirror.room_at(hash, cell, gap, p, 0.0, 0.0)
+		if room >= least:
+			var rr := minf(pr, room)
+			_add(out, hash, cell, p, 0.0, rr, 0.0, "round", region, gap, part)
+			s += rr + gap
+		else:
+			s += 1.0
+
+
+## The junction stone's radius at a line's end (before position scaling).
+static func _end_r(ctx: Dictionary, node: int, r_node: float) -> float:
+	var r: float = ctx["r"]
+	return minf(r, ctx["node_r"][node]) * (r_node / r)
+
+
+## The room beside a line: the narrower area's width (see _side_room) at a
+## few points along it, a low one of them.
+static func _line_room(path: Dictionary, map: RegionMap) -> float:
+	var pts: PackedVector2Array = path["points"]
+	var closed: bool = path["closed"]
+	var length := Contours.length(pts, closed)
+	var rooms := PackedFloat32Array()
+	for f in [0.2, 0.4, 0.6, 0.8]:
+		rooms.append(_side_room(pts, closed, length * f, map))
+	rooms.sort()
+	return rooms[1]
 
 
 ## A line stone's radius at arc length s along a path (the i-th stone).
