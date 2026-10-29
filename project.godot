@@ -31,7 +31,7 @@ window/handheld/orientation=6
 pointing/emulate_touch_from_mouse=true
 sensors/enable_accelerometer=true
 sensors/enable_gravity=true
-sensors/enable_magnetometer=true
+sensors/enable_gyroscope=true
 
 [rendering]
 

@@ -4,8 +4,8 @@ extends SubViewportContainer
 ## a fixed camera looking straight down. Every stone is a faceted gem
 ## (GemMesh, gem.gdshader) that glints as the light drifts over time and as
 ## the phone turns: the light hangs still in the room, so tilting, turning
-## or rolling the phone (seen by its gravity sensor and compass, in any
-## pose, upright too) moves it across the stones; the camera never moves.
+## or rolling the phone (in any pose, upright too) moves it across the
+## stones, always staying generally overhead; the camera never moves.
 ## Each stone casts a soft shadow on the paper (`shadows` turns it off) with
 ## colored caustic light in it (gem_shadow.gdshader), and the brightest
 ## glints flare into star sparkles (gem_sparkle.gdshader). Caustics follow
@@ -40,14 +40,19 @@ const KIT_DRILL := 0.9
 ## board's xz plane, toward the picture's top left; elevation above the
 ## paper) and how far it drifts. Radians.
 const KEY_AZIMUTH := -2.3
-const KEY_ELEVATION := 0.62
+const KEY_ELEVATION := 0.95
 const DRIFT := 0.45
-## However the phone turns, the lights stay at least this high above the
-## paper (radians).
-const MIN_ELEVATION := 0.2
-## How quickly sensor readings settle (per second): higher follows the
-## phone faster, lower smooths out compass jitter.
+## The fill light's height, and the lowest the key and fill go (radians):
+## however the phone turns, the light stays generally overhead.
+const FILL_ELEVATION := 0.6
+const MIN_KEY_ELEVATION := 0.75
+const MIN_FILL_ELEVATION := 0.4
+## The farthest the phone's turn swings a light from where it would hang
+## (radians); bigger turns ease toward it rather than stopping hard.
+const MAX_SWING := 0.55
+## How quickly gravity readings and the light settle (per second).
 const SENSOR_SMOOTH := 6.0
+const LIGHT_SMOOTH := 8.0
 
 ## The light drifts with time (tests freeze it and set the time instead).
 var animate := true
@@ -58,6 +63,9 @@ var light_time := 0.0
 ## (x right, y up the screen, z out of it). Tests set it.
 var turn := Basis.IDENTITY
 var use_sensor := true
+## The lights' smoothed directions, in board space.
+var key_dir := Vector3.UP
+var fill_dir := Vector3.UP
 ## Darken the paper under each stone (its caustic light shows either way).
 var shadows := true:
 	set(value):
@@ -77,12 +85,14 @@ var _board := Vector2(1.0, 1.0)
 var _zoom := 1.0
 ## The board point at the middle of the view.
 var _center := Vector2(0.5, 0.5)
-## Smoothed sensor readings, in the phone's axes, and the phone's frame
-## (room east, north and up, in its axes) when the picture appeared.
+## Smoothed gravity in the phone's axes, which way was up (in them) when
+## the picture appeared, and how far the phone has spun about the vertical
+## since (radians, from the gyroscope).
 var _gravity := Vector3.ZERO
-var _magnet := Vector3.ZERO
 var _start_up := Vector3.ZERO
-var _start_frame := Basis.IDENTITY
+var _spin := 0.0
+## Ease the lights toward their new directions (off for a new picture).
+var _settle := false
 var _touches := {}
 var _last_tap_ms := -DOUBLE_TAP_MS
 var _last_tap_pos := Vector2.ZERO
@@ -115,6 +125,7 @@ func _init() -> void:
 	_gem_material.shader = GEM_SHADER
 	_shadow_material.shader = SHADOW_SHADER
 	_shadow_material.render_priority = -1
+	_shadow_material.set_shader_parameter("span", SHADOW_SPAN)
 	_sparkle_material.shader = SPARKLE_SHADER
 	_sparkle_material.render_priority = 1
 	_paper_material.shader = PAPER_SHADER
@@ -134,71 +145,67 @@ func _process(delta: float) -> void:
 		light_time += delta
 	if use_sensor:
 		_read_sensors(delta)
-	update_light()
+	update_light(delta)
 
 
-## Follows the phone's orientation: gravity gives its tilt in every pose,
-## the compass its heading (so turning it while upright counts too).
+## Follows the phone's orientation, each sensor for one thing so they never
+## pull against each other: gravity for tilting and rolling (in any pose),
+## the gyroscope for spinning about the vertical (turning it while upright).
 func _read_sensors(delta: float) -> void:
 	var g := Input.get_gravity()
 	if g.length() < 1.0:
 		return  # no sensor (desktop, tests)
-	var m := Input.get_magnetometer()
-	var k := 1.0 - exp(-delta * SENSOR_SMOOTH)
-	_gravity = g if _gravity == Vector3.ZERO else _gravity.lerp(g, k)
-	if m.length() > 1.0:
-		_magnet = m if _magnet == Vector3.ZERO else _magnet.lerp(m, k)
+	_gravity = g if _gravity == Vector3.ZERO else _gravity.lerp(g, 1.0 - exp(-delta * SENSOR_SMOOTH))
 	var up := -_gravity.normalized()
-	# The pose to measure from: the first reading, or the first with a
-	# compass if that only came later.
-	if _start_up == Vector3.ZERO or (_start_frame == Basis.IDENTITY and _magnet != Vector3.ZERO):
+	if _start_up == Vector3.ZERO:
 		_start_up = up
-		_start_frame = room_frame(_gravity, _magnet)
-	if _magnet == Vector3.ZERO or _start_frame == Basis.IDENTITY:
-		# No compass: tilt only, the shortest turn from how the phone stood.
-		turn = Basis(Quaternion(_start_up, up))
-	else:
-		turn = room_frame(_gravity, _magnet) * _start_frame.transposed()
+		_spin = 0.0
+	_spin += Input.get_gyroscope().dot(up) * delta
+	turn = phone_turn(_start_up, up, _spin)
 
 
-## The room's east, north and up in the phone's axes (as a basis's columns),
-## from gravity and the magnetic field read in those axes; IDENTITY without
-## a usable field. Only how it changes matters, so the sensors' sign
-## conventions don't.
-static func room_frame(gravity: Vector3, magnet: Vector3) -> Basis:
-	var up := -gravity.normalized()
-	var east := magnet.cross(up)
-	if east.length() < 1e-3:
-		return Basis.IDENTITY
-	east = east.normalized()
-	return Basis(east, up.cross(east), up)
+## The phone's turn from how it stood (`start_up`: the room's up in its
+## axes then) to now (`up`), having spun `spin` radians about the vertical
+## on the way: a room-fixed direction tilts with the shortest turn from
+## start_up to up, then spins back about up.
+static func phone_turn(start_up: Vector3, up: Vector3, spin: float) -> Basis:
+	return Basis(up, -spin) * Basis(Quaternion(start_up, up))
 
 
-## Sets every shader's light for the current time and the phone's turn.
-func update_light() -> void:
+## Sets every shader's light for the current time and the phone's turn,
+## easing toward it after `delta` seconds (0 jumps straight there).
+func update_light(delta := 0.0) -> void:
 	var t := light_time
 	var az := KEY_AZIMUTH + DRIFT * sin(t * 0.23) + 0.15 * sin(t * 0.61 + 1.3)
 	var el := KEY_ELEVATION + 0.1 * sin(t * 0.17 + 0.4)
-	var key := _turned(Vector3(cos(az) * cos(el), sin(el), sin(az) * cos(el)))
+	var key := _turned(Vector3(cos(az) * cos(el), sin(el), sin(az) * cos(el)), MIN_KEY_ELEVATION)
 	var faz := az + 2.6 + 0.3 * sin(t * 0.31 + 2.0)
-	var fel := 0.45 + 0.08 * sin(t * 0.27)
-	var fill := _turned(Vector3(cos(faz) * cos(fel), sin(fel), sin(faz) * cos(fel)))
+	var fel := FILL_ELEVATION + 0.08 * sin(t * 0.27)
+	var fill := _turned(Vector3(cos(faz) * cos(fel), sin(fel), sin(faz) * cos(fel)), MIN_FILL_ELEVATION)
+	var k := 1.0 - exp(-delta * LIGHT_SMOOTH) if _settle and delta > 0.0 else 1.0
+	key_dir = key_dir.slerp(key, k).normalized()
+	fill_dir = fill_dir.slerp(fill, k).normalized()
+	_settle = true
 	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
-		m.set_shader_parameter("key_dir", key)
-		m.set_shader_parameter("fill_dir", fill)
+		m.set_shader_parameter("key_dir", key_dir)
+		m.set_shader_parameter("fill_dir", fill_dir)
 
 
 ## A light direction (board space) after the phone's turn: into the phone's
 ## axes (board x right, y toward the viewer, z down the picture are its x,
-## z and -y), turned, and back, kept above the paper.
-func _turned(board_dir: Vector3) -> Vector3:
+## z and -y), turned, and back. The swing from where it would hang eases off
+## toward MAX_SWING, and it stays at least `lowest` (radians) above the paper.
+func _turned(board_dir: Vector3, lowest: float) -> Vector3:
 	var d := turn * Vector3(board_dir.x, -board_dir.z, board_dir.y)
-	var b := Vector3(d.x, d.z, -d.y)
-	var low := sin(MIN_ELEVATION)
-	if b.y < low:
-		var flat := Vector2(b.x, b.z).normalized() * cos(MIN_ELEVATION)
-		b = Vector3(flat.x, low, flat.y)
-	return b.normalized()
+	var b := Vector3(d.x, d.z, -d.y).normalized()
+	var swing := board_dir.angle_to(b)
+	if swing > 1e-4:
+		b = board_dir.slerp(b, MAX_SWING * tanh(swing / MAX_SWING) / swing).normalized()
+	if b.y < sin(lowest):
+		var flat := Vector2(b.x, b.z)
+		flat = (flat.normalized() if flat.length() > 1e-4 else Vector2(board_dir.x, board_dir.z).normalized())
+		b = Vector3(flat.x * cos(lowest), sin(lowest), flat.y * cos(lowest))
+	return b
 
 
 func show_collage(picture: Dictionary) -> void:
@@ -237,6 +244,7 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	# The light starts where it should, however the phone is held now.
 	_start_up = Vector3.ZERO
 	turn = Basis.IDENTITY
+	_settle = false
 	_board = board
 	var plane := PlaneMesh.new()
 	plane.size = board
