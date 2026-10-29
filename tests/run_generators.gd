@@ -32,6 +32,7 @@ func _init() -> void:
 	test_pattern_seeds()
 	test_symmetry()
 	test_gem_cuts()
+	test_board_light()
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
@@ -619,6 +620,36 @@ func test_gem_cuts() -> void:
 			by_part[key] = sl["cut"]
 	print("  %d meshes, cuts used %s" % [meshes, cuts.keys()])
 	check(cuts.size() >= 3, "only %d cuts used in 3 pictures" % cuts.size())
+
+
+func test_board_light() -> void:
+	print("Board light")
+	# Gravity and the magnetic field as a phone would read them in a pose:
+	# `pose` takes the phone's axes into the room's (east, north, up).
+	var read := func(pose: Basis) -> Array:
+		return [pose.transposed() * Vector3(0.0, 0.0, -9.8), pose.transposed() * Vector3(0.0, 22.0, -40.0)]
+	var upright := Basis(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, -1, 0))  # screen faces south
+	var board := GemBoard3D.new()
+	board.use_sensor = false
+	var start: Array = read.call(upright)
+	var frame0 := GemBoard3D.room_frame(start[0], start[1])
+	var poses := {"held still": upright, "turned 30 degrees upright": Basis(Vector3.BACK, deg_to_rad(30.0)) * upright,
+		"tilted back 20 degrees": upright * Basis(Vector3.RIGHT, deg_to_rad(-20.0)),
+		"rolled 20 degrees": upright * Basis(Vector3.BACK, deg_to_rad(20.0))}
+	board.turn = Basis.IDENTITY
+	board.update_light()
+	var key0: Vector3 = board._turned(Vector3(-0.5, 0.6, -0.6).normalized())
+	for what: String in poses:
+		var now: Array = read.call(poses[what])
+		board.turn = GemBoard3D.room_frame(now[0], now[1]) * frame0.transposed()
+		var key: Vector3 = board._turned(Vector3(-0.5, 0.6, -0.6).normalized())
+		var moved := rad_to_deg(key.angle_to(key0))
+		print("  %s: light moves %.0f degrees" % [what, moved])
+		if what == "held still":
+			check(moved < 0.5, "the light moved %.1f degrees with the phone held still" % moved)
+		else:
+			check(moved > 8.0, "the light moved only %.1f degrees with the phone %s" % [moved, what])
+	board.free()
 
 
 func test_kits() -> void:

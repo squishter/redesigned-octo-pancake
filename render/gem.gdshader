@@ -5,7 +5,8 @@
 // is picked from where it is, like a kaleidoscope: sectors around a
 // brilliant, nested rectangles in a step cut) and comes back out tinted by
 // the gem's color, a little apart per color channel for fire. Soft light
-// drifts through the body, and the rim falls dark like a real stone's.
+// plays through the body as the light moves, and the rim falls dark like a
+// real stone's.
 // Glints are brighter than white and bloom through the board's glow.
 shader_type spatial;
 render_mode unshaded, cull_disabled;
@@ -100,8 +101,8 @@ void fragment() {
 		vec3 absorb = pow(max(tint, vec3(0.001)), vec3(depth));
 		inside = absorb * (0.18 + body);
 	}
-	// Light playing on the underside, drifting through the stone.
-	float drift = glow_drift(p * 1.3 + stone.x * 9.0, gem_time * 0.8 + stone.x * 5.0);
+	// Light playing on the underside, moving as the light moves.
+	float drift = glow_drift(p * 1.3 + stone.x * 9.0 + light_shift() * 0.5, light_phase() * 1.4 + stone.x * 5.0);
 	inside += tint * drift * 0.3 * light_strength;
 	inside *= 0.45 + 0.55 * rim;
 

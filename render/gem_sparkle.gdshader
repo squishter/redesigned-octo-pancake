@@ -13,7 +13,7 @@ varying float glint;
 varying vec2 lp;
 
 float flare(float r, float k) {
-	float turn = r * 6.2831853 + 0.2 * sin(gem_time * 0.35 + r * 40.0) + k * 2.4;
+	float turn = r * 6.2831853 + k * 2.4;
 	float tilt = radians(14.0 + 28.0 * fract(r * 7.13 + k * 0.37));
 	vec3 n = vec3(cos(turn) * sin(tilt), cos(tilt), sin(turn) * sin(tilt));
 	vec3 up = reflect(vec3(0.0, -1.0, 0.0), n);

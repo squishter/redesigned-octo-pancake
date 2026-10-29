@@ -115,6 +115,14 @@ func _ready() -> void:
 	var controls := GridContainer.new()
 	controls.columns = 2
 	list.add_child(controls)
+	# How the 3D board looks; changes show at once, nothing regenerates.
+	_label(controls, "Shadows")
+	var shadows := CheckBox.new()
+	shadows.text = "Under each gem"
+	shadows.button_pressed = true
+	shadows.toggled.connect(func(on: bool) -> void: _board.shadows = on)
+	_fill_row(shadows)
+	controls.add_child(shadows)
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())

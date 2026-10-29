@@ -3,10 +3,13 @@ extends SubViewportContainer
 ## The board in 3D: a gem collage (or a kit's drills) on white paper, under
 ## a fixed camera looking straight down. Every stone is a faceted gem
 ## (GemMesh, gem.gdshader) that glints as the light drifts over time and as
-## the phone tilts: the gravity sensor turns the light, never the camera.
-## Each stone casts a soft shadow on the paper with colored caustic light in
-## it (gem_shadow.gdshader), and the brightest glints flare into star
-## sparkles (gem_sparkle.gdshader).
+## the phone turns: the light hangs still in the room, so tilting, turning
+## or rolling the phone (seen by its gravity sensor and compass, in any
+## pose, upright too) moves it across the stones; the camera never moves.
+## Each stone casts a soft shadow on the paper (`shadows` turns it off) with
+## colored caustic light in it (gem_shadow.gdshader), and the brightest
+## glints flare into star sparkles (gem_sparkle.gdshader). Caustics follow
+## the light's direction only, so they hold still when it does.
 ##
 ## Stones of one shape and cut share a mesh and draw as one MultiMesh, so
 ## thousands stay cheap. Pinch to zoom, drag to pan, double-tap to fit (mouse
@@ -33,25 +36,33 @@ const SPARKLE_SPAN := 1.7
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
 const KIT_DRILL := 0.9
-## The key light: where it hangs (azimuth in the board's xz plane, toward
-## the picture's top left; elevation above the paper), how far it drifts,
-## and how much tilting the phone turns it. Radians.
+## The key light: where it hangs when the picture appears (azimuth in the
+## board's xz plane, toward the picture's top left; elevation above the
+## paper) and how far it drifts. Radians.
 const KEY_AZIMUTH := -2.3
 const KEY_ELEVATION := 0.62
 const DRIFT := 0.45
-const TILT_GAIN := 1.0
-const MAX_TILT := 0.6
-## How far back a phone usually leans while held (radians from flat); tilts
-## are measured from there.
-const HOLD_PITCH := 0.9
+## However the phone turns, the lights stay at least this high above the
+## paper (radians).
+const MIN_ELEVATION := 0.2
+## How quickly sensor readings settle (per second): higher follows the
+## phone faster, lower smooths out compass jitter.
+const SENSOR_SMOOTH := 6.0
 
 ## The light drifts with time (tests freeze it and set the time instead).
 var animate := true
 ## Seconds of drift; the light's position over time.
 var light_time := 0.0
-## Phone tilt (roll, pitch) in radians, from the gravity sensor; tests set it.
-var tilt := Vector2.ZERO
+## How the phone has turned since the picture appeared, as the rotation
+## that carries a direction fixed in the room through the phone's own axes
+## (x right, y up the screen, z out of it). Tests set it.
+var turn := Basis.IDENTITY
 var use_sensor := true
+## Darken the paper under each stone (its caustic light shows either way).
+var shadows := true:
+	set(value):
+		shadows = value
+		_shadow_material.set_shader_parameter("shadow_strength", 1.0 if value else 0.0)
 
 var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
@@ -66,6 +77,12 @@ var _board := Vector2(1.0, 1.0)
 var _zoom := 1.0
 ## The board point at the middle of the view.
 var _center := Vector2(0.5, 0.5)
+## Smoothed sensor readings, in the phone's axes, and the phone's frame
+## (room east, north and up, in its axes) when the picture appeared.
+var _gravity := Vector3.ZERO
+var _magnet := Vector3.ZERO
+var _start_up := Vector3.ZERO
+var _start_frame := Basis.IDENTITY
 var _touches := {}
 var _last_tap_ms := -DOUBLE_TAP_MS
 var _last_tap_pos := Vector2.ZERO
@@ -116,30 +133,72 @@ func _process(delta: float) -> void:
 	if animate:
 		light_time += delta
 	if use_sensor:
-		var g := Input.get_gravity()
-		var want := Vector2.ZERO
-		if g.length() > 1.0:
-			# Up, in the phone's frame: x right, y up the screen, z out of it.
-			var u := -g.normalized()
-			want = Vector2(asin(clampf(u.x, -1.0, 1.0)), atan2(u.y, u.z) - HOLD_PITCH)
-			want = want.clamp(Vector2(-MAX_TILT, -MAX_TILT), Vector2(MAX_TILT, MAX_TILT))
-		tilt = tilt.lerp(want, 1.0 - exp(-delta * 5.0))
+		_read_sensors(delta)
 	update_light()
 
 
-## Sets every shader's light for the current time and tilt.
+## Follows the phone's orientation: gravity gives its tilt in every pose,
+## the compass its heading (so turning it while upright counts too).
+func _read_sensors(delta: float) -> void:
+	var g := Input.get_gravity()
+	if g.length() < 1.0:
+		return  # no sensor (desktop, tests)
+	var m := Input.get_magnetometer()
+	var k := 1.0 - exp(-delta * SENSOR_SMOOTH)
+	_gravity = g if _gravity == Vector3.ZERO else _gravity.lerp(g, k)
+	if m.length() > 1.0:
+		_magnet = m if _magnet == Vector3.ZERO else _magnet.lerp(m, k)
+	var up := -_gravity.normalized()
+	# The pose to measure from: the first reading, or the first with a
+	# compass if that only came later.
+	if _start_up == Vector3.ZERO or (_start_frame == Basis.IDENTITY and _magnet != Vector3.ZERO):
+		_start_up = up
+		_start_frame = room_frame(_gravity, _magnet)
+	if _magnet == Vector3.ZERO or _start_frame == Basis.IDENTITY:
+		# No compass: tilt only, the shortest turn from how the phone stood.
+		turn = Basis(Quaternion(_start_up, up))
+	else:
+		turn = room_frame(_gravity, _magnet) * _start_frame.transposed()
+
+
+## The room's east, north and up in the phone's axes (as a basis's columns),
+## from gravity and the magnetic field read in those axes; IDENTITY without
+## a usable field. Only how it changes matters, so the sensors' sign
+## conventions don't.
+static func room_frame(gravity: Vector3, magnet: Vector3) -> Basis:
+	var up := -gravity.normalized()
+	var east := magnet.cross(up)
+	if east.length() < 1e-3:
+		return Basis.IDENTITY
+	east = east.normalized()
+	return Basis(east, up.cross(east), up)
+
+
+## Sets every shader's light for the current time and the phone's turn.
 func update_light() -> void:
 	var t := light_time
-	var az := KEY_AZIMUTH + DRIFT * sin(t * 0.23) + 0.15 * sin(t * 0.61 + 1.3) + tilt.x * TILT_GAIN
-	var el := clampf(KEY_ELEVATION + 0.1 * sin(t * 0.17 + 0.4) - tilt.y * TILT_GAIN * 0.6, 0.25, 1.35)
-	var key := Vector3(cos(az) * cos(el), sin(el), sin(az) * cos(el))
+	var az := KEY_AZIMUTH + DRIFT * sin(t * 0.23) + 0.15 * sin(t * 0.61 + 1.3)
+	var el := KEY_ELEVATION + 0.1 * sin(t * 0.17 + 0.4)
+	var key := _turned(Vector3(cos(az) * cos(el), sin(el), sin(az) * cos(el)))
 	var faz := az + 2.6 + 0.3 * sin(t * 0.31 + 2.0)
 	var fel := 0.45 + 0.08 * sin(t * 0.27)
-	var fill := Vector3(cos(faz) * cos(fel), sin(fel), sin(faz) * cos(fel))
+	var fill := _turned(Vector3(cos(faz) * cos(fel), sin(fel), sin(faz) * cos(fel)))
 	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
 		m.set_shader_parameter("key_dir", key)
 		m.set_shader_parameter("fill_dir", fill)
-		m.set_shader_parameter("gem_time", t)
+
+
+## A light direction (board space) after the phone's turn: into the phone's
+## axes (board x right, y toward the viewer, z down the picture are its x,
+## z and -y), turned, and back, kept above the paper.
+func _turned(board_dir: Vector3) -> Vector3:
+	var d := turn * Vector3(board_dir.x, -board_dir.z, board_dir.y)
+	var b := Vector3(d.x, d.z, -d.y)
+	var low := sin(MIN_ELEVATION)
+	if b.y < low:
+		var flat := Vector2(b.x, b.z).normalized() * cos(MIN_ELEVATION)
+		b = Vector3(flat.x, low, flat.y)
+	return b.normalized()
 
 
 func show_collage(picture: Dictionary) -> void:
@@ -175,6 +234,9 @@ func reset_view() -> void:
 func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Vector2i) -> void:
 	for child in _layers.get_children():
 		child.queue_free()
+	# The light starts where it should, however the phone is held now.
+	_start_up = Vector3.ZERO
+	turn = Basis.IDENTITY
 	_board = board
 	var plane := PlaneMesh.new()
 	plane.size = board

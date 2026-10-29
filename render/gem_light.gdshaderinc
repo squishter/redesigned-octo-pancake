@@ -1,10 +1,11 @@
 // The board's light, shared by the gem, sparkle, paper and shadow shaders.
-// GemBoard3D moves the lights over time and with the phone's tilt and sets
-// these every frame. Directions point toward the light, in board space (y up
-// toward the viewer, x right, z down the picture).
+// GemBoard3D moves the lights over time and with the phone's orientation
+// and sets these every frame. Directions point toward the light, in board
+// space (y up toward the viewer, x right, z down the picture). Everything
+// here depends on where the lights are, never on the time itself, so light
+// that holds still makes still caustics.
 uniform vec3 key_dir = vec3(-0.45, 0.62, -0.64);
 uniform vec3 fill_dir = vec3(0.7, 0.5, 0.5);
-uniform float gem_time = 0.0;
 uniform float light_strength = 1.0;
 uniform vec3 paper_color = vec3(0.86, 0.84, 0.8);
 
@@ -37,7 +38,17 @@ vec3 studio(vec3 d) {
 	return c;
 }
 
-// Drifting caustic light (bright webs), about 0..1.
+// How far the key light has moved the caustics: their offset and their
+// phase (smooth in the light's direction, so they shift as it moves).
+vec2 light_shift() {
+	return key_dir.xz / max(key_dir.y, 0.3);
+}
+
+float light_phase() {
+	return key_dir.x * 2.1 + key_dir.z * 1.7 + key_dir.y * 2.6;
+}
+
+// Caustic light (bright webs) for phase t, about 0..1.
 float caustic(vec2 p, float t) {
 	vec2 q = mod(p * 6.2831853, 6.2831853) - 250.0;
 	vec2 i = q;
@@ -52,7 +63,7 @@ float caustic(vec2 p, float t) {
 	return clamp(pow(abs(c), 8.0), 0.0, 1.5);
 }
 
-// Soft light drifting through a stone: broad bright patches, 0..1.
+// Soft light through a stone for phase t: broad bright patches, 0..1.
 float glow_drift(vec2 p, float t) {
 	float a = sin(p.x * 2.1 + p.y * 1.3 + t * 0.9);
 	float b = sin(p.x * -1.4 + p.y * 2.4 - t * 0.7 + 1.7);
