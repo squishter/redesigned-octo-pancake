@@ -15,7 +15,8 @@ extends RefCounted
 ## Patterns are chosen per symmetry group, so symmetric copies match.
 ##
 ## The peak search uses per-block maxima (BLOCK x BLOCK px) that are refreshed
-## only where slots changed the field.
+## only where slots changed the field; per-block upper bounds let a new
+## stone skip the blocks it can't change.
 
 const BLOCK := 16
 
@@ -102,6 +103,9 @@ var _bh := 0
 var _block_max := PackedFloat32Array()
 var _block_arg := PackedInt32Array()
 var _block_dirty := PackedByteArray()
+## Most room any of the current region's pixels in each block has (an upper
+## bound; INF when unknown).
+var _block_bound := PackedFloat32Array()
 var _region := -1
 var _region_blocks := Rect2i()
 var _cur_max := 0.0
@@ -201,6 +205,7 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	_block_max.resize(_bw * _bh)
 	_block_arg.resize(_bw * _bh)
 	_block_dirty.resize(_bw * _bh)
+	_block_bound.resize(_bw * _bh)
 
 
 ## Picks a pattern and its parameters for a group from its biggest region.
@@ -282,6 +287,7 @@ func _begin_region(region: Dictionary) -> void:
 	for by in range(_region_blocks.position.y, _region_blocks.end.y):
 		for bx in range(_region_blocks.position.x, _region_blocks.end.x):
 			_block_dirty[by * _bw + bx] = 1
+			_block_bound[by * _bw + bx] = INF
 	_cur_max = region["max_dist"]
 	_tone = 0
 	_part = 0
@@ -300,6 +306,7 @@ func _reset_free(region: Dictionary) -> void:
 	for by in range(_region_blocks.position.y, _region_blocks.end.y):
 		for bx in range(_region_blocks.position.x, _region_blocks.end.x):
 			_block_dirty[by * _bw + bx] = 1
+			_block_bound[by * _bw + bx] = INF
 	_cur_max = region["max_dist"]
 
 
@@ -452,12 +459,12 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_lattice(region, r_row, gap, design["row_shape"], design["lattice_turn"], design["gradient"])
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"stripes":
-			_stripes(region, r_row, design["row_shape"], design["lattice_turn"] * 1.5, toning != "solid", design["grade"],
-					design["spacers"])
+			SlotPatterns.stripes(self, region, r_row, design["row_shape"], design["lattice_turn"] * 1.5, toning != "solid",
+					design["grade"], design["spacers"])
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"sunburst":
 			_tone = 0 if toning == "edge" else 1
-			_sunburst(region, r_row, toning)
+			SlotPatterns.sunburst(self, region, r_row, toning)
 			_tone = 0
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"pave":
@@ -695,103 +702,6 @@ func _lattice(region: Dictionary, r: float, spacing: float, shape: String, turn:
 			_place(shape, p, a + (PI / 6.0 if shape == "hexagon" else 0.0), rf, 0.0)
 
 
-## Straight parallel rows across the region (along its axis, turned by
-## `turn`), each clipped to the region and evenly spaced inside, with the
-## middle row through the centroid; rows away from the middle are `grade`
-## times the size of the row before. Rows alternate tones when `banded`.
-func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded: bool, grade: float,
-		spaced: bool) -> void:
-	var c: Vector2 = region["centroid"]
-	var dir := Vector2.from_angle(region["axis"] + turn)
-	var nrm := dir.orthogonal()
-	var bbox: Rect2i = region["bbox"]
-	var reach := Vector2(bbox.size).length() / 2.0 + 2.0
-	# Row offsets from the middle row outward on both sides, each row `grade`
-	# times the size of the one nearer the middle.
-	# With spacers, every other row is a thin row of small stones.
-	var offsets := [0.0]
-	var sizes := [r0]
-	var off := 0.0
-	var r := r0
-	var main := r0
-	var i := 0
-	while off < reach and offsets.size() < 200:
-		i += 1
-		var nr: float
-		if spaced and i % 2 == 1:
-			nr = r0 * SPACER
-		else:
-			main = clampf(main * grade, unit * 0.45, unit * 1.6)
-			nr = main
-		off += r + gap + nr
-		r = nr
-		offsets.append_array([off, -off])
-		sizes.append_array([r, r])
-	var part0 := _part
-	for k in offsets.size():
-		r = sizes[k]
-		# Rows the same distance from the middle are one part, so the stripes
-		# stay mirror-symmetric when parts change type.
-		var ring := (k + 1) / 2
-		_tone = (1 if spaced and ring % 2 == 1 else ((ring % 2) if banded else 0))
-		_part = part0 + 1 + ring
-		var base: Vector2 = c + nrm * float(offsets[k])
-		# Inside stretches of this row, where a full stone could sit.
-		var run_start := NAN
-		var t := -reach
-		while t <= reach + 1.0:
-			var p := base + dir * t
-			var inside := t <= reach and _free_at(p) >= r * 0.6 + gap
-			if inside and is_nan(run_start):
-				run_start = t
-			elif not inside and not is_nan(run_start):
-				var pts := PackedVector2Array([base + dir * run_start, base + dir * (t - 1.0)])
-				_along(pts, false, r, shape)
-				run_start = NAN
-			t += 1.0
-	_part = part0 + 1 + (offsets.size() + 1) / 2
-	_tone = 0
-
-
-## A center stone, then rings of stones on shared spokes, each ring's stones
-## as big as the spacing between spokes allows, so they grow outward.
-func _sunburst(region: Dictionary, r_row: float, toning: String) -> void:
-	var peak := _peak()
-	if peak < 0:
-		return
-	var c := _center(peak)
-	var rc := minf(free[peak] - gap, r_row * 1.6)
-	if rc < unit * 0.4:
-		return
-	_part += 1
-	_place("round", c, 0.0, rc, 0.0)
-	var spokes := clampi(int(TAU * (rc + gap + r_row * 0.6) / (r_row * 1.2 + gap)), 6, 24)
-	if spokes % 2 == 1:
-		spokes += 1
-	var turned := _spokes(region, spokes)
-	spokes = turned[0]
-	var a0: float = turned[1]
-	var rad := rc + gap
-	var ring := 0
-	var reach: float = Vector2(region["bbox"].size).length()
-	while rad < reach and ring < 30:
-		# Stones touch their neighbors on the ring: r = R sin(pi / n), so R = r / sin.
-		var rr := minf(r_row * 1.3, (rad + r_row) * sin(PI / spokes) - gap / 2.0)
-		rr = maxf(rr, unit * 0.35)
-		var at := rad + rr
-		_tone = (ring % 2) if toning == "rows" else _tone
-		_part += 1
-		for j in spokes:
-			var a := a0 + TAU * j / spokes + (PI / spokes if ring % 2 == 1 and toning == "rows" else 0.0)
-			var p := c + Vector2.from_angle(a) * at
-			var rf := minf(rr, _free_at(p) - gap)
-			if rf >= rr * 0.6:
-				_place("round", p, 0.0, rf, 0.0)
-		rad = at + rr + gap
-		ring += 1
-	_tone = 0
-
-
 ## A chain of stones along the region's medial axis (its centerline), each
 ## as big as the region is wide there (up to r_max), so the chain swells where
 ## the region does and tapers toward its tips. Side branches shorter than the
@@ -929,22 +839,44 @@ func _stamp(c: Vector2, dir: Vector2, h: float, r: float) -> void:
 	var x1 := mini(w - 1, int(c.x + reach))
 	var y0 := maxi(0, int(c.y - reach))
 	var y1 := mini(map.height - 1, int(c.y + reach))
-	for y in range(y0, y1 + 1):
-		var py := y + 0.5 - c.y
-		for x in range(x0, x1 + 1):
-			var i := y * w + x
-			if map.labels[i] != _region:
-				continue
-			var px := x + 0.5 - c.x
-			var t := clampf(px * dir.x + py * dir.y, -h, h)
-			var ex := px - t * dir.x
-			var ey := py - t * dir.y
-			var dd := sqrt(ex * ex + ey * ey) - r
-			if dd < free[i]:
-				free[i] = dd
 	for by in range(y0 / BLOCK, y1 / BLOCK + 1):
 		for bx in range(x0 / BLOCK, x1 / BLOCK + 1):
-			_block_dirty[by * _bw + bx] = 1
+			var k := by * _bw + bx
+			# Pixels farther from the stone than any of them has room keep it.
+			var bx0 := bx * BLOCK
+			var by0 := by * BLOCK
+			var bx1 := mini(w, bx0 + BLOCK) - 1
+			var by1 := mini(map.height, by0 + BLOCK) - 1
+			var ox := maxf(0.0, maxf(bx0 - c.x, c.x - bx1 - 1.0))
+			var oy := maxf(0.0, maxf(by0 - c.y, c.y - by1 - 1.0))
+			if sqrt(ox * ox + oy * oy) - h - r >= _block_bound[k]:
+				continue
+			var top := -INF
+			var arg := -1
+			for y in range(maxi(y0, by0), mini(y1, by1) + 1):
+				var py := y + 0.5 - c.y
+				for x in range(maxi(x0, bx0), mini(x1, bx1) + 1):
+					var i := y * w + x
+					if map.labels[i] != _region:
+						continue
+					var px := x + 0.5 - c.x
+					var t := clampf(px * dir.x + py * dir.y, -h, h)
+					var ex := px - t * dir.x
+					var ey := py - t * dir.y
+					var dd := sqrt(ex * ex + ey * ey) - r
+					if dd < free[i]:
+						free[i] = dd
+					if free[i] > top:
+						top = free[i]
+						arg = i
+			# A whole block seen: its maximum is known again.
+			if x0 <= bx0 and x1 >= bx1 and y0 <= by0 and y1 >= by1:
+				_block_bound[k] = top
+				_block_max[k] = top
+				_block_arg[k] = arg
+				_block_dirty[k] = 0
+			else:
+				_block_dirty[k] = 1
 
 
 ## Pixel index of the deepest free point for a single, centered stone: on
@@ -990,6 +922,7 @@ func _argmax() -> int:
 							arg = i
 				_block_max[b] = m
 				_block_arg[b] = arg
+				_block_bound[b] = m
 			if _block_max[b] > best_v:
 				best_v = _block_max[b]
 				best = _block_arg[b]
