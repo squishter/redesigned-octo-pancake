@@ -18,6 +18,8 @@ extends RefCounted
 ##   version, type: "collage", width, height, symmetry, source: {...},
 ##   setting: "gems" | "metal", pattern_seed, line_gems: GemLines style or "",
 ##   bold_lines: how many classes of lines got medium or large stones,
+##   dropped: how many elements (classes of gem lines, groups of areas) were
+##     left out to stay under max_slots stones,
 ##   lines: PackedByteArray mask (255 = line); every line separates regions
 ##     (in the gems setting, the widened channel the line gems sit in),
 ##   lines_visible: the part of `lines` to draw as the metal setting,
@@ -41,9 +43,13 @@ const GEMS_SETTING_CHANCE := 0.75
 ## Stones per collage: pictures outside this range are rebuilt with bigger or
 ## smaller stones, aiming a little inside it.
 const MIN_SLOTS := 300
-const MAX_SLOTS := 5000
+const MAX_SLOTS := 6000
 const SLOTS_LOW_AIM := 450.0
-const SLOTS_HIGH_AIM := 4200.0
+const SLOTS_HIGH_AIM := 5000.0
+## Pictures over MAX_SLOTS leave out up to this many elements (a class of
+## gem lines, or a group of areas, with all their symmetric copies; the
+## busiest first) before their stones are made bigger.
+const MAX_DROPPED := 6
 ## The channel around gem-line stones is this many stone gaps wider than
 ## them. Area stones keep a gap from the channel's edge as well, so this
 ## only needs to cover rasterizing.
@@ -76,20 +82,44 @@ const GEM_TYPES_MAX := 30
 ##              (default: 25-30, picked per seed)
 ##   seed, gap: passed to SlotPacker
 ##   unit: base stone radius in px; by default 1% of the picture, then scaled
-##         so the collage has MIN_SLOTS..MAX_SLOTS stones
+##         so the collage has MIN_SLOTS..MAX_SLOTS stones (gem-line pictures
+##         first leave out their busiest classes of lines, see MAX_DROPPED)
+##   max_slots: the most stones (default MAX_SLOTS)
+##   drop_lines, bare_at: classes of gem lines and centroids of areas to leave
+##     out (set when over max_slots)
 ##   source: Dictionary describing where the lines came from, stored as is
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
 	var unit: float = options.get("unit", minf(w, h) * 0.010)
 	var picture := _build(mask, w, h, options, unit)
 	if options.has("unit") and options.has("spacers"):
 		return picture
+	var max_slots: int = options.get("max_slots", MAX_SLOTS)
+	# Too many stones: leave out the element with the most stones (a class of
+	# gem lines, or a group of areas), all its symmetric copies at once, as a
+	# symmetric gap, rather than making every stone bigger.
+	var drop := []
+	var bare := []
+	for _attempt in MAX_DROPPED:
+		if picture["slots"].size() <= max_slots:
+			break
+		var busiest := _busiest_element(picture)
+		if busiest.is_empty():
+			break
+		if busiest.has("lines"):
+			drop.append(busiest["lines"])
+		else:
+			bare.append_array(busiest["areas"])
+		options = options.duplicate()
+		options["drop_lines"] = drop.duplicate()
+		options["bare_at"] = bare.duplicate()
+		picture = _build(mask, w, h, options, unit)
 	# Stone count goes roughly as 1 / unit^2 (line stones change less): rescale
 	# toward the range and rebuild, a few times for the busiest pictures.
 	for _attempt in (0 if options.has("unit") else 4):
 		var n: int = picture["slots"].size()
-		if n >= MIN_SLOTS and n <= MAX_SLOTS:
+		if n >= MIN_SLOTS and n <= max_slots:
 			break
-		var aim := SLOTS_HIGH_AIM if n > MAX_SLOTS else SLOTS_LOW_AIM
+		var aim := SLOTS_HIGH_AIM * max_slots / MAX_SLOTS if n > max_slots else SLOTS_LOW_AIM
 		unit *= clampf(sqrt(float(n) / aim), 0.5, 2.5)
 		picture = _build(mask, w, h, options, unit)
 	# Short of gem types: thin spacer rows between the main rows give the
@@ -99,7 +129,7 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 		opts["spacers"] = true
 		var spaced := _build(mask, w, h, opts, unit)
 		var n: int = spaced["slots"].size()
-		if spaced["gem_types"] > picture["gem_types"] and n >= MIN_SLOTS and n <= MAX_SLOTS:
+		if spaced["gem_types"] > picture["gem_types"] and n >= MIN_SLOTS and n <= max_slots:
 			picture = spaced
 	return picture
 
@@ -141,7 +171,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		var typical: float = depths[depths.size() / 2] if not depths.is_empty() else unit * 3.0
 		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
 		var bold: int = options.get("bold_lines", rng.randi_range(2, 3))
-		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold)
+		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold, mask,
+				options.get("drop_lines", []))
 		for sl in line_slots:
 			if sl["seq"] < 0 and sl["tone"] == 1:
 				bold_lines[sl["part"]] = true
@@ -157,6 +188,12 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if setting == "gems":
 		plan_options["line_style"] = "none"
 	var plan := DesignPlan.make(map, groups, plan_options, seed_value)
+	# Areas left out to stay under max_slots (by where they are, as region
+	# numbers can shift between builds).
+	for at: Vector2 in options.get("bare_at", []):
+		for r in map.regions:
+			if (r["centroid"] as Vector2).distance_to(at) < 3.0:
+				plan["fills"][r["id"]] = "bare"
 	var pack_options := options.duplicate()
 	pack_options["seed"] = seed_value
 	pack_options["groups"] = groups
@@ -322,6 +359,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"line_gems": line_gems,
 		"line_colors": ("matched" if line_matched else "neutral") if setting == "gems" else "",
 		"bold_lines": bold_lines.size(),
+		"dropped": options.get("drop_lines", []).size() + _bare_groups(options.get("bare_at", []), groups, map),
 		"radial_size": pack_options["radial_size"],
 		"tiers": pack_options["tiers"],
 		"spacers": pack_options.get("spacers", false),
@@ -336,6 +374,45 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"regions": regions,
 		"slots": slots,
 	}
+
+
+## The element with the most stones: a class of inner gem lines (not the
+## silhouette's, nor bold lines) as {"lines": class}, or a symmetry group of
+## areas as {"areas": [their centroids]}; {} if none.
+static func _busiest_element(picture: Dictionary) -> Dictionary:
+	var lines := {}
+	var areas := {}
+	for s in picture["slots"]:
+		var region: Dictionary = picture["regions"][s["region"]]
+		if region["kind"] == "area":
+			areas[region["group"]] = areas.get(region["group"], 0) + 1
+		elif region.get("line", "") != "outer" and s["part"] < GemLines.NODE_PARTS and not (s["seq"] < 0 and s["tone"] == 1):
+			lines[s["part"]] = lines.get(s["part"], 0) + 1
+	var best := {}
+	var most := 0
+	for part: int in lines:
+		if lines[part] > most:
+			most = lines[part]
+			best = {"lines": part}
+	for g: int in areas:
+		if areas[g] > most:
+			most = areas[g]
+			var at := []
+			for r in picture["regions"]:
+				if r["kind"] == "area" and r["group"] == g:
+					at.append(r["centroid"])
+			best = {"areas": at}
+	return best
+
+
+## How many symmetry groups the areas left out (by centroid) belong to.
+static func _bare_groups(bare_at: Array, groups: PackedInt32Array, map: RegionMap) -> int:
+	var seen := {}
+	for at: Vector2 in bare_at:
+		for r in map.regions:
+			if (r["centroid"] as Vector2).distance_to(at) < 3.0:
+				seen[groups[r["id"]]] = true
+	return seen.size()
 
 
 ## `count` colors from `choices`, each clearly different from `base` and

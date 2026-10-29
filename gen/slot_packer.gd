@@ -106,6 +106,8 @@ var _axis := NAN
 var _ring := {}
 ## The picture's line art (nonzero on lines), for the symmetry around rings.
 var _lines := PackedByteArray()
+## Symmetry for the current region's rows around the center (see _row_sym).
+var _row_ring := {}
 ## Which step of the pattern is placing stones (a row, a ring, the center
 ## stone...). Counted from 0 in every region, so symmetric copies agree.
 var _part := 0
@@ -137,28 +139,37 @@ static func pack(region_map: RegionMap, options: Dictionary = {}) -> Array[Dicti
 	var groups: PackedInt32Array = options.get("groups", PackedInt32Array())
 	var order := region_map.regions.duplicate()
 	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["area"] > b["area"])
-	# Each group's pattern is designed on its biggest member (first in order).
-	# A region is packed once and copied onto every symmetric copy of it by
-	# the rotation or reflection that maps one onto the other, so copies get
-	# the same stones. A group can hold more than one shape (rings of
-	# different regions at the same distance): each shape is packed once.
-	var designs := {}
-	var masters := {}
+	var members := {}
 	for region in order:
 		var id: int = region["id"]
 		var g: int = groups[id] if id < groups.size() else -1 - id
-		if not designs.has(g):
-			designs[g] = p._design(region, forced.get(id, ""), g)
-			masters[g] = []
-		var copied := false
-		for m: Dictionary in masters[g]:
-			if forced.get(id, "") == m["style"] and SlotMirror.copy_region(p, region, m):
-				copied = true
-				break
-		if not copied:
-			var first := p.slots.size()
-			p._pack_region(region, designs[g])
-			masters[g].append({"region": region, "slots": p.slots.slice(first), "style": forced.get(id, "")})
+		if not members.has(g):
+			members[g] = []
+		members[g].append(region)
+	# Each group's pattern is designed and packed on its middle-sized member,
+	# then copied onto every symmetric copy of it by the rotation or
+	# reflection that maps one onto the other, so copies get the same stones;
+	# a copy made a little bigger or smaller by the lines around it still
+	# takes them. A group can hold more than one shape (rings of different
+	# regions at the same distance): each shape is packed once.
+	for g in members:
+		var list: Array = members[g]
+		var mid: Dictionary = list[list.size() / 2]
+		list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return absf(a["area"] - mid["area"]) < absf(b["area"] - mid["area"]))
+		var design := p._design(list[0], forced.get(list[0]["id"], ""), g)
+		var masters := []
+		for region: Dictionary in list:
+			var id: int = region["id"]
+			var copied := false
+			for m: Dictionary in masters:
+				if forced.get(id, "") == m["style"] and SlotMirror.copy_region(p, region, m):
+					copied = true
+					break
+			if not copied:
+				var first := p.slots.size()
+				p._pack_region(region, design)
+				masters.append({"region": region, "slots": p.slots.slice(first), "style": forced.get(id, "")})
 	return p.slots
 
 
@@ -267,6 +278,7 @@ func _begin_region(region: Dictionary) -> void:
 	_tone = 0
 	_part = 0
 	_ring = {}
+	_row_ring = {}
 
 
 ## Clears the current region's stones from the free field.
@@ -309,19 +321,19 @@ func _edge_room(c: Vector2, dir: Vector2, h: float, id: int) -> float:
 
 func _pack_region(region: Dictionary, design: Dictionary) -> void:
 	_begin_region(region)
-	# The region's own symmetry: turns about the picture's center for a region
-	# around it (or, when it's round, those of the lines around it), and a
-	# mirror axis.
+	# The region's symmetry: for a region around the picture's center, the
+	# turns and mirror axis of the line art around it (exact, where the
+	# region's own edge may be carved a pixel off by gem lines), or its own
+	# when those lines are only circles; elsewhere its own mirror axis.
 	_axis = NAN
 	var folds := 1
 	if mirror_axes:
 		if (region["centroid"] as Vector2).distance_to(_pic_center) <= unit:
-			var id: int = region["id"]
-			_ring = Symmetry.ring_symmetry(Symmetry.sample_pixels(map, region, 1200), _pic_center,
-					func(q: Vector2) -> bool: return map.label_at(int(q.x), int(q.y)) == id)
+			_ring_sym()
 			if _ring["folds"] >= Symmetry.MAX_FOLDS:
-				_ring = {}
-				_ring_sym()
+				var id: int = region["id"]
+				_ring = Symmetry.ring_symmetry(Symmetry.sample_pixels(map, region, 1200), _pic_center,
+						func(q: Vector2) -> bool: return map.label_at(int(q.x), int(q.y)) == id)
 			folds = _ring["folds"] if _ring["folds"] < Symmetry.MAX_FOLDS else 1
 			_axis = _ring["axis"]
 		else:
@@ -524,7 +536,7 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 		n = maxi(1, floori(length / pitch))
 		if mirror_axes and Geometry2D.is_point_in_polygon(_pic_center, pts):
 			# A row around the picture's center keeps its symmetry.
-			var lay := Symmetry.ring_layout(n, _ring_sym(), pts, _pic_center)
+			var lay := Symmetry.ring_layout(n, _row_sym(), pts, _pic_center)
 			n = lay[0]
 			start = lay[1]
 		step = length / n
@@ -550,20 +562,12 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 			_place(shape, p, rot + ROW_TURN.get(shape, 0.0), rf, 0.0)
 
 
-## Symmetry.ring_symmetry of the lines in a band around the current region,
-## worked out once per region.
 func _ring_sym() -> Dictionary:
-	if _ring.is_empty():
-		var region: Dictionary = map.regions[_region]
-		var near := INF
-		var reach := 0.0
-		for p in Symmetry.sample_pixels(map, region, 400):
-			near = minf(near, p.distance_to(_pic_center))
-			reach = maxf(reach, p.distance_to(_pic_center))
-		if _lines.is_empty():
-			_lines = map.line_mask()
-		_ring = Symmetry.ring_near(_lines, map.width, map.height, _pic_center, near - unit * 2.5, reach + unit * 2.5)
-	return _ring
+	return SlotMirror.ring_sym(self)
+
+
+func _row_sym() -> Dictionary:
+	return SlotMirror.row_sym(self)
 
 
 ## Spokes (or petals) around the center of a region that sits on the

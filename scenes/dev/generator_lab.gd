@@ -380,6 +380,8 @@ func _process(_delta: float) -> void:
 			var setting: String = p["setting"]
 			if setting == "gems":
 				setting = "gem lines (%s, %s colors, %d bold)" % [p["line_gems"], p["line_colors"], p["bold_lines"]]
+			if p["dropped"] > 0:
+				setting += ", %d left out for stone count" % p["dropped"]
 			_say("Collage · %d stones · %d gem types · pattern %d · %d ms" % [p["slots"].size(), p["gem_types"],
 					p["pattern_seed"], ms], ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
 					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [

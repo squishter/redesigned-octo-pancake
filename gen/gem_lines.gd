@@ -13,15 +13,19 @@ extends RefCounted
 ##   lozenge: diamond-shaped lozenges along the line, rounds on the junctions
 ##   taper: swells in the middle of each stretch of line and narrows at its
 ##     ends, like an ink stroke
-##   pulse: grows and shrinks in waves as the line runs left to right
-##   ramp: small to large along one line, large to small along the next,
-##     alternating around the picture
+##   pulse: grows and shrinks in waves, evenly from the line's middle
+##   ramp: grows from one end of a line to the other: outward on some
+##     symmetry classes of lines, inward on others (lines that run around
+##     the center swell or pinch in the middle instead)
 ##   radial: stones shrink toward the picture's center
 ##   hub: stones shrink toward the nearest hub where several lines meet (the
 ##     middle of a flower, a star's center), so each motif draws inward
-## Every style also narrows toward a line's loose end. The caller builds the
-## channel around the stones it gets back, so a line is exactly as wide as
-## its stones at every point.
+## In the styles of one size, some classes of longer lines grow, shrink or
+## swell along their length too (GRADED_CHANCE), so runs of stones change
+## size as they go. Sizes always run relative to the picture's center, so
+## symmetric copies match. Every style also narrows toward a line's loose
+## end. The caller builds the channel around the stones it gets back, so a
+## line is exactly as wide as its stones at every point.
 
 const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "emerald", "lozenge", "taper", "pulse", "ramp",
 		"radial", "hub"]
@@ -49,6 +53,16 @@ const SEQUENCE_MIN_STONES := 10
 const NODE_PARTS := 100000
 ## Smallest stone, as a share of the full line stone.
 const MIN_SCALE := 0.35
+## Largest stone of a line that grows or swells, as a share of the line stone.
+const GROWN_SCALE := 1.45
+## Share of line classes (with room for 4+ stones) that grow, shrink or swell
+## in the styles of one size.
+const GRADED_CHANCE := 0.6
+## Size profiles along a line (see _radius).
+const GRADED := ["grow", "shrink", "swell"]
+## Lines carry on through a junction (as one stroke) when they meet within
+## this many radians of a straight line.
+const STROKE_TURN := 0.52
 ## Lines that meet at a hub: at least this many.
 const HUB_DEGREE := 4
 ## Bold lines: a few classes of lines through the middle of the picture take
@@ -73,14 +87,40 @@ const BOLD_REACH_MORE := 0.75
 ## Up to `bold` classes of lines through the middle get medium or large
 ## stones (see BOLD_SIZES) where their areas have room, in the line's
 ## accent color (tone 1) unless they repeat a sequence.
+## `line_mask` (the line art, nonzero on lines; default: the map's lines)
+## gives the symmetry the stones are made to follow (see LineMirror).
+## Classes listed in `drop` get no stones (their lines stay as plain
+## separators); class numbers don't change when some are dropped.
 static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String,
-		symmetry: String = "none", seed_value: int = 1, bold: int = 0) -> Array[Dictionary]:
+		symmetry: String = "none", seed_value: int = 1, bold: int = 0,
+		line_mask: PackedByteArray = PackedByteArray(), drop: Array = []) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var hash := {}
 	var cell := r * 4.0
 	var nodes: Array = graph["nodes"]
-	var paths: Array = graph["paths"]
 	var center := Vector2(map.width, map.height) / 2.0
+	var tol := minf(map.width, map.height) * 0.015
+	# Symmetry classes over every line first, so they keep their numbers when
+	# some are dropped.
+	var all_paths: Array = graph["paths"]
+	var path_keys := []
+	for path in all_paths:
+		var pts: PackedVector2Array = path["points"]
+		# A loop's traversal starts anywhere, so key it by its center instead.
+		var at := pts[pts.size() / 2]
+		if path["closed"]:
+			at = Vector2.ZERO
+			for q in pts:
+				at += q
+			at /= pts.size()
+		path_keys.append(_sym_key(at, center, symmetry, Contours.length(pts, path["closed"])))
+	var all_class := _classes(path_keys, tol)
+	var paths := []
+	var path_class := PackedInt32Array()
+	for k in all_paths.size():
+		if not all_class[k] in drop:
+			paths.append(all_paths[k])
+			path_class.append(all_class[k])
 	# Which paths run along the silhouette (background on one side).
 	var outer := PackedByteArray()
 	var node_outer := PackedInt32Array()
@@ -103,34 +143,9 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 			hubs.append(nodes[n])
 	if style == "hub" and hubs.is_empty():
 		style = "radial"
-	# Ramps alternate direction in order around the picture's center, so they
-	# repeat evenly around a symmetric picture.
-	var ramp_up := {}
-	if style == "ramp":
-		var order := range(paths.size())
-		var mids := []
-		for path in paths:
-			var pts: PackedVector2Array = path["points"]
-			mids.append((pts[pts.size() / 2] - center).angle())
-		order.sort_custom(func(a: int, b: int) -> bool: return mids[a] < mids[b])
-		for i in order.size():
-			ramp_up[order[i]] = i % 2 == 0
 	var field := {"style": style, "r": r, "center": center, "far": far, "hubs": hubs,
 			"hub_reach": minf(map.width, map.height) * 0.22}
 
-	var tol := minf(map.width, map.height) * 0.015
-	var path_keys := []
-	for path in paths:
-		var pts: PackedVector2Array = path["points"]
-		# A loop's traversal starts anywhere, so key it by its center instead.
-		var at := pts[pts.size() / 2]
-		if path["closed"]:
-			at = Vector2.ZERO
-			for q in pts:
-				at += q
-			at /= pts.size()
-		path_keys.append(_sym_key(at, center, symmetry, Contours.length(pts, path["closed"])))
-	var path_class := _classes(path_keys, tol)
 	var node_keys := []
 	for n in nodes.size():
 		node_keys.append(_sym_key(nodes[n], center, symmetry, 0.0))
@@ -176,7 +191,7 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 		if not by_class.has(path_class[k]):
 			by_class[path_class[k]] = []
 		by_class[path_class[k]].append(k)
-	var copies := symmetry != "none" and not style in ["pulse", "ramp"]
+	var copies := symmetry != "none"
 	var copy_of := {}
 	var at := nodes.duplicate()
 	var settled := PackedByteArray()
@@ -199,15 +214,29 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 					settled[e] = 1
 	if symmetry == "radial":
 		_snap_nodes(at, node_class, center, band_sym, minf(map.width, map.height))
+	# Lines run on through junctions where they carry straight on (strokes),
+	# and a stroke changes size along its whole length.
+	var strokes := _strokes(paths, node_paths, center, r)
+	var pitch := r * 2.0 * _aspect(style) + gap
+	for st: Dictionary in strokes["list"]:
+		var key := 1 << 30
+		for k: int in st["paths"]:
+			key = mini(key, path_class[k])
+			st["bold"] = st.get("bold", false) or bold_r.has(path_class[k])
+		st["profile"] = _profile(style, key, seed_value, st, pitch)
 	for n in nodes.size():
 		if node_paths[n] == 0:
 			continue
 		var silhouette := node_outer[n] * 2 >= node_paths[n]
 		var rn := r_node * _place_scale(field, at[n])
+		# A junction inside a stroke takes the stroke's size there.
+		if strokes["node_t"].has(n):
+			var nt: Array = strokes["node_t"][n]
+			rn = r_node * _scale(strokes["list"][nt[0]]["profile"], nt[1])
 		_add(out, hash, cell, at[n], 0.0, rn, 0.0, "round", 1 if silhouette else 0, gap, NODE_PARTS + node_class[n])
 	var ctx := {
 		"field": field, "r": r, "r_node": r_node, "gap": gap, "cell": cell, "style": style, "outer": outer,
-		"path_class": path_class, "bold_r": bold_r, "ramp_up": ramp_up, "seed": seed_value, "rings": rings,
+		"path_class": path_class, "bold_r": bold_r, "seed": seed_value, "rings": rings, "strokes": strokes,
 	}
 	var laid := {}
 	for c: int in by_class:
@@ -218,7 +247,9 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 				var before := out.size()
 				_lay_line(out, hash, paths[k], k, ctx)
 				laid[k] = out.slice(before)
-	return out
+	if line_mask.is_empty():
+		line_mask = map.line_mask()
+	return LineMirror.apply(out, line_mask, map.width, map.height, symmetry, r, gap, cell)
 
 
 ## Moves the junctions at the ends of `copy` (a copy of `master` by xf) to
@@ -330,12 +361,6 @@ static func _lay_line(out: Array[Dictionary], hash: Dictionary, path: Dictionary
 	var pts: PackedVector2Array = path["points"]
 	var closed: bool = path["closed"]
 	var ends: Array = path["ends"].duplicate()
-	# Pulses run left to right (top to bottom for vertical lines).
-	if style == "pulse" and not closed:
-		var d := pts[pts.size() - 1] - pts[0]
-		if d.x < 0.0 or (is_zero_approx(d.x) and d.y < 0.0):
-			pts.reverse()
-			ends.reverse()
 	var length := Contours.length(pts, closed)
 	var aspect := 1.0
 	var shape := "round"
@@ -356,9 +381,12 @@ static func _lay_line(out: Array[Dictionary], hash: Dictionary, path: Dictionary
 		"r": bold_r.get(path_class[k], r),
 		"bold": bold_r.has(path_class[k]),
 		"loose": [not closed and ends[0] < 0, not closed and ends[1] < 0],
-		"up": ctx["ramp_up"].get(k, true),
 		"ring": ctx["rings"].has(k),
 	}
+	var place: Array = ctx["strokes"]["of"][k]
+	prof["profile"] = ctx["strokes"]["list"][place[0]]["profile"]
+	prof["t0"] = place[1]
+	prof["t1"] = place[2]
 	var s0 := 0.0
 	var s1 := length
 	if not closed:
@@ -470,21 +498,18 @@ static func _copy_line(out: Array[Dictionary], hash: Dictionary, cell: float, la
 static func _radius(field: Dictionary, prof: Dictionary, s: float, i: int) -> float:
 	var r: float = prof["r"]
 	var length: float = prof["length"]
-	var t := clampf(s / maxf(1.0, length), 0.0, 1.0)
+	# Where along its stroke, from the stroke's inner end (nearer the center).
+	var t := lerpf(prof.get("t0", 0.0), prof.get("t1", 1.0), clampf(s / maxf(1.0, length), 0.0, 1.0))
 	var out := r
-	# Rings around the center keep one size all the way round, so they stay
-	# symmetric; position-based styles are symmetric anyway.
-	match "" if prof.get("ring", false) and field["style"] in ["taper", "pulse", "ramp"] else field["style"]:
+	match prof.get("profile", "flat"):
 		"pearls":
 			out = r if i % 2 == 0 else r * 0.6
-		"taper":
-			out = r * lerpf(MIN_SCALE, 1.0, sin(PI * t))
+		"swell", "pinch", "grow", "shrink":
+			out = r * _scale(prof["profile"], t)
 		"pulse":
-			# About two pulses per ten stones.
-			out = r * lerpf(0.55, 1.0, 0.5 + 0.5 * cos(TAU * s / (r * 11.0)))
-		"ramp":
-			out = r * lerpf(MIN_SCALE, 1.0, t if prof["up"] else 1.0 - t)
-		"radial", "hub":
+			# About two pulses per ten stones, from the middle out either way.
+			out = r * lerpf(0.55, 1.0, 0.5 + 0.5 * cos(TAU * (s - length / 2.0) / (r * 11.0)))
+		"position":
 			# Bold lines keep their size: they are there to be big.
 			if not prof["bold"]:
 				var p: Vector2 = Contours.sample(prof["pts"], prof["closed"], s)[0]
@@ -497,6 +522,172 @@ static func _radius(field: Dictionary, prof: Dictionary, s: float, i: int) -> fl
 		out *= lerpf(0.5, 1.0, maxf(0.0, length - s) / fade)
 	# Never dust: at least 1.5 px.
 	return maxf(out, maxf(r * MIN_SCALE, 1.5))
+
+
+## How a stroke's stones change size along it (see _radius): its style's
+## profile, or for the styles of one size, a grow, shrink or swell on some
+## longer strokes (GRADED_CHANCE), picked by `key` (the lowest class of its
+## lines, so symmetric copies pick alike). Grows and shrinks run outward
+## from the center; on a stroke that keeps about the same distance from the
+## center (an arc around it) they swell or pinch in the middle instead, and
+## loops keep one size.
+static func _profile(style: String, key: int, seed_value: int, stroke: Dictionary, pitch: float) -> String:
+	var length: float = stroke["length"]
+	var around: bool = absf(stroke["outer"] - stroke["inner"]) < length * 0.25
+	var profile := "flat"
+	match style:
+		"pearls":
+			profile = "pearls"
+		"taper":
+			profile = "swell"
+		"pulse":
+			profile = "pulse"
+		"radial", "hub":
+			profile = "position"
+		_:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([seed_value, key, "profile"])
+			var roll := rng.randf()
+			var pick: String = GRADED[rng.randi_range(0, GRADED.size() - 1)]
+			if style == "ramp":
+				profile = "grow" if roll < 0.5 else "shrink"
+			elif roll < GRADED_CHANCE and length >= pitch * 4.0:
+				profile = pick
+	if stroke["cycle"] or stroke["bold"]:
+		return "pearls" if profile == "pearls" else "flat"
+	if around and profile in ["grow", "shrink"]:
+		return "swell" if profile == "grow" else "pinch"
+	return profile
+
+
+## Size scale of a graded profile at t (0 at a stroke's inner end, 1 at its
+## outer one).
+static func _scale(profile: String, t: float) -> float:
+	match profile:
+		"swell":
+			return lerpf(MIN_SCALE, GROWN_SCALE, sin(PI * t))
+		"pinch":
+			return lerpf(GROWN_SCALE, MIN_SCALE, sin(PI * t))
+		"grow":
+			return lerpf(MIN_SCALE, GROWN_SCALE, t)
+		"shrink":
+			return lerpf(GROWN_SCALE, MIN_SCALE, t)
+	return 1.0
+
+
+## Length / width of a style's line stones.
+static func _aspect(style: String) -> float:
+	match style:
+		"marquise", "lozenge":
+			return 1.8
+		"baguette", "emerald":
+			return 1.6
+	return 1.0
+
+
+## Strokes: lines joined through the junctions where they carry straight on
+## (the two ends there that meet within STROKE_TURN of a straight line, the
+## straightest pair first), as a pen would draw them. Returns
+## {"list": [{paths, length, inner, outer, cycle}], "of": {path: [stroke,
+## t at its first point, t at its last]}, "node_t": {junction: [stroke, t]}}
+## where t runs 0..1 from the stroke's end nearer the center (inner and
+## outer: the two ends' distances from it).
+static func _strokes(paths: Array, node_paths: PackedInt32Array, center: Vector2, r: float) -> Dictionary:
+	# Each end's way out of its junction.
+	var at_node := {}
+	for k in paths.size():
+		var pts: PackedVector2Array = paths[k]["points"]
+		if paths[k]["closed"]:
+			continue
+		var length := Contours.length(pts, false)
+		var d := minf(r * 3.0, length / 2.0)
+		for e in 2:
+			var n: int = paths[k]["ends"][e]
+			if n < 0:
+				continue
+			var tip: Vector2 = pts[0] if e == 0 else pts[pts.size() - 1]
+			var into: Vector2 = Contours.sample(pts, false, d if e == 0 else length - d)[0]
+			if not at_node.has(n):
+				at_node[n] = []
+			at_node[n].append([k * 2 + e, (into - tip).angle()])
+	var partner := {}
+	for n: int in at_node:
+		var ends_here: Array = at_node[n]
+		var pairs := []
+		for i in ends_here.size():
+			for j in i:
+				var bend := absf(angle_difference(ends_here[i][1], ends_here[j][1] + PI))
+				if bend < STROKE_TURN:
+					pairs.append([bend, ends_here[i][0], ends_here[j][0]])
+		pairs.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+		for pr: Array in pairs:
+			if not partner.has(pr[1]) and not partner.has(pr[2]):
+				partner[pr[1]] = pr[2]
+				partner[pr[2]] = pr[1]
+	var out := {"list": [], "of": {}, "node_t": {}}
+	var done := {}
+	for k0 in paths.size():
+		if done.has(k0):
+			continue
+		# Back to the stroke's first line (or round a loop to this one).
+		var start := [k0, 0]
+		var cycle: bool = paths[k0]["closed"]
+		while not cycle and partner.has(start[0] * 2 + start[1]):
+			var q: int = partner[start[0] * 2 + start[1]]
+			if q / 2 == k0:
+				cycle = true
+				break
+			start = [q / 2, 1 - q % 2]
+		# Then along it: each line in order, entered at end `from`.
+		var run := []
+		var cur := start
+		while true:
+			run.append(cur)
+			done[cur[0]] = true
+			if paths[cur[0]]["closed"]:
+				break
+			var exit_key: int = cur[0] * 2 + (1 - cur[1])
+			if not partner.has(exit_key):
+				break
+			var q: int = partner[exit_key]
+			if done.has(q / 2):
+				break
+			cur = [q / 2, q % 2]
+		var total := 0.0
+		var lengths := []
+		for e: Array in run:
+			lengths.append(Contours.length(paths[e[0]]["points"], paths[e[0]]["closed"]))
+			total += lengths[-1]
+		total = maxf(total, 1.0)
+		var first: Array = run[0]
+		var last: Array = run[-1]
+		var p0: PackedVector2Array = paths[first[0]]["points"]
+		var p1: PackedVector2Array = paths[last[0]]["points"]
+		var a_end: Vector2 = p0[0] if first[1] == 0 else p0[p0.size() - 1]
+		var b_end: Vector2 = p1[p1.size() - 1] if last[1] == 0 else p1[0]
+		var flip := a_end.distance_to(center) > b_end.distance_to(center)
+		var id: int = out["list"].size()
+		var ks := []
+		var o := 0.0
+		for i in run.size():
+			var e: Array = run[i]
+			var t_a := o / total
+			var t_b: float = (o + lengths[i]) / total
+			if flip:
+				t_a = 1.0 - t_a
+				t_b = 1.0 - t_b
+			# t at the line's own first and last points.
+			out["of"][e[0]] = [id, t_a, t_b] if e[1] == 0 else [id, t_b, t_a]
+			ks.append(e[0])
+			o += lengths[i]
+			if i < run.size() - 1 and not paths[e[0]]["closed"]:
+				var n: int = paths[e[0]]["ends"][1 - e[1]]
+				if n >= 0 and node_paths[n] == 2:
+					out["node_t"][n] = [id, t_b]
+		out["list"].append({"paths": ks, "length": total, "inner": minf(a_end.distance_to(center),
+				b_end.distance_to(center)), "outer": maxf(a_end.distance_to(center), b_end.distance_to(center)),
+				"cycle": cycle})
+	return out
 
 
 ## Picks the bold lines: classes of lines through the middle (BOLD_REACH),

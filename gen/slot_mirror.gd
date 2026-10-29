@@ -20,7 +20,7 @@ extends RefCounted
 static func copy_region(p: SlotPacker, region: Dictionary, master: Dictionary) -> bool:
 	var src: Dictionary = master["region"]
 	var area_ratio: float = float(region["area"]) / src["area"]
-	if area_ratio < 0.9 or area_ratio > 1.1:
+	if area_ratio < 0.8 or area_ratio > 1.25:
 		return false
 	var t := Symmetry.region_transform(p.map, src, region, p._pic_center)
 	if t.is_empty():
@@ -223,6 +223,74 @@ static func _snap(p: SlotPacker, group: Array, c: Vector2, r: float) -> Vector2:
 			if off.dot(dir) > 0.0 and absf(off.cross(dir)) < r + p.gap / 2.0:
 				return p._pic_center + dir * off.dot(dir)
 	return c
+
+
+## Symmetry.ring_symmetry of the lines in a band around the packer's current
+## region (widened until they show folds), worked out once per region.
+static func ring_sym(p: SlotPacker) -> Dictionary:
+	if p._ring.is_empty():
+		var region: Dictionary = p.map.regions[p._region]
+		var near := INF
+		var reach := 0.0
+		for q in Symmetry.sample_pixels(p.map, region, 400):
+			near = minf(near, q.distance_to(p._pic_center))
+			reach = maxf(reach, q.distance_to(p._pic_center))
+		if p._lines.is_empty():
+			p._lines = p.map.line_mask()
+		# Lines that are only circles say nothing about the folds: look
+		# further out until some lines do.
+		for margin in [2.5, 6.0, 12.0, 24.0]:
+			p._ring = Symmetry.ring_near(p._lines, p.map.width, p.map.height, p._pic_center, near - p.unit * margin,
+					reach + p.unit * margin)
+			if p._ring["folds"] < Symmetry.MAX_FOLDS:
+				break
+	return p._ring
+
+
+## Symmetry for rows of stones that run around the center: a count that
+## is a multiple of the folds of the line art just inside the region and of
+## those just outside it (an evenly spaced ring matches every turn that is
+## a whole number of its steps, so it can match both), starting on the
+## inside's mirror axis. Worked out once per region.
+static func row_sym(p: SlotPacker) -> Dictionary:
+	if p._row_ring.is_empty():
+		var region: Dictionary = p.map.regions[p._region]
+		var near := INF
+		var reach := 0.0
+		for q in Symmetry.sample_pixels(p.map, region, 400):
+			near = minf(near, q.distance_to(p._pic_center))
+			reach = maxf(reach, q.distance_to(p._pic_center))
+		if p._lines.is_empty():
+			p._lines = p.map.line_mask()
+		var sides := []
+		for inside in [true, false]:
+			var sym := {"folds": Symmetry.MAX_FOLDS, "axis": NAN}
+			for margin in [2.5, 6.0, 12.0]:
+				var lo: float = near - p.unit * margin if inside else reach - 1.0
+				var hi: float = near + 1.0 if inside else reach + p.unit * margin
+				sym = Symmetry.ring_near(p._lines, p.map.width, p.map.height, p._pic_center, lo, hi)
+				if sym["folds"] < Symmetry.MAX_FOLDS:
+					break
+			sides.append(sym)
+		var a: int = sides[0]["folds"]
+		var b: int = sides[1]["folds"]
+		if a >= Symmetry.MAX_FOLDS and b >= Symmetry.MAX_FOLDS:
+			p._row_ring = ring_sym(p)
+		else:
+			var folds := b if a >= Symmetry.MAX_FOLDS else (a if b >= Symmetry.MAX_FOLDS else a * b / _gcd(a, b))
+			if folds > Symmetry.MAX_FOLDS:
+				folds = a
+			var axis: float = sides[0]["axis"] if not is_nan(sides[0]["axis"]) else sides[1]["axis"]
+			p._row_ring = {"folds": folds, "axis": axis}
+	return p._row_ring
+
+
+static func _gcd(a: int, b: int) -> int:
+	while b != 0:
+		var t := a % b
+		a = b
+		b = t
+	return a
 
 
 ## True if a stone of radius r shrunk by k is still worth placing.

@@ -519,6 +519,31 @@ func test_symmetry() -> void:
 			bold += 1
 	check(bold >= 2, "only %d of 4 gem-line pictures got bold lines" % bold)
 
+	# Lines in the styles of one size grow, shrink or swell along some strokes.
+	var graded := 0
+	for i in 3:
+		var p := PictureSources.mandala_collage(3200 + i, {"variant": "mandala", "setting": "gems", "line_gems": "beads",
+				"pattern_seed": i})
+		var sizes := {}
+		for sl in p["slots"]:
+			if p["regions"][sl["region"]]["kind"] == "line" and sl["part"] < GemLines.NODE_PARTS:
+				if not sizes.has(sl["part"]):
+					sizes[sl["part"]] = []
+				sizes[sl["part"]].append(sl["width"])
+		for part in sizes:
+			if sizes[part].size() >= 4 and sizes[part].max() >= sizes[part].min() * 1.5:
+				graded += 1
+	print("  %d classes of bead lines change size along their strokes" % graded)
+	check(graded >= 3, "only %d classes of bead lines change size" % graded)
+
+	# Over the stone limit, whole elements are left out instead of growing every stone.
+	var capped := PictureSources.mandala_collage(3110, {"variant": "mandala", "setting": "gems", "pattern_seed": 1,
+			"max_slots": 1200})
+	print("  capped at 1200: %d stones, %d elements left out, unit %.1f" % [capped["slots"].size(), capped["dropped"],
+			capped["unit"]])
+	check(capped["dropped"] > 0, "nothing was left out over the stone limit")
+	check(capped["slots"].size() <= 1200, "%d stones over a limit of 1200" % capped["slots"].size())
+
 
 ## Share of a mandala's stones (within its rings, short of the silhouette)
 ## that land on a stone of about the same size when the picture turns by
