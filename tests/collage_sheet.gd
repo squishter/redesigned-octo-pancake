@@ -36,8 +36,9 @@ func _init() -> void:
 			for r in p["regions"]:
 				if r["kind"] == "area":
 					styles[r["style"]] = styles.get(r["style"], 0) + 1
-			print("seed %d pattern %d: %s %s radial %s, %d slots, %d ms, %s" % [s, pattern, p["setting"], p["line_gems"],
-					p["radial_size"], p["slots"].size(), Time.get_ticks_msec() - t0, styles])
+			print("seed %d pattern %d: %s %s radial %s tiers %s, %d slots, %d gem types, unit %.1f, %d ms, %s" % [
+					s, pattern, p["setting"], p["line_gems"], p["radial_size"], p["tiers"], p["slots"].size(),
+					p["gem_types"], p["unit"], Time.get_ticks_msec() - t0, styles])
 			render(p).save_png(out_dir.path_join("sheet_%d_%s_p%d.png" % [s, variant, pattern]))
 	quit()
 

@@ -58,6 +58,9 @@ var gap := 2.0
 var seed_value := 1
 ## Stones shrink toward the picture's center (to RADIAL_MIN at the center).
 var radial_size := false
+## Multi-pass designs: a few large stones first, then a few medium ones,
+## then the group's pattern around them.
+var tiers := false
 var _pic_center := Vector2.ZERO
 var _pic_reach := 1.0
 
@@ -70,6 +73,9 @@ var _region := -1
 var _region_blocks := Rect2i()
 var _cur_max := 0.0
 var _tone := 0
+## Which step of the pattern is placing stones (a row, a ring, the center
+## stone...). Counted from 0 in every region, so symmetric copies agree.
+var _part := 0
 
 
 ## Packs every region. options:
@@ -77,10 +83,13 @@ var _tone := 0
 ##   gap (px between stones, default 0.3%),
 ##   groups (PackedInt32Array: symmetry group per region; copies share a pattern),
 ##   radial_size (bool): rows, lattices and spines shrink toward the picture's center,
+##   tiers (bool): some groups first get a few large, then a few medium stones,
 ##   styles (Dictionary region id -> style, to force a style or sparse fill).
-## Returns slots: {id, region, shape, x, y, rotation, size, width, tone}, in px
-## of the map; size is the length along the rotation, width across it; tone 1
-## marks stones in the region's accent color.
+## Returns slots: {id, region, shape, x, y, rotation, size, width, tone, part},
+## in px of the map; size is the length along the rotation, width across it;
+## tone 1 marks stones in the region's accent color, tone 2 in its feature
+## color (the big tier stones); part numbers the pattern's steps (each row,
+## ring or tier), the same in symmetric copies.
 ## Also writes the chosen pattern into each region's dictionary ("style").
 static func pack(region_map: RegionMap, options: Dictionary = {}) -> Array[Dictionary]:
 	var p := SlotPacker.new()
@@ -108,6 +117,7 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	unit = options.get("unit", side * 0.010)
 	gap = options.get("gap", side * 0.003)
 	radial_size = options.get("radial_size", false)
+	tiers = options.get("tiers", false)
 	_pic_center = Vector2(region_map.width, region_map.height) / 2.0
 	_pic_reach = side / 2.0
 	free = region_map.dist.duplicate()
@@ -163,6 +173,12 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"grade": [1.0, 1.0, 0.85, 1.15][g_rng.randi_range(0, 3)],
 		# Honeycomb stones shrink toward the edge, like a halftone.
 		"gradient": g_rng.randf() < 0.35,
+		"scatter_space": u * g_rng.randf_range(1.2, 2.0),
+		# Tiers: big stones (radius) and how many medium ones go in first.
+		"large": u * g_rng.randf_range(2.2, 3.2) if tiers and max_d > u * 2.6 and g_rng.randf() < 0.4 else 0.0,
+		"mediums": g_rng.randi_range(1, 3) if tiers and max_d > u * 1.8 and g_rng.randf() < 0.45 else 0,
+		"medium_r": u * g_rng.randf_range(1.2, 1.6),
+		"tier_shape": ["round", "round", "hexagon", "square", "oval", "marquise"][g_rng.randi_range(0, 5)],
 	}
 
 
@@ -188,11 +204,15 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 			_block_dirty[by * _bw + bx] = 1
 	_cur_max = region["max_dist"]
 	_tone = 0
+	_part = 0
 	var style: String = design["style"]
 	region["style"] = style
 	var u := unit
 	var r_row: float = design["row_r"]
 	var toning: String = design["toning"]
+
+	if tiers and style != "bare":
+		_tier_stones(region, design)
 
 	match style:
 		"bare":
@@ -202,7 +222,7 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 		"accent":
 			_center_stone(region, u * 2.2)
 		"scatter":
-			_lattice(region, u * 0.6, u * rng.randf_range(1.2, 2.0), "round", design["lattice_turn"], false)
+			_lattice(region, u * 0.6, design["scatter_space"], "round", design["lattice_turn"], false)
 		"echo":
 			var radii := _graded_rows(region, r_row, design["grade"], design["alternate"])
 			var n := radii.size()
@@ -271,6 +291,43 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([u * 0.8, u * 0.6])
 
 
+## The first passes of a tiered design: one large stone at the region's
+## deepest point (shaped to it), then a few medium stones at the next
+## deepest free points, before the pattern fills around them. Symmetric
+## copies have the same shape, so they get the same stones.
+func _tier_stones(region: Dictionary, design: Dictionary) -> void:
+	var large: float = design["large"]
+	var shape: String = design["tier_shape"]
+	if large > 0.0:
+		_part += 1
+		_tone = 2
+		var peak := _argmax()
+		if peak >= 0:
+			var c := _center(peak)
+			var r := minf(large * _scale_at(c), free[peak] - gap)
+			if r >= unit * 1.4:
+				var placed := false
+				if shape in ASPECT:
+					placed = _try_capsule(shape, c, region["axis"], r / ASPECT[shape] * 1.2)
+				if not placed:
+					_place("round" if shape in ASPECT else shape, c, region["axis"], r, 0.0)
+	var mediums: int = design["mediums"]
+	if mediums > 0:
+		_part += 1
+		_tone = 2 if large <= 0.0 else 1
+		var mr: float = design["medium_r"]
+		for _i in mediums:
+			var peak := _argmax()
+			if peak < 0:
+				break
+			var c := _center(peak)
+			var r := minf(mr * _scale_at(c), free[peak] - gap)
+			if r < mr * 0.7:
+				break
+			_place("hexagon" if shape == "hexagon" else "round", c, region["axis"], r, 0.0)
+	_tone = 0
+
+
 func _row_tone(toning: String, k: int) -> int:
 	match toning:
 		"rows":
@@ -313,6 +370,7 @@ func _rows(region: Dictionary, radii: Array, shapes: Array, tones: Array) -> voi
 	var lines := Contours.iso_lines(map.dist, map.labels, map.width, map.height, _region, region["bbox"], levels)
 	for k in radii.size():
 		_tone = tones[k]
+		_part += 1
 		for path in lines[k]:
 			_along(path["points"], path["closed"], radii[k], shapes[k])
 	_tone = 0
@@ -357,6 +415,7 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 ## The biggest stone that fits at the region's deepest free point, shaped to
 ## the region (marquise or oval when it is long), at most `cap` in radius.
 func _center_stone(region: Dictionary, cap: float) -> void:
+	_part += 1
 	var peak := _argmax()
 	if peak < 0:
 		return
@@ -379,7 +438,9 @@ func _rosette(region: Dictionary, r_row: float) -> float:
 	var rc := minf(free[peak] - gap, unit * 2.2) * 0.75
 	if rc < unit * 0.4:
 		return 0.0
+	_part += 1
 	_place("round", c, 0.0, rc, 0.0)
+	_part += 1
 	var rt := maxf(unit * 0.5, minf(rc * 0.6, r_row))
 	var ring := rc + gap + rt * 1.5
 	var k := maxi(5, int(TAU * ring / (2.0 * rt + gap * 2.0)))
@@ -396,6 +457,7 @@ func _rosette(region: Dictionary, r_row: float) -> float:
 ## hexagonal, lined up with the region's axis and
 ## centered on its centroid, so symmetric copies get the same lattice.
 func _lattice(region: Dictionary, r: float, spacing: float, shape: String, turn: float, gradient: bool) -> void:
+	_part += 1
 	var pitch := 2.0 * r + spacing
 	var c: Vector2 = region["centroid"]
 	var a: float = region["axis"] + turn
@@ -446,6 +508,7 @@ func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded:
 	for k in offsets.size():
 		r = sizes[k]
 		_tone = (((k + 1) / 2) % 2) if banded else 0
+		_part += 1
 		var base: Vector2 = c + nrm * float(offsets[k])
 		# Inside stretches of this row, where a full stone could sit.
 		var run_start := NAN
@@ -473,6 +536,7 @@ func _sunburst(region: Dictionary, r_row: float, toning: String) -> void:
 	var rc := minf(free[peak] - gap, r_row * 1.6)
 	if rc < unit * 0.4:
 		return
+	_part += 1
 	_place("round", c, 0.0, rc, 0.0)
 	var spokes := clampi(int(TAU * (rc + gap + r_row * 0.6) / (r_row * 1.2 + gap)), 6, 24)
 	if spokes % 2 == 1:
@@ -487,6 +551,7 @@ func _sunburst(region: Dictionary, r_row: float, toning: String) -> void:
 		rr = maxf(rr, unit * 0.35)
 		var at := rad + rr
 		_tone = (ring % 2) if toning == "rows" else _tone
+		_part += 1
 		for j in spokes:
 			var a := a0 + TAU * j / spokes + (PI / spokes if ring % 2 == 1 and toning == "rows" else 0.0)
 			var p := c + Vector2.from_angle(a) * at
@@ -503,6 +568,7 @@ func _sunburst(region: Dictionary, r_row: float, toning: String) -> void:
 ## the region does and tapers toward its tips. Side branches shorter than the
 ## region is wide are ignored; the longest stretch goes first.
 func _spine(region: Dictionary, r_max: float, r_min: float) -> void:
+	_part += 1
 	var bbox: Rect2i = region["bbox"].grow(1)
 	var bw := bbox.size.x
 	var bh := bbox.size.y
@@ -550,6 +616,7 @@ func _dist_at(p: Vector2) -> float:
 ## Fills what the pattern left open, biggest stones first, from the given
 ## sizes only, so leftovers match the pattern instead of turning to dust.
 func _fill_rest(sizes: Array) -> void:
+	_part += 1
 	var r_min: float = sizes[-1]
 	while true:
 		var peak := _argmax()
@@ -619,6 +686,7 @@ func _place(shape: String, c: Vector2, rotation: float, r: float, h: float) -> v
 		"size": 2.0 * (r + h),
 		"width": 2.0 * r,
 		"tone": _tone,
+		"part": _part,
 	})
 	_stamp(c, Vector2.from_angle(rotation), h, r)
 

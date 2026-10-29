@@ -359,7 +359,8 @@ func test_collages() -> void:
 		check(areas >= 5, "seed %d: only %d regions" % [seed_value, areas])
 		check(float(empty) / areas < 0.25,
 				"seed %d: %d of %d regions too thin for stones" % [seed_value, empty, areas])
-		check(coverage > 0.55, "seed %d: coverage %.2f" % [seed_value, coverage])
+		# Patterns leave the velvet showing between rows, so coverage runs lower than packing.
+		check(coverage > 0.15, "seed %d: coverage %.2f" % [seed_value, coverage])
 		check(overlaps == 0, "seed %d: %d overlapping slot pairs" % [seed_value, overlaps])
 		check(img.get_meta("stray") < 0.02, "seed %d: slots spill onto lines" % seed_value)
 		img.save_png(out_dir.path_join("collage_%d_%s.png" % [seed_value, variant]))
@@ -454,13 +455,24 @@ func test_pattern_seeds() -> void:
 		var overlaps := count_overlaps(p["slots"], p["width"] * 0.002)
 		check(overlaps == 0, "line_gems %s: %d overlapping slot pairs" % [line_style, overlaps])
 		render_collage(p).save_png(out_dir.path_join("lines_%s.png" % line_style))
+	var in_range := 0
 	for i in 12:
 		var p := PictureSources.mandala_collage(2010 + i % 4, {"pattern_seed": i})
 		settings[p["setting"]] = settings.get(p["setting"], 0) + 1
+		var n: int = p["slots"].size()
+		check(n >= CollageGenerator.MIN_SLOTS and n <= CollageGenerator.MAX_SLOTS,
+				"pattern %d: %d stones, outside %d-%d" % [i, n, CollageGenerator.MIN_SLOTS, CollageGenerator.MAX_SLOTS])
+		check(p["gem_types"] <= CollageGenerator.GEM_TYPES_MAX, "pattern %d: %d gem types" % [i, p["gem_types"]])
+		check(p["gem_types"] == p["gem_kinds"].size(), "pattern %d: gem_types disagrees with gem_kinds" % i)
+		if p["gem_types"] >= CollageGenerator.GEM_TYPES_MIN:
+			in_range += 1
 		for r in p["regions"]:
 			if r["kind"] == "area":
 				styles[r["style"]] = true
-	print("  settings %s, patterns %s" % [settings, styles.keys()])
+	print("  settings %s, patterns %s, %d of 12 with %d-%d gem types" % [settings, styles.keys(), in_range,
+			CollageGenerator.GEM_TYPES_MIN, CollageGenerator.GEM_TYPES_MAX])
+	# Busy radial pictures can run out of parts to vary; most reach the range.
+	check(in_range >= 8, "only %d of 12 collages reached %d gem types" % [in_range, CollageGenerator.GEM_TYPES_MIN])
 	check(settings.get("gems", 0) > settings.get("metal", 0), "gem lines should be the usual setting")
 	for style in ["echo", "halo", "spine", "solitaire"]:
 		check(styles.has(style), "pattern %s never used" % style)

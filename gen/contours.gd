@@ -4,6 +4,10 @@ extends RefCounted
 ## (marching squares) and centerlines of a line mask (thinning plus a walk of
 ## the skeleton graph). Gem patterns place stones evenly along these paths.
 
+## 8-neighbor offsets.
+const _NX := [1, 1, 0, -1, -1, -1, 0, 1]
+const _NY := [0, 1, 1, 1, 0, -1, -1, -1]
+
 
 ## Iso-lines of `field` at each of `levels`, restricted to pixels labeled
 ## `region` in `labels` (everything else counts as -1, so lines stay inside).

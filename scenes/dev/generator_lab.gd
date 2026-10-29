@@ -282,11 +282,11 @@ func _process(_delta: float) -> void:
 			var setting: String = p["setting"]
 			if setting == "gems":
 				setting = "gem lines (%s, %s colors)" % [p["line_gems"], p["line_colors"]]
-			_status.text = ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %.0f%% avg coverage, "
-					+ "lines %s, fills %s, patterns %s%s — %d ms") % [
-				flower, setting, p["pattern_seed"], p["regions"].size(), empty, p["slots"].size(),
+			_status.text = ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
+					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [
+				flower, setting, p["pattern_seed"], p["regions"].size(), empty, p["slots"].size(), p["gem_types"],
 				CollageGenerator.mean_coverage(p) * 100.0, p["line_style"], fills, patterns,
-				", sizes shrink inward" if p["radial_size"] else "", ms]
+				", sizes shrink inward" if p["radial_size"] else "", ", tiered" if p["tiers"] else "", ms]
 		"Kit":
 			var k: Dictionary = out["picture"]
 			_canvas.show_kit(k)

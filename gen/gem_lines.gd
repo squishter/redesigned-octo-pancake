@@ -30,7 +30,7 @@ const HUB_DEGREE := 4
 
 ## graph: Contours.centerlines() of the line mask. map: a RegionMap of the
 ## lines (its BACKGROUND tells the silhouette apart).
-## Returns slots ({id, region, shape, x, y, rotation, size, width, tone}) with
+## Returns slots ({id, region, shape, x, y, rotation, size, width, tone, part}) with
 ## region 0 for inner lines and 1 for the silhouette; the caller renumbers.
 static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -81,6 +81,9 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 		var silhouette := node_paths[n] > 0 and node_outer[n] * 2 >= node_paths[n]
 		var rn := r_node * _place_scale(field, nodes[n])
 		_add(out, hash, cell, nodes[n], 0.0, rn, 0.0, "round", 1 if silhouette else 0, gap)
+	# Junction stones are their own pattern part, so they can take another gem type.
+	for sl in out:
+		sl["part"] = 1
 	for k in paths.size():
 		var path: Dictionary = paths[k]
 		var pts: PackedVector2Array = path["points"]
@@ -256,6 +259,7 @@ static func _add(out: Array[Dictionary], hash: Dictionary, cell: float, c: Vecto
 		"size": 2.0 * (r + h),
 		"width": 2.0 * r,
 		"tone": 0,
+		"part": 0,
 	}
 	out.append(slot)
 	var key := Vector2i(cx, cy)

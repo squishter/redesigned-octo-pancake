@@ -23,7 +23,9 @@ extends RefCounted
 ##   line_style, sparsity: the design choices (see DesignPlan),
 ##   regions: [{id, group, kind, color, gem_color_id, accent_color, accent_gem, fill,
 ##              outlined, style, area, centroid, empty}],
-##   slots: [{id, region, shape, x, y, rotation, size, width, tone, target_color, target_gem}],
+##   slots: [{id, region, shape, x, y, rotation, size, width, tone, part, target_color, target_gem}],
+##   gem_types: how many gem types it uses; gem_kinds: [{shape, gem, color, count}],
+##   unit, tiers, radial_size: the stone size and design choices used,
 ## }
 ## Coordinates and sizes are in px of width x height. Regions in the same
 ## `group` are symmetric copies, which free-color mode can paint together.
@@ -33,6 +35,15 @@ extends RefCounted
 
 const SETTINGS := ["gems", "metal"]
 const GEMS_SETTING_CHANCE := 0.75
+## Stones per collage: pictures outside this range are rebuilt with bigger or
+## smaller stones, aiming a little inside it.
+const MIN_SLOTS := 300
+const MAX_SLOTS := 1500
+const SLOTS_LOW_AIM := 450.0
+const SLOTS_HIGH_AIM := 1250.0
+## Gem types (shape + color, any size) a collage aims for.
+const GEM_TYPES_MIN := 25
+const GEM_TYPES_MAX := 30
 
 
 ## options:
@@ -48,9 +59,31 @@ const GEMS_SETTING_CHANCE := 0.75
 ##                 the same lines
 ##   sparsity, line_style: see DesignPlan (default: picked per seed)
 ##   radial_size: bool, area stones shrink toward the center (default: picked per seed)
-##   seed, unit, gap: passed to SlotPacker
+##   tiers: bool, some groups get a few large then medium stones before their
+##          pattern (default: picked per seed)
+##   gem_types: how many gem types (shape + color, any size) to aim for
+##              (default: 25-30, picked per seed)
+##   seed, gap: passed to SlotPacker
+##   unit: base stone radius in px; by default 1% of the picture, then scaled
+##         so the collage has MIN_SLOTS..MAX_SLOTS stones
 ##   source: Dictionary describing where the lines came from, stored as is
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
+	var unit: float = options.get("unit", minf(w, h) * 0.010)
+	var picture := _build(mask, w, h, options, unit)
+	if options.has("unit"):
+		return picture
+	# Stone count goes as 1 / unit^2: rescale toward the range and rebuild.
+	for _attempt in 2:
+		var n: int = picture["slots"].size()
+		if n >= MIN_SLOTS and n <= MAX_SLOTS:
+			break
+		var aim := SLOTS_HIGH_AIM if n > MAX_SLOTS else SLOTS_LOW_AIM
+		unit *= clampf(sqrt(float(n) / aim), 0.5, 2.5)
+		picture = _build(mask, w, h, options, unit)
+	return picture
+
+
+static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, unit: float) -> Dictionary:
 	var pattern_seed: int = options.get("pattern_seed", 0)
 	var seed_value: int = options.get("seed", 1)
 	if pattern_seed != 0:
@@ -60,7 +93,6 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	var symmetry: String = options.get("symmetry", "none")
 	var min_area: int = options.get("min_area", int(w * h * 0.0005))
 	var side := float(mini(w, h))
-	var unit: float = options.get("unit", side * 0.010)
 	var gap: float = options.get("gap", side * 0.003)
 
 	var setting: String = options.get("setting", "auto")
@@ -102,6 +134,9 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	pack_options["groups"] = groups
 	if not pack_options.has("radial_size"):
 		pack_options["radial_size"] = rng.randf() < (0.35 if symmetry == "radial" else 0.15)
+	if not pack_options.has("tiers"):
+		pack_options["tiers"] = rng.randf() < 0.3
+	pack_options["unit"] = unit
 	var styles := DesignPlan.packer_styles(plan)
 	styles.merge(options.get("styles", {}), true)
 	pack_options["styles"] = styles
@@ -111,14 +146,17 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	var theme := Palettes.theme_colors(options.get("theme", "sunset"))
 	var colors: PackedColorArray
 	var accents := PackedColorArray()
+	var features := PackedColorArray()
 	var from_image: bool = options.get("colors_image") is Image
 	if from_image:
 		colors = RegionPaint.image_colors(map, options["colors_image"])
 		for c in colors:
 			accents.append(c.lightened(0.35) if c.get_luminance() < 0.6 else c.darkened(0.3))
+			features.append(c.darkened(0.45) if c.get_luminance() > 0.3 else c.lightened(0.6))
 	else:
 		colors = RegionPaint.theme_colors(map, symmetry, theme, seed_value)
 		accents = RegionPaint.accent_colors(map, groups, colors, theme, seed_value)
+		features = RegionPaint.accent_colors(map, groups, accents, theme, seed_value + 1)
 
 	var n_groups := 0
 	for g in groups:
@@ -143,22 +181,28 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 					var c: Color = accents[groups.find(key)]
 					colors.append(c)
 					accents.append(c)
+					features.append(c)
 				else:
 					colors.append(neutral[1] if key == "outer" else neutral[0])
 					accents.append(colors[colors.size() - 1])
+					features.append(colors[colors.size() - 1])
 			sl["region"] = n + k
 
 	var gems: Array = options.get("gems", Palettes.starter_gems())
 	var gem_ids := []
 	var accent_ids := []
+	var feature_ids := []
 	if not gems.is_empty():
 		var snapped := RegionPaint.snap_to_gems(colors, gems)
 		var snapped_accents := RegionPaint.snap_to_gems(accents, gems)
+		var snapped_features := RegionPaint.snap_to_gems(features, gems)
 		for r in colors.size():
 			colors[r] = gems[snapped[r]]["color"]
 			gem_ids.append(gems[snapped[r]]["id"])
 			accents[r] = gems[snapped_accents[r]]["color"]
 			accent_ids.append(gems[snapped_accents[r]]["id"])
+			features[r] = gems[snapped_features[r]]["color"]
+			feature_ids.append(gems[snapped_features[r]]["id"])
 
 	for sl in line_slots:
 		sl["id"] = slots.size()
@@ -170,13 +214,28 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	slot_count.resize(colors.size())
 	for s in slots:
 		var r: int = s["region"]
-		var accent: bool = s.get("tone", 0) == 1
-		s["target_color"] = accents[r] if accent else colors[r]
-		if gem_ids.is_empty():
-			s["target_gem"] = null
-		else:
-			s["target_gem"] = accent_ids[r] if accent else gem_ids[r]
+		match s.get("tone", 0):
+			1:
+				s["target_color"] = accents[r]
+				s["target_gem"] = accent_ids[r] if not accent_ids.is_empty() else null
+			2:
+				s["target_color"] = features[r]
+				s["target_gem"] = feature_ids[r] if not feature_ids.is_empty() else null
+			_:
+				s["target_color"] = colors[r]
+				s["target_gem"] = gem_ids[r] if not gem_ids.is_empty() else null
 		slot_count[r] += 1
+
+	# Steer the number of gem types (shape + color, any size) into range by
+	# recoloring or reshaping whole pattern parts across symmetric copies.
+	var group_of := PackedInt32Array()
+	for r in colors.size():
+		group_of.append(groups[r] if r < n else n_groups + r - n)
+	var type_rng := RandomNumberGenerator.new()
+	type_rng.seed = hash([seed_value, "gem types"])
+	var type_target: int = options.get("gem_types", type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
+	var gem_types := GemVariety.balance(slots, group_of,
+			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value)
 
 	var regions := []
 	for r in map.regions:
@@ -189,6 +248,8 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 			"gem_color_id": gem_ids[id] if not gem_ids.is_empty() else null,
 			"accent_color": accents[id],
 			"accent_gem": accent_ids[id] if not accent_ids.is_empty() else null,
+			"feature_color": features[id],
+			"feature_gem": feature_ids[id] if not feature_ids.is_empty() else null,
 			"fill": fills[id],
 			"outlined": outlined[id] == 1,
 			"style": r.get("style", ""),
@@ -231,6 +292,10 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 		"line_gems": line_gems,
 		"line_colors": ("matched" if line_matched else "neutral") if setting == "gems" else "",
 		"radial_size": pack_options["radial_size"],
+		"tiers": pack_options["tiers"],
+		"unit": unit,
+		"gem_types": gem_types,
+		"gem_kinds": GemVariety.kinds(slots),
 		"line_style": "gems" if setting == "gems" else plan["line_style"],
 		"sparsity": plan["sparsity"],
 		"source": options.get("source", {}),
@@ -239,6 +304,48 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 		"regions": regions,
 		"slots": slots,
 	}
+
+
+## Colors GemVariety may recolor parts with, best first: the gem colors the
+## picture already uses (most used first), then the theme's, then the other
+## gems by how close they sit to a theme color, so new types stay in harmony.
+static func _variety_colors(slots: Array, theme: PackedColorArray, gems: Array) -> Array:
+	var out := []
+	var seen := {}
+	var used := {}
+	for s in slots:
+		var key: String = str(s["target_gem"]) if s["target_gem"] != null else (s["target_color"] as Color).to_html(false)
+		if not used.has(key):
+			used[key] = {"color": s["target_color"], "gem": s["target_gem"], "n": 0}
+		used[key]["n"] += 1
+	var by_use := used.values()
+	by_use.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["n"] > b["n"])
+	for u in by_use:
+		var key: String = str(u["gem"]) if u["gem"] != null else (u["color"] as Color).to_html(false)
+		seen[key] = true
+		out.append({"color": u["color"], "gem": u["gem"]})
+	if gems.is_empty():
+		for c in theme:
+			if not seen.has(c.to_html(false)):
+				seen[c.to_html(false)] = true
+				out.append({"color": c, "gem": null})
+		return out
+	var theme_lab := PackedVector3Array()
+	for c in theme:
+		theme_lab.append(LabColor.from_color(c))
+	var rest := []
+	for g in gems:
+		if seen.has(str(g["id"])):
+			continue
+		var lab := LabColor.from_color(g["color"])
+		var d := INF
+		for t in theme_lab:
+			d = minf(d, lab.distance_to(t))
+		rest.append({"color": g["color"], "gem": g["id"], "d": d})
+	rest.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["d"] < b["d"])
+	for r in rest:
+		out.append({"color": r["color"], "gem": r["gem"]})
+	return out
 
 
 ## Symmetry group of the area a line stone borders: of the areas on its two
