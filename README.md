@@ -22,8 +22,9 @@ that turns a source picture into a playable puzzle for either mode.
 
 | Script | What it does |
 | --- | --- |
-| `mandala.gd` | Seeded symmetric line art as vector polylines. It makes mandalas (motif rings of petals, scallops, dots, zigzags, lattices and leaves, repeated 6/8/10/12 times), flowers (from `flower.gd`), 6-fold snowflakes, and mirror-only hearts and butterflies. An optional *wobble* makes it look hand-drawn while every region stays closed. |
+| `mandala.gd` | Seeded symmetric line art as vector polylines. It makes mandalas (motif rings of petals, scallops, dots, zigzags, lattices and leaves, repeated 6/8/10/12 times), flowers (from `flower.gd`), 6-fold snowflakes, and mirror-only hearts (from `heart.gd`) and butterflies. An optional *wobble* makes it look hand-drawn while every region stays closed. |
 | `flower.gd` | Flowers from 7 petal templates, each with its own petal-count range drawn uniformly: oval (daisy, 8–16), pointed (lily, 5–12), heart notch (cosmos, 5–8), wide fan (rose, 4–7), fringed tip (carnation, 6–10), thin ray (aster, 18–36) and spoon (gerbera, 8–14). Each flower has 1–4 rings, and each ring mixes 2 or 3 wobbled versions of its template (length, width, tip, curl and skew varied) in a symmetric ABAB, ABCABC or mirrored order. Inner rings are 0.55–0.8 the size of the ring outside, rotated half a petal, and sometimes use another template. Petals overlap like a pinwheel with hidden lines clipped, so every region stays closed. Centers are a seed spiral, stamens, nested circles or a star. Pass `recent` (the templates of the previous flowers) to skip the last 2 and favor the least used, so a run of flowers covers every template. |
+| `heart.gd` | Hearts from three choices. **Shape:** 6 outline proportions (classic, plump, slim, sweetheart with a deep cleft, puffy, pointed), each varied slightly. **Collar:** a band just inside the outline, made by a true inward offset so it stays even: plain, rays, beads, scallops, petals, double or none. **Inside:** 1–3 combined patterns, from 4 center motifs (heart, double heart with spokes, flower, rosette) and 8 fills (stripes, chevrons, diamond lattice, rays, waves, dots, grid, echoes of the motif's outline). Two fills split the heart along a mirrored divider (straight, arc, wave or V); fills flow around the motif, so every region stays closed. Everything is mirror-symmetric. Pass `recent` (the previous hearts' choices) to skip recent ones and favor the least used. |
 | `kit_generator.gd` | Kit pipeline: crop to the board aspect, area-average downscale (40×50 / 70×90 / 100×130), k-means in Lab, snap to the gem colors she owns (only those), clean up isolated cells, then build a legend with a symbol per color. |
 | `color_quantizer.gd`, `lab_color.gd` | Weighted k-means++ in Lab over a color histogram, plus sRGB ↔ Lab conversion. |
 | `line_raster.gd` | Polylines or line-art images → line masks; dilation to close gaps. |
@@ -59,8 +60,9 @@ that share a `group` are symmetric copies of each other.
   is a dev screen. Pick a mandala shape, theme, seed and wobble, or load a
   photo. Then view it as a collage, a kit or plain line art, and save the JSON.
 - Headless checks with preview PNGs. The checks cover 20 seeds across all
-  shapes, a contact sheet of 24 flowers in a row (every template, no repeats
-  within 2, varied petal counts), overlaps, coverage, slots spilling onto
+  shapes, contact sheets of 24 flowers in a row (every template, no repeats
+  within 2, varied petal counts) and 24 hearts (every shape, collar and
+  pattern, mostly combined, mirror-symmetric), overlaps, coverage, slots spilling onto
   lines, kits at every size (owned colors only), photo line art and a JSON
   round trip:
 

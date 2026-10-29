@@ -13,7 +13,8 @@ extends RefCounted
 ## copy a little so it looks hand-drawn; it fades to zero at the ring
 ## boundaries, so every region stays closed.
 ##
-## Flowers come from FlowerGenerator's petal templates.
+## Flowers come from FlowerGenerator's petal templates and hearts from
+## HeartGenerator.
 
 const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 const MOTIFS := ["petals", "scallops", "dots", "zigzag", "lattice", "leaves"]
@@ -26,9 +27,11 @@ var closed := PackedByteArray()
 
 ## options: variant (one of VARIANTS, default "mandala"), wobble (0..1, the
 ## "semi-symmetric" strength, default 0); flowers also take FlowerGenerator's
-## template and recent. Returns
+## template and recent, hearts HeartGenerator's shape, collar, patterns and
+## recent. Returns
 ## {"seed", "variant", "symmetry": "radial" | "mirror", "polylines", "closed"},
-## plus "flower" (FlowerGenerator's template, rings and center) for flowers.
+## plus "flower" (FlowerGenerator's template, rings and center) for flowers
+## and "heart" (shape, collar, patterns, divider) for hearts.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var g := MandalaGenerator.new()
 	g.rng.seed = seed_value
@@ -50,7 +53,15 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		"snowflake":
 			g._build_snowflake()
 		"heart":
-			g._build_heart()
+			var h := HeartGenerator.generate(seed_value, options)
+			return {
+				"seed": seed_value,
+				"variant": variant,
+				"symmetry": "mirror",
+				"polylines": h["polylines"],
+				"closed": h["closed"],
+				"heart": {"shape": h["shape"], "collar": h["collar"], "patterns": h["patterns"], "divider": h["divider"]},
+			}
 		"butterfly":
 			g._build_butterfly()
 		_:
@@ -284,39 +295,6 @@ func _build_snowflake() -> void:
 			for v in p:
 				pts.append(v.rotated(rot))
 			_add(pts, true)
-
-
-static func _heart_point(t: float, s: float) -> Vector2:
-	var x := 16.0 * pow(sin(t), 3)
-	var y := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
-	# Scale about a point near the heart's middle so nested hearts stay centered.
-	return Vector2(x / 17.0 * s, -y / 17.0 * s - 0.05 * (1.0 - s) + 0.08)
-
-
-func _build_heart() -> void:
-	var scales := [1.0, rng.randf_range(0.66, 0.74), rng.randf_range(0.36, 0.44)]
-	for s in scales:
-		var pts := PackedVector2Array()
-		for i in 240:
-			pts.append(_heart_point(TAU * i / 240.0, s))
-		_add(pts, true)
-	# Rays between the outer and middle heart, mirror-symmetric, with a dot per cell.
-	var k := rng.randi_range(5, 8)
-	for i in range(1, k + 1):
-		var t := PI * i / (k + 1)
-		for tt in [t, TAU - t]:
-			_add(PackedVector2Array([_heart_point(tt, scales[1]), _heart_point(tt, scales[0])]))
-	for i in k + 1:
-		var t := PI * (i + 0.5) / (k + 1)
-		for tt in [t, TAU - t]:
-			var a := _heart_point(tt, scales[1])
-			var b := _heart_point(tt, scales[0])
-			_add(circle((a + b) / 2.0, a.distance_to(b) * 0.2, 28), true)
-	var k2 := rng.randi_range(3, 5)
-	for i in range(1, k2 + 1):
-		var t := PI * i / (k2 + 1)
-		for tt in [t, TAU - t]:
-			_add(PackedVector2Array([_heart_point(tt, scales[2]), _heart_point(tt, scales[1])]))
 
 
 func _build_butterfly() -> void:

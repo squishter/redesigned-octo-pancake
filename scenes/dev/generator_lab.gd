@@ -7,6 +7,7 @@ const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 var _source: OptionButton
 var _variant: OptionButton
 var _template: OptionButton
+var _collar: OptionButton
 var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
@@ -36,6 +37,7 @@ func _ready() -> void:
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
+	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS)
 	_theme = _options(controls, "Theme", Array(Palettes.theme_names()))
 	_mode = _options(controls, "Mode", ["Collage", "Kit", "Line art"])
 	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
@@ -151,6 +153,7 @@ func _generate() -> void:
 		"seed": int(_seed.value),
 		"variant": _selected(_variant),
 		"template": _selected(_template),
+		"collar": _selected(_collar),
 		"theme": _selected(_theme),
 		"wobble": _wobble.value,
 		"detail": _detail.value,
@@ -171,6 +174,7 @@ func _run_job(job: Dictionary) -> void:
 		"seed": job["seed"],
 		"variant": job["variant"],
 		"template": job["template"],
+		"collar": job["collar"],
 		"theme": job["theme"],
 		"wobble": job["wobble"],
 		"detail": job["detail"],
@@ -210,6 +214,9 @@ func _process(_delta: float) -> void:
 			var flower := ""
 			if p["source"].has("template"):
 				flower = ", %s petals" % p["source"]["template"]
+			if p["source"].has("heart"):
+				var heart: Dictionary = p["source"]["heart"]
+				flower = ", %s heart, %s collar, %s" % [heart["shape"], heart["collar"], " + ".join(PackedStringArray(heart["patterns"]))]
 			_status.text = "Collage%s: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
 				flower, p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
 				p["line_style"], fills, ms]

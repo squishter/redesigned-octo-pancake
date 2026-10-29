@@ -22,6 +22,7 @@ func _init() -> void:
 	test_lab_round_trip()
 	test_mandala_determinism()
 	test_flowers()
+	test_hearts()
 	test_collages()
 	test_design_plans()
 	test_kits()
@@ -104,6 +105,57 @@ func test_flowers() -> void:
 			used.size(), FlowerGenerator.TEMPLATES.size(), count])
 	check(counts.size() >= 8, "only %d different outer petal counts" % counts.size())
 	sheet.save_png(out_dir.path_join("flowers_contact_sheet.png"))
+
+
+## 24 hearts in a row: every shape, collar and inner pattern shows up, most
+## hearts combine 2-3 patterns, every heart is mirror-symmetric with plenty of
+## closed regions. Writes a contact sheet.
+func test_hearts() -> void:
+	print("Hearts")
+	var count := 24
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 4, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	var combined := 0
+	for i in count:
+		var seed_value := 4000 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "heart", "recent": recent})
+		var heart: Dictionary = lines["mandala"]["heart"]
+		recent.append(heart)
+		seen[heart["shape"]] = true
+		seen[heart["collar"]] = true
+		for p in heart["patterns"]:
+			seen[p] = true
+		if heart["patterns"].size() >= 2:
+			combined += 1
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var mask: PackedByteArray = lines["mask"]
+		var map := RegionMap.build(mask, w, h, int(w * h * 0.0005))
+		var mismatched := 0
+		for y in h:
+			for x in w / 2:
+				if (mask[y * w + x] != 0) != (mask[y * w + w - 1 - x] != 0):
+					mismatched += 1
+		print("  seed %d %-10s %-8s %-32s %3d regions" % [seed_value, heart["shape"], heart["collar"],
+				" + ".join(PackedStringArray(heart["patterns"])), map.regions.size()])
+		check(map.regions.size() >= 3, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		check(mismatched < w * h * 0.002, "seed %d: not mirror-symmetric (%d px differ)" % [seed_value, mismatched])
+		var art := Image.create(w, h, false, Image.FORMAT_RGBA8)
+		art.fill(Color.WHITE)
+		for y in h:
+			for x in w:
+				if mask[y * w + x]:
+					art.set_pixel(x, y, PictureSources.LINE_COLOR)
+		art.resize(cell, cell, Image.INTERPOLATE_BILINEAR)
+		sheet.blit_rect(art, Rect2i(0, 0, cell, cell), Vector2i((i % 6) * cell, (i / 6) * cell))
+	var expected := HeartGenerator.SHAPES.keys() + HeartGenerator.COLLARS + HeartGenerator.MOTIFS + HeartGenerator.FIELDS
+	for choice in expected:
+		check(seen.has(choice), "%s never showed up in %d hearts" % [choice, count])
+	check(combined >= count / 2, "only %d of %d hearts combine patterns" % [combined, count])
+	sheet.save_png(out_dir.path_join("hearts_contact_sheet.png"))
 
 
 ## Packs `seeds` mandalas across all variants and themes and checks the slots

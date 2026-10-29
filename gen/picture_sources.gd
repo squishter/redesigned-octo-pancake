@@ -9,8 +9,9 @@ const BACKGROUND := Color("#f4eee6")
 
 
 ## Mandala options: variant, wobble (see MandalaGenerator), template and recent
-## for flowers (see FlowerGenerator), size (raster px, default 768),
-## line_width (px, default size / 170).
+## for flowers (see FlowerGenerator), shape, collar, patterns and recent for
+## hearts (see HeartGenerator), size (raster px, default 768), line_width (px,
+## default size / 170).
 ## Returns {"mask", "width", "height", "mandala"}.
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
@@ -37,6 +38,8 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictio
 	}
 	if mandala.has("flower"):
 		opts["source"]["template"] = mandala["flower"]["template"]
+	if mandala.has("heart"):
+		opts["source"]["heart"] = mandala["heart"]
 	return CollageGenerator.generate(lines["mask"], lines["width"], lines["height"], opts)
 
 
