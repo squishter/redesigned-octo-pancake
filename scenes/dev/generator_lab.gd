@@ -1,8 +1,12 @@
 extends Control
 ## Developer screen for the puzzle generators: pick a source (seeded mandala
 ## or a photo) and a mode, generate on a worker thread, and look at the result.
+## Laid out for phones: the picture fills the screen (pinch to zoom, drag to
+## pan, double-tap to fit), with the main actions in a bar at the bottom and
+## every setting in an Options panel above it.
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
+const LabTheme := preload("res://scenes/dev/lab_theme.gd")
 
 var _source: OptionButton
 var _variant: OptionButton
@@ -24,7 +28,10 @@ var _wobble: HSlider
 var _detail: HSlider
 var _colors: SpinBox
 var _status: Label
+var _summary: Label
 var _canvas: PreviewCanvas
+var _options_panel: Control
+var _options_button: Button
 var _file_dialog: FileDialog
 
 var _photo: Image
@@ -34,12 +41,51 @@ var _result: Dictionary = {}
 
 
 func _ready() -> void:
+	get_tree().root.theme = LabTheme.build()
+	RenderingServer.set_default_clear_color(LabTheme.BG)
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 16)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 24)
 	add_child(root)
+	_avoid_cutouts(root)
 
-	var controls := HFlowContainer.new()
-	root.add_child(controls)
+	var top := HBoxContainer.new()
+	root.add_child(top)
+	_summary = Label.new()
+	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_summary.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	_summary.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	top.add_child(_summary)
+	_button(top, "Fit", func() -> void: _canvas.reset_view()).size_flags_horizontal = Control.SIZE_SHRINK_END
+
+	_canvas = PreviewCanvas.new()
+	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_canvas.clip_contents = true
+	root.add_child(_canvas)
+
+	# Options: hidden until asked for, and scrolls when taller than its share.
+	var panel := PanelContainer.new()
+	panel.visible = false
+	panel.custom_minimum_size.y = get_viewport_rect().size.y * 0.5
+	root.add_child(panel)
+	_options_panel = panel
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 24
+	panel.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	var actions := HFlowContainer.new()
+	list.add_child(actions)
+	_button(actions, "Generate", _generate)
+	_button(actions, "Photo…", func() -> void: _file_dialog.popup_centered_ratio(0.8))
+	_button(actions, "Save JSON", _save)
+
+	var controls := GridContainer.new()
+	controls.columns = 2
+	list.add_child(controls)
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
@@ -59,20 +105,22 @@ func _ready() -> void:
 	_colors = _spin(controls, "Kit colors", 12, 40, 20)
 	_wobble = _slider(controls, "Wobble", 0.0)
 	_detail = _slider(controls, "Detail", 0.5)
-	_button(controls, "New seed", _new_seed)
-	_button(controls, "New pattern", _new_pattern)
-	_button(controls, "Photo…", func() -> void: _file_dialog.popup_centered_ratio(0.8))
-	_button(controls, "Generate", _generate)
-	_button(controls, "Save JSON", _save)
 
+	# Everything the last run reported.
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(_status)
+	_status.custom_minimum_size.x = 200
+	_status.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	_status.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	list.add_child(_status)
 
-	_canvas = PreviewCanvas.new()
-	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_canvas.clip_contents = true
-	root.add_child(_canvas)
+	# The main actions, where thumbs reach.
+	var bar := HBoxContainer.new()
+	root.add_child(bar)
+	for b in [_button(bar, "New seed", _new_seed), _button(bar, "New pattern", _new_pattern)]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_options_button = _button(bar, "Options", _toggle_options)
+	_options_button.toggle_mode = true
 
 	_file_dialog = FileDialog.new()
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -83,6 +131,29 @@ func _ready() -> void:
 	add_child(_file_dialog)
 
 	_generate()
+
+
+## Keeps the layout clear of notches and rounded corners.
+func _avoid_cutouts(root: Control) -> void:
+	var safe := DisplayServer.get_display_safe_area()
+	var window := Vector2(DisplayServer.window_get_size())
+	if safe.size.x <= 0 or window.x <= 0.0:
+		return
+	var px := get_viewport_rect().size / window
+	var top := safe.position.y * px.y
+	var bottom := (window.y - safe.end.y) * px.y
+	root.offset_top = maxf(root.offset_top, top)
+	root.offset_bottom = minf(root.offset_bottom, -bottom)
+
+
+func _toggle_options() -> void:
+	_options_panel.visible = _options_button.button_pressed
+
+
+## Shows a short line above the picture and the full text in the options.
+func _say(summary: String, details := "") -> void:
+	_summary.text = summary
+	_status.text = details if details != "" else summary
 
 
 func _new_seed() -> void:
@@ -105,53 +176,69 @@ static func _unique(items: Array) -> Array:
 
 
 func _options(parent: Control, label: String, items: Array) -> OptionButton:
-	var box := _labeled(parent, label)
+	_label(parent, label)
 	var ob := OptionButton.new()
 	for item in items:
 		ob.add_item(str(item).capitalize())
 		ob.set_item_metadata(ob.item_count - 1, item)
 	ob.item_selected.connect(func(_i: int) -> void: _generate())
-	box.add_child(ob)
+	_fill_row(ob)
+	ob.fit_to_longest_item = false
+	parent.add_child(ob)
 	return ob
 
 
 func _spin(parent: Control, label: String, lo: float, hi: float, value: float) -> SpinBox:
-	var box := _labeled(parent, label)
+	_label(parent, label)
 	var sb := SpinBox.new()
 	sb.min_value = lo
 	sb.max_value = hi
 	sb.value = value
-	box.add_child(sb)
+	sb.select_all_on_focus = true
+	sb.value_changed.connect(func(_v: float) -> void: _generate())
+	_fill_row(sb)
+	var row := HBoxContainer.new()
+	row.add_child(sb)
+	for step: float in [-1.0, 1.0]:
+		var b := _button(row, "−" if step < 0.0 else "+", func() -> void: sb.value += step)
+		b.custom_minimum_size.x = LabTheme.TAP_HEIGHT
+	parent.add_child(row)
 	return sb
 
 
 func _slider(parent: Control, label: String, value: float) -> HSlider:
-	var box := _labeled(parent, label)
+	_label(parent, label)
 	var sl := HSlider.new()
 	sl.min_value = 0.0
 	sl.max_value = 1.0
 	sl.step = 0.05
 	sl.value = value
-	sl.custom_minimum_size.x = 140
 	sl.drag_ended.connect(func(_changed: bool) -> void: _generate())
-	box.add_child(sl)
+	_fill_row(sl)
+	parent.add_child(sl)
 	return sl
 
 
-func _button(parent: Control, text: String, action: Callable) -> void:
+func _button(parent: Control, text: String, action: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
+	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
 	b.pressed.connect(action)
 	parent.add_child(b)
+	return b
 
 
-func _labeled(parent: Control, text: String) -> HBoxContainer:
-	var box := HBoxContainer.new()
+func _label(parent: Control, text: String) -> void:
 	var l := Label.new()
 	l.text = text
-	box.add_child(l)
-	parent.add_child(box)
-	return box
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	parent.add_child(l)
+
+
+## A settings row's control takes the rest of the row, at tap height.
+func _fill_row(c: Control) -> void:
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size.y = LabTheme.TAP_HEIGHT
 
 
 func _selected(ob: OptionButton) -> Variant:
@@ -161,7 +248,7 @@ func _selected(ob: OptionButton) -> Variant:
 func _on_photo_selected(path: String) -> void:
 	var img := Image.load_from_file(path)
 	if img == null or img.is_empty():
-		_status.text = "Couldn't load %s" % path
+		_say("Couldn't load %s" % path)
 		return
 	_photo = img
 	_source.select(1)
@@ -173,7 +260,7 @@ func _generate() -> void:
 		return  # one at a time; the current job finishes first
 	var use_photo: bool = _source.selected == 1
 	if use_photo and _photo == null:
-		_status.text = "Pick a photo first."
+		_say("Pick a photo first.")
 		return
 	var job := {
 		"photo": _photo if use_photo else null,
@@ -196,7 +283,7 @@ func _generate() -> void:
 		"line_gems": _selected(_line_gems),
 		"pattern_seed": int(_pattern.value),
 	}
-	_status.text = "Generating…"
+	_say("Generating…")
 	_task_started = Time.get_ticks_msec()
 	_task_id = WorkerThreadPool.add_task(_run_job.bind(job), false, "generate picture")
 
@@ -282,26 +369,27 @@ func _process(_delta: float) -> void:
 			var setting: String = p["setting"]
 			if setting == "gems":
 				setting = "gem lines (%s, %s colors)" % [p["line_gems"], p["line_colors"]]
-			_status.text = ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
+			_say("Collage · %d stones · %d gem types · pattern %d · %d ms" % [p["slots"].size(), p["gem_types"],
+					p["pattern_seed"], ms], ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
 					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [
 				flower, setting, p["pattern_seed"], p["regions"].size(), empty, p["slots"].size(), p["gem_types"],
 				CollageGenerator.mean_coverage(p) * 100.0, p["line_style"], fills, patterns,
-				", sizes shrink inward" if p["radial_size"] else "", ", tiered" if p["tiers"] else "", ms]
+				", sizes shrink inward" if p["radial_size"] else "", ", tiered" if p["tiers"] else "", ms])
 		"Kit":
 			var k: Dictionary = out["picture"]
 			_canvas.show_kit(k)
-			_status.text = "Kit: %d×%d, %d colors — %d ms" % [k["width"], k["height"], k["palette"].size(), ms]
+			_say("Kit: %d×%d, %d colors — %d ms" % [k["width"], k["height"], k["palette"].size(), ms])
 		_:
 			var l: Dictionary = out["lines"]
 			_canvas.show_lines(l["mask"], l["width"], l["height"])
-			_status.text = "Line art %d×%d — %d ms" % [l["width"], l["height"], ms]
+			_say("Line art %d×%d — %d ms" % [l["width"], l["height"], ms])
 
 
 func _save() -> void:
 	if not _result.has("picture"):
-		_status.text = "Nothing to save in this mode."
+		_say("Nothing to save in this mode.")
 		return
 	DirAccess.make_dir_recursive_absolute("user://generated")
 	var path := "user://generated/%s_%d.json" % [str(_result["mode"]).to_lower(), Time.get_unix_time_from_system()]
 	var err := PatternIO.save(_result["picture"], path)
-	_status.text = "Saved %s" % ProjectSettings.globalize_path(path) if err == OK else "Save failed: %s" % error_string(err)
+	_say("Saved %s" % ProjectSettings.globalize_path(path) if err == OK else "Save failed: %s" % error_string(err))

@@ -76,6 +76,10 @@ copies of each other.
   is a dev screen. Pick a mandala shape, theme, seed and wobble, or load a
   photo. *New pattern* (or the Pattern box) makes another collage of the same
   lines; Setting and Line gems force a choice. Then view it as a collage, a kit or plain line art, and save the JSON.
+  It is laid out for phones: *New seed*, *New pattern* and *Options* sit in a
+  bar at the bottom, every setting is in the Options panel, and the picture
+  zooms with a pinch (or the mouse wheel), pans with a drag and fits again
+  with a double-tap or *Fit*.
 - Headless checks with preview PNGs. The checks cover 20 seeds across all
   shapes, contact sheets of 24 framed pictures (every frame shape, band,
   corner and background; about 3 in 4 framed by default), 24 mandalas (every silhouette, center, extra and
