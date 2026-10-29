@@ -20,12 +20,12 @@ extends RefCounted
 const BLOCK := 16
 
 ## Length / width of the elongated shapes. The rest are as wide as they are long.
-const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4}
+const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4, "kite": 1.6, "lozenge": 1.8}
 
 ## Full patterns, picked per symmetry group from the region's size and shape:
 ## echo: rows of stones following the outline inward, like ripples
 ## halo: one or two outline rows around a big center stone
-## rosette: a center stone ringed by outward teardrops, with outline rows
+## rosette: a center stone ringed by outward petals, with outline rows
 ## honeycomb: an even lattice of stones lined up with the region's axis
 ## spine: a chain along the middle, each stone as big as fits (petals, thin bands)
 ## solitaire: one stone shaped to the region, small ones in the corners
@@ -40,11 +40,24 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave"]
 const STYLES := PATTERNS + ["scatter", "accent", "outline", "bare"]
 ## Stone shapes for outline rows; elongated ones lie along the row.
-const ROW_SHAPES := ["round", "round", "round", "hexagon", "square", "marquise", "oval"]
+const ROW_SHAPES := ["round", "round", "round", "round", "hexagon", "square", "marquise", "oval", "cushion", "octagon",
+		"flower", "heart", "lozenge"]
+## How far row stones turn from the row's direction: flat sides face along
+## the row, and hearts and stars point across it.
+const ROW_TURN := {"square": PI / 4.0, "hexagon": PI / 6.0, "heart": PI / 2.0, "star": PI / 2.0, "pentagon": PI / 2.0,
+		"trillion": PI / 2.0}
+## Center stones of halos, solitaires and accents when the region is not long.
+const CENTER_SHAPES := ["round", "round", "round", "cushion", "octagon", "heart", "flower", "star", "trillion",
+		"pentagon"]
+## The teardrops of a rosette, sometimes kites or marquises instead.
+const PETAL_SHAPES := ["teardrop", "teardrop", "kite", "marquise"]
 ## How a pattern uses the region's accent color (slot "tone" 1):
 ## solid: none; rows: every other row; edge: the outermost row; heart: the
 ## center stone(s).
 const TONINGS := ["solid", "rows", "edge", "heart"]
+## The big stones of tiered designs (mediums match unless elongated or square).
+const TIER_SHAPES := ["round", "round", "hexagon", "square", "oval", "marquise", "cushion", "octagon", "heart", "star",
+		"flower", "kite"]
 ## Spacer rows' stones, as a share of the pattern's row stones.
 const SPACER := 0.5
 ## Smallest stone scale at the picture's center when sizes shrink inward.
@@ -165,7 +178,8 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
 	var shape: String = ROW_SHAPES[g_rng.randi_range(0, ROW_SHAPES.size() - 1)]
 	if style == "honeycomb":
-		shape = "hexagon" if g_rng.randf() < 0.4 else "round"
+		var roll := g_rng.randf()
+		shape = "hexagon" if roll < 0.3 else ("flower" if roll < 0.4 else ("cushion" if roll < 0.47 else "round"))
 	return {
 		"style": style,
 		"row_r": row_r,
@@ -186,7 +200,11 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"large": u * g_rng.randf_range(2.2, 3.2) if tiers and max_d > u * 2.6 and g_rng.randf() < 0.4 else 0.0,
 		"mediums": g_rng.randi_range(1, 3) if tiers and max_d > u * 1.8 and g_rng.randf() < 0.45 else 0,
 		"medium_r": u * g_rng.randf_range(1.2, 1.6),
-		"tier_shape": ["round", "round", "hexagon", "square", "oval", "marquise"][g_rng.randi_range(0, 5)],
+		"tier_shape": TIER_SHAPES[g_rng.randi_range(0, TIER_SHAPES.size() - 1)],
+		"center_shape": CENTER_SHAPES[g_rng.randi_range(0, CENTER_SHAPES.size() - 1)],
+		# Long center stones: marquise and oval, or the straight-sided lozenge and kite.
+		"center_long": ["marquise", "oval"] if g_rng.randf() < 0.7 else ["lozenge", "kite"],
+		"petal_shape": PETAL_SHAPES[g_rng.randi_range(0, PETAL_SHAPES.size() - 1)],
 	}
 
 
@@ -228,7 +246,7 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 		"outline":
 			_rows(region, [u * 0.45], ["round"], [0])
 		"accent":
-			_center_stone(region, u * 2.2)
+			_center_stone(region, u * 2.2, design)
 		"scatter":
 			_lattice(region, u * 0.6, design["scatter_space"], "round", design["lattice_turn"], false)
 		"echo":
@@ -258,12 +276,12 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 					tones.append(1)
 			_rows(region, radii, shapes, tones)
 			_tone = 0 if toning == "edge" else 1
-			_center_stone(region, INF)
+			_center_stone(region, INF, design)
 			_tone = 0
 			_fill_rest([r_row * 0.8, r_row * 0.6])
 		"rosette":
 			_tone = 1 if toning in ["heart", "rows"] else 0
-			var rc := _rosette(region, r_row)
+			var rc := _rosette(region, r_row, design["petal_shape"])
 			_tone = 0
 			# Outline rows stop short of the rosette.
 			var depth: float = region["max_dist"] - rc
@@ -300,7 +318,7 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 			_spine(region, u * 2.0, u * 0.4)
 		"solitaire":
 			_tone = 1 if toning == "heart" else 0
-			_center_stone(region, INF)
+			_center_stone(region, INF, design)
 			_tone = 0
 			_fill_rest([u * 0.8, u * 0.6])
 
@@ -338,7 +356,7 @@ func _tier_stones(region: Dictionary, design: Dictionary) -> void:
 			var r := minf(mr * _scale_at(c), free[peak] - gap)
 			if r < mr * 0.7:
 				break
-			_place("hexagon" if shape == "hexagon" else "round", c, region["axis"], r, 0.0)
+			_place("round" if shape in ASPECT or shape == "square" else shape, c, region["axis"], r, 0.0)
 	_tone = 0
 
 
@@ -423,13 +441,13 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 				_place("round", p, 0.0, rf, 0.0)
 		else:
 			# Flat sides face along the row.
-			var turn := PI / 4.0 if shape == "square" else (PI / 6.0 if shape == "hexagon" else 0.0)
-			_place(shape, p, rot + turn, rf, 0.0)
+			_place(shape, p, rot + ROW_TURN.get(shape, 0.0), rf, 0.0)
 
 
 ## The biggest stone that fits at the region's deepest free point, shaped to
-## the region (marquise or oval when it is long), at most `cap` in radius.
-func _center_stone(region: Dictionary, cap: float) -> void:
+## the region (the design's long shapes when it is long, its center shape
+## otherwise), at most `cap` in radius.
+func _center_stone(region: Dictionary, cap: float, design: Dictionary) -> void:
 	_part += 1
 	var peak := _argmax()
 	if peak < 0:
@@ -439,13 +457,15 @@ func _center_stone(region: Dictionary, cap: float) -> void:
 	if r < unit * 0.3:
 		return
 	var el: float = region["elongation"]
-	if el > 1.5 and _try_capsule("marquise" if el > 2.2 else "oval", c, region["axis"], r * 0.95):
+	var long: Array = design["center_long"]
+	if el > 1.5 and _try_capsule(long[0] if el > 2.2 else long[1], c, region["axis"], r * 0.95):
 		return
-	_place("round", c, 0.0, r, 0.0)
+	_place(design["center_shape"], c, region["axis"], r, 0.0)
 
 
-## A center stone ringed by outward teardrops. Returns the ring's outer radius.
-func _rosette(region: Dictionary, r_row: float) -> float:
+## A center stone ringed by outward petals (teardrops, kites or marquises).
+## Returns the ring's outer radius.
+func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
 	var peak := _argmax()
 	if peak < 0:
 		return 0.0
@@ -464,7 +484,7 @@ func _rosette(region: Dictionary, r_row: float) -> float:
 		var a := offset + TAU * j / k
 		var p := c + Vector2.from_angle(a) * ring
 		if _free_at(p) >= rt + gap:
-			_try_capsule("teardrop", p, a, rt)
+			_try_capsule(petal, p, a, rt)
 	return ring + rt * 1.5 + gap
 
 

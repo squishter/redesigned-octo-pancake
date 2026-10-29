@@ -12,11 +12,14 @@ extends RefCounted
 ## adds thin rows to vary.
 ##
 ## Shapes only swap within a family whose outlines fit the same slot:
-## round, square, hexagon and triangle fit a circle; oval, marquise and
-## teardrop fit a capsule (a baguette's corners don't, so nothing becomes one).
+## round, cushion, octagon, hexagon, flower, square, pentagon, heart,
+## trillion, triangle and star fit a circle; oval, marquise, lozenge, kite and
+## teardrop fit a capsule (baguette and emerald corners don't, so nothing
+## becomes one).
 
-const ROUND_FAMILY := ["round", "hexagon", "square", "triangle"]  # most fitting first
-const LONG_FAMILY := ["oval", "marquise", "teardrop"]
+const ROUND_FAMILY := ["round", "cushion", "octagon", "hexagon", "flower", "square", "pentagon", "heart", "trillion",
+		"triangle", "star"]  # most fitting first
+const LONG_FAMILY := ["oval", "marquise", "lozenge", "kite", "teardrop"]
 
 
 ## slots: the collage's slots, each with shape, part, target_color and

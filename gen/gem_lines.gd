@@ -9,6 +9,8 @@ extends RefCounted
 ##   pearls: big and small rounds alternating
 ##   marquise: marquises lying along the line, rounds on the junctions
 ##   baguette: baguettes along the line, rounds on the junctions
+##   emerald: clipped-corner step cuts along the line, rounds on the junctions
+##   lozenge: diamond-shaped lozenges along the line, rounds on the junctions
 ##   taper: swells in the middle of each stretch of line and narrows at its
 ##     ends, like an ink stroke
 ##   pulse: grows and shrinks in waves as the line runs left to right
@@ -21,7 +23,8 @@ extends RefCounted
 ## channel around the stones it gets back, so a line is exactly as wide as
 ## its stones at every point.
 
-const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "taper", "pulse", "ramp", "radial", "hub"]
+const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "emerald", "lozenge", "taper", "pulse", "ramp",
+		"radial", "hub"]
 ## Step sequences an occasional long line repeats, one gem type per step.
 ## Open lines count from both ends toward the middle, so the sequence reads
 ## the same either way and mirrored copies match; closed loops only take
@@ -146,9 +149,12 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 			"marquise":
 				shape = "marquise"
 				aspect = 1.8
-			"baguette":
-				shape = "baguette"
+			"baguette", "emerald":
+				shape = style
 				aspect = 1.6
+			"lozenge":
+				shape = "lozenge"
+				aspect = 1.8
 		var prof := {
 			"pts": pts,
 			"closed": closed,
