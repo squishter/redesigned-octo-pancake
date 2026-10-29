@@ -5,7 +5,9 @@ extends Control
 ## GemBoard3D of single stones, so they glint too), each with its number
 ## and how many are left; a type goes once all its slots are filled. Pick
 ## one and its open slots stand out on the board (SlotOverlay); tap a slot,
-## or drag across several, and each pops into place with a tiny buzz. A
+## or drag across several, and each flies in from the gem row (GemFlights)
+## or pops into place (the fill_animation setting) with a tiny buzz. The
+## row scrolls with a drag (and flings) and picks a gem with a tap. A
 ## drag that doesn't start on one of the selected gem's slots pans, two
 ## fingers pinch. When the last stone is in, the picture ripples and
 ## sparkles, and from then on it's only for looking at, zoomed and panned
@@ -28,6 +30,10 @@ const BUZZ_GAP_MS := 35
 ## more for a tap, less while dragging so a stroke doesn't sweep in neighbors.
 const TAP_SLOP := 12.0
 const DRAG_SLOP := 4.0
+## The gem row: how far a finger moves before a touch scrolls instead of
+## picking a gem, and how fast a fling slows (per second).
+const ROW_DEADZONE := 20.0
+const FLING_DECAY := 4.0
 
 ## Set before adding to the tree.
 var puzzle_id := ""
@@ -44,10 +50,26 @@ var _overlay: SlotOverlay
 var _icons: GemBoard3D
 var _palette: ScrollContainer
 var _row: HBoxContainer
-## Palette buttons by gem type, and their "left" labels.
+## Gem row cards by gem type, their icons and "left" labels.
 var _items := {}
+var _item_icons := {}
 var _left_labels := {}
-var _group := ButtonGroup.new()
+var _card_style: StyleBoxFlat
+var _picked_style: StyleBoxFlat
+## The finger on the gem row (-1 none), where it went down and last was,
+## whether it has scrolled, the row's scroll and its fling speed (px/s).
+var _row_touch := -1
+var _row_start := Vector2.ZERO
+var _row_last := Vector2.ZERO
+var _row_last_ms := 0
+var _row_moved := false
+var _scroll_x := 0.0
+var _fling := 0.0
+var _flights: GemFlights
+## "fly" or "pop" (see SaveStore.DEFAULT_SETTINGS).
+var _fill_animation := "fly"
+## The last stone is placed and the finale waits for gems still flying.
+var _finish_pending := false
 var _progress: Label
 var _done_bar: Control
 var _area: Control
@@ -77,15 +99,20 @@ func _ready() -> void:
 	top.add_child(_progress)
 	_button(top, "Fit", func() -> void: _board.reset_view())
 
+	# The gem row scrolls by hand (see _input): its cards ignore touches, so
+	# a drag that starts on one scrolls rather than getting stuck on it.
 	_palette = ScrollContainer.new()
 	_palette.custom_minimum_size.y = ITEM_SIZE.y + 24
 	_palette.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_palette.scroll_deadzone = 24
+	_palette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_palette)
 	_row = HBoxContainer.new()
 	_row.add_theme_constant_override("separation", 14)
+	_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_palette.add_child(_row)
-	_group.allow_unpress = true
+	_card_style = _card(LabTheme.FIELD, Color.TRANSPARENT)
+	_picked_style = _card(LabTheme.FIELD_PRESSED, LabTheme.GOLD)
+	_fill_animation = profile.get("settings", {}).get("fill_animation", "fly")
 
 	_done_bar = HBoxContainer.new()
 	_done_bar.custom_minimum_size.y = _palette.custom_minimum_size.y
@@ -115,6 +142,12 @@ func _ready() -> void:
 	_board.stroke_started.connect(_on_stroke_started)
 	_board.stroke_moved.connect(_on_stroke_moved)
 	_board.stroke_ended.connect(func() -> void: _stroke_type = -1)
+	# Over everything, so gems fly from the row down onto the board.
+	_flights = GemFlights.new()
+	_flights.board = _board
+	_flights.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_flights.landed.connect(_on_landed)
+	add_child(_flights)
 
 	_load()
 
@@ -209,6 +242,7 @@ func _build_icons() -> void:
 	_icons.margin = 0.0
 	_icons.input_enabled = false
 	_icons.shadows = false
+	_icons.set_transparent()
 	_icons.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_icons.position = Vector2(-100000.0, 0.0)
 	_icons.size = Vector2(cols, rows) * ICON_PX
@@ -220,6 +254,8 @@ func _build_icons() -> void:
 		icon.atlas = _icons.get_view_texture()
 		icon.region = Rect2(Vector2(t % cols, t / cols) * ICON_PX, Vector2(ICON_PX, ICON_PX))
 		_types[t]["icon"] = icon
+		_types[t]["icon_share"] = stones[t]["size"] / ICON_CELL
+		_types[t]["icon_rotation"] = stones[t]["rotation"]
 
 
 func _build_palette() -> void:
@@ -228,22 +264,14 @@ func _build_palette() -> void:
 			_row.add_child(_make_item(t))
 
 
-func _make_item(t: int) -> Button:
-	var b := Button.new()
-	b.toggle_mode = true
-	b.button_group = _group
-	b.focus_mode = Control.FOCUS_NONE
+## A gem row card: the rendered gem, its number and how many are left.
+func _make_item(t: int) -> PanelContainer:
+	var b := PanelContainer.new()
 	b.custom_minimum_size = ITEM_SIZE
-	var picked := StyleBoxFlat.new()
-	picked.bg_color = LabTheme.FIELD_PRESSED
-	picked.set_corner_radius_all(18)
-	picked.border_color = LabTheme.GOLD
-	picked.set_border_width_all(5)
-	for state in ["pressed", "hover_pressed"]:
-		b.add_theme_stylebox_override(state, picked)
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_theme_stylebox_override("panel", _card_style)
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 12)
 	box.add_theme_constant_override("separation", 2)
 	b.add_child(box)
 	var icon := TextureRect.new()
@@ -265,14 +293,21 @@ func _make_item(t: int) -> Button:
 	left.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
 	box.add_child(left)
 	_items[t] = b
+	_item_icons[t] = icon
 	_left_labels[t] = left
 	_update_left(t)
-	b.toggled.connect(func(on: bool) -> void:
-		if on:
-			_select(t)
-		elif _selected == t:
-			_select(-1))
 	return b
+
+
+static func _card(color: Color, border: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	box.set_corner_radius_all(18)
+	box.set_content_margin_all(12)
+	if border.a > 0.0:
+		box.border_color = border
+		box.set_border_width_all(5)
+	return box
 
 
 func _update_left(t: int) -> void:
@@ -282,16 +317,92 @@ func _update_left(t: int) -> void:
 
 ## Selects a gem type (-1 for none): its slots stand out on the board.
 func _select(t: int) -> void:
+	if _items.has(_selected):
+		(_items[_selected] as Control).add_theme_stylebox_override("panel", _card_style)
 	_selected = t
 	_overlay.selected = t
-	if t >= 0 and _items.has(t):
-		var b: Button = _items[t]
-		b.set_pressed_no_signal(true)
-		_palette.ensure_control_visible.call_deferred(b)
-	elif t < 0:
-		var pressed := _group.get_pressed_button()
-		if pressed != null:
-			pressed.set_pressed_no_signal(false)
+	if _items.has(t):
+		var b: Control = _items[t]
+		b.add_theme_stylebox_override("panel", _picked_style)
+		_show_item.call_deferred(b)
+
+
+## Scrolls the row just far enough to show a card.
+func _show_item(b: Control) -> void:
+	if not is_instance_valid(b):
+		return
+	var lo := b.position.x
+	var hi := lo + b.size.x
+	if lo < _scroll_x:
+		_scroll_x = lo
+	elif hi > _scroll_x + _palette.size.x:
+		_scroll_x = hi - _palette.size.x
+	_fling = 0.0
+	_apply_scroll()
+
+
+func _apply_scroll() -> void:
+	var most := maxf(0.0, _row.size.x - _palette.size.x)
+	_scroll_x = clampf(_scroll_x, 0.0, most)
+	_palette.scroll_horizontal = int(_scroll_x)
+
+
+## The gem row's touches: a drag scrolls it (and flings on letting go), a
+## tap picks the gem under the finger (or lets go of the picked one).
+func _input(event: InputEvent) -> void:
+	if not _palette.is_visible_in_tree():
+		return
+	if event is InputEventScreenTouch:
+		var p := _row_point(event.position)
+		if event.pressed and _row_touch < 0 and Rect2(Vector2.ZERO, _palette.size).has_point(p):
+			_row_touch = event.index
+			_row_start = event.position
+			_row_last = event.position
+			_row_last_ms = Time.get_ticks_msec()
+			_row_moved = false
+			_fling = 0.0
+		elif not event.pressed and event.index == _row_touch:
+			_row_touch = -1
+			if not _row_moved:
+				_tap_row(p)
+	elif event is InputEventScreenDrag and event.index == _row_touch:
+		var dx: float = event.position.x - _row_last.x
+		if not _row_moved and absf(event.position.x - _row_start.x) > ROW_DEADZONE:
+			_row_moved = true
+		if _row_moved:
+			_scroll_x -= dx / _row_scale()
+			_apply_scroll()
+			var now := Time.get_ticks_msec()
+			var dt := maxf((now - _row_last_ms) / 1000.0, 0.004)
+			_fling = lerpf(_fling, -dx / _row_scale() / dt, 0.5)
+			_row_last_ms = now
+		_row_last = event.position
+	elif event is InputEventMouseButton and event.pressed:
+		if Rect2(Vector2.ZERO, _palette.size).has_point(_row_point(event.position)):
+			if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_LEFT]:
+				_scroll_x -= ITEM_SIZE.x
+				_apply_scroll()
+			elif event.button_index in [MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_RIGHT]:
+				_scroll_x += ITEM_SIZE.x
+				_apply_scroll()
+
+
+## A point on screen in the row's px, and the row's px per screen px.
+func _row_point(at: Vector2) -> Vector2:
+	return _palette.get_global_transform_with_canvas().affine_inverse() * at
+
+
+func _row_scale() -> float:
+	return _palette.get_global_transform_with_canvas().get_scale().x
+
+
+func _tap_row(p: Vector2) -> void:
+	var at := p + Vector2(_scroll_x, 0.0)
+	for t: int in _items:
+		var b: Control = _items[t]
+		if Rect2(b.position, b.size).has_point(at):
+			_select(-1 if t == _selected else t)
+			return
 
 
 ## The first gem type after `t` with slots left (wrapping round), or -1.
@@ -331,28 +442,59 @@ func _fill_at(at: Vector2, slop: float) -> void:
 func _fill(i: int) -> void:
 	var t := _type_of[i]
 	_overlay.place(i)
-	_board.fill_slot(i)
+	if not (_fill_animation == "fly" and _fly(i, t)):
+		_board.fill_slot(i)
+		_buzz()
 	_filled += 1
 	_types[t]["left"] -= 1
 	_update_left(t)
 	_update_progress()
-	_buzz()
 	_dirty = true
 	if _types[t]["left"] <= 0:
 		_retire(t)
 	if _filled >= _type_of.size():
+		_finish_pending = true
+		_try_finish()
+
+
+## Sends the gem flying from its card (or the row's nearer end, when the
+## card is scrolled away) into slot i; false if it couldn't go.
+func _fly(i: int, t: int) -> bool:
+	var ty := _types[t]
+	if not _item_icons.has(t) or not ty.has("icon"):
+		return false
+	var icon: Control = _item_icons[t]
+	var row := _palette.get_global_rect()
+	var from := icon.get_global_rect().get_center()
+	from.x = clampf(from.x, row.position.x + icon.size.x / 2.0, row.end.x - icon.size.x / 2.0)
+	from = _flights.get_global_transform_with_canvas().affine_inverse() * from
+	var s: Dictionary = _overlay.slots[i]
+	var size := minf(icon.size.x, icon.size.y)
+	return _flights.send(i, ty["icon"], ty["icon_share"], from, size, Vector2(s["x"], s["y"]), s["size"],
+			s["rotation"], ty["icon_rotation"], ty["color"])
+
+
+func _on_landed(i: int) -> void:
+	_board.land_slot(i)
+	_buzz()
+	_try_finish()
+
+
+## The finale, once the last stone is in and nothing is still flying.
+func _try_finish() -> void:
+	if _finish_pending and _flights.flying() == 0 and not _done:
+		_finish_pending = false
 		_finish(true)
 
 
 ## A gem type with nothing left to place leaves the palette; the next one
 ## is picked up, so she can carry on.
 func _retire(t: int) -> void:
-	var b: Button = _items.get(t)
+	var b: Control = _items.get(t)
 	_items.erase(t)
+	_item_icons.erase(t)
 	_left_labels.erase(t)
 	if b != null:
-		b.button_group = null
-		b.disabled = true
 		var fade := create_tween()
 		fade.tween_property(b, "modulate:a", 0.0, 0.25)
 		fade.tween_callback(b.queue_free)
@@ -413,6 +555,12 @@ func _finish(celebrate: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	if _row_touch < 0 and absf(_fling) > 10.0:
+		_scroll_x += _fling * delta
+		_fling *= exp(-delta * FLING_DECAY)
+		_apply_scroll()
+		if _scroll_x <= 0.0 or _scroll_x >= _row.size.x - _palette.size.x:
+			_fling = 0.0
 	if not _dirty:
 		return
 	_since_save += delta
@@ -436,6 +584,7 @@ func _save(thumbnail: bool) -> void:
 
 
 func _leave() -> void:
+	_flights.land_all()
 	_save(true)
 	back_requested.emit()
 

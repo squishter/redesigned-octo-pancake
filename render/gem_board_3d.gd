@@ -42,6 +42,8 @@ const MARGIN := 0.03
 const POP_TIME := 0.32
 const PULSE_TIME := 0.6
 const CELEBRATE_TIME := 1.4
+## A stone that flew in settles from a little too big over this long.
+const LAND_TIME := 0.18
 ## How far a pop overshoots (the usual "back" easing constant).
 const OVERSHOOT := 1.70158
 ## Gem colors cut as opaque polished stones rather than see-through ones,
@@ -106,6 +108,7 @@ var stroke_filter := Callable()
 var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
 var _paper := MeshInstance3D.new()
+var _env := Environment.new()
 var _layers := Node3D.new()
 var _gem_material := ShaderMaterial.new()
 var _shadow_material := ShaderMaterial.new()
@@ -131,7 +134,7 @@ var _last_tap_pos := Vector2.ZERO
 var _stroke := -1
 ## Each slot's instances in every layer: [MultiMesh, index, full transform].
 var _refs: Array = []
-## Slots animating: slot -> [start (on _clock), 0 pop in or 1 pulse].
+## Slots animating: slot -> [start (on _clock), 0 pop in, 1 pulse or 2 land].
 var _anims := {}
 var _clock := 0.0
 ## The light drifts faster until then (on _clock), sweeping glints over a
@@ -145,7 +148,7 @@ func _init() -> void:
 	_viewport.msaa_3d = Viewport.MSAA_4X
 	_viewport.handle_input_locally = false
 	add_child(_viewport)
-	var env := Environment.new()
+	var env := _env
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = BACKGROUND
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
@@ -278,6 +281,21 @@ func fill_slot(i: int) -> void:
 	_anims[i] = [_clock, 0]
 
 
+## Shows one stone that has just flown in, settling into place.
+func land_slot(i: int) -> void:
+	_anims[i] = [_clock, 2]
+	_step_anims()
+
+
+## Draws only the stones, no paper, over a transparent background (for
+## icons and stones flying over the screen).
+func set_transparent() -> void:
+	_viewport.transparent_bg = true
+	_env.background_mode = Environment.BG_CLEAR_COLOR
+	_env.glow_enabled = false
+	_paper.visible = false
+
+
 ## A wave of pulses through every stone, outward from board point `from`,
 ## while the light sweeps over them. Returns how long it lasts (seconds).
 func celebrate(from: Vector2) -> float:
@@ -306,12 +324,15 @@ func _step_anims() -> void:
 		var t: float = _clock - a[0]
 		if t < 0.0:
 			continue
-		var u := minf(t / (POP_TIME if a[1] == 0 else PULSE_TIME), 1.0)
+		var u := minf(t / ([POP_TIME, PULSE_TIME, LAND_TIME][a[1]] as float), 1.0)
 		var f := 1.0
-		if a[1] == 0:
-			f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
-		else:
-			f = 1.0 + 0.3 * sin(PI * u)
+		match a[1]:
+			0:
+				f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
+			1:
+				f = 1.0 + 0.3 * sin(PI * u)
+			_:
+				f = 1.0 + 0.15 * (1.0 - u) * (1.0 - u)
 		_apply_scale(i, f)
 		if u >= 1.0:
 			done.append(i)

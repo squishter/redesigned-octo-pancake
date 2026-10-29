@@ -3,8 +3,8 @@ extends Control
 ## color theme), or pick up a saved one. Every puzzle keeps its own save, so
 ## a new one never overwrites one in progress. Each saved puzzle can be
 ## continued, restarted, recolored (the same picture made again in another
-## unlocked theme, as a new puzzle beside it) or deleted. The generator lab
-## is a debug mode at the bottom.
+## unlocked theme, as a new puzzle beside it) or deleted. Settings (how
+## placed gems go in) and the generator lab, a debug mode, are at the bottom.
 
 signal play_requested(id: String)
 signal lab_requested
@@ -19,6 +19,7 @@ var profile: Dictionary = {}
 
 var _list: VBoxContainer
 var _new_panel: Control
+var _settings_panel: Control
 var _type: OptionButton
 var _theme: OptionButton
 var _start: Button
@@ -82,8 +83,31 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
 
-	var lab := _button(root, "Generator lab (debug)", func() -> void: lab_requested.emit())
-	lab.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	# Settings: hidden until asked for, saved as soon as they change.
+	_settings_panel = PanelContainer.new()
+	_settings_panel.visible = false
+	root.add_child(_settings_panel)
+	var settings_grid := GridContainer.new()
+	settings_grid.columns = 2
+	_settings_panel.add_child(settings_grid)
+	var fill := _options(settings_grid, "Placing gems")
+	var settings: Dictionary = profile["settings"]
+	for key: String in SaveStore.FILL_ANIMATIONS:
+		fill.add_item(SaveStore.FILL_ANIMATIONS[key])
+		fill.set_item_metadata(fill.item_count - 1, key)
+		if key == settings["fill_animation"]:
+			fill.select(fill.item_count - 1)
+	fill.item_selected.connect(func(i: int) -> void:
+		settings["fill_animation"] = fill.get_item_metadata(i)
+		SaveStore.save_profile(profile))
+
+	var footer := HBoxContainer.new()
+	root.add_child(footer)
+	var settings_button := _small_button(footer, "Settings", func() -> void:
+		_settings_panel.visible = not _settings_panel.visible)
+	settings_button.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	var lab := _small_button(footer, "Generator lab (debug)", func() -> void: lab_requested.emit())
+	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lab.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
 
 	# Covers the menu while a puzzle is being made.
@@ -173,8 +197,9 @@ func _process(_delta: float) -> void:
 func go_back() -> void:
 	if _task_id >= 0:
 		return
-	if _new_panel.visible:
+	if _new_panel.visible or _settings_panel.visible:
 		_new_panel.visible = false
+		_settings_panel.visible = false
 	else:
 		get_tree().quit()
 

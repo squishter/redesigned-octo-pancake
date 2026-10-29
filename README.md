@@ -41,8 +41,11 @@ mode for trying out new pattern generation.
   run along the top as fully rendered, glinting gems with their number and
   how many are left; a gem leaves the row once all its slots are filled,
   and the next one is picked up. Picking one makes its open slots stand out
-  (darker outlines over a tint of its color). Tap a slot, or drag across
-  many: each one pops into place with a tiny buzz. A drag that doesn't start
+  (darker outlines over a tint of its color). The row scrolls with a drag
+  (flinging on), and a tap picks a gem or lets it go. Tap a slot, or drag
+  across many: each gem flies from its card in the row into the slot with a
+  trail of tiny sparkles and a little burst as it lands, or (in *Settings*
+  on the menu) pops in place, either way with a tiny buzz. A drag that doesn't start
   on the selected gem's slot pans instead, and two fingers pinch. When the
   last stone is in, a wave ripples out from the middle while the light
   sweeps over the gems, and the picture is left to look at, zoomed and
@@ -53,11 +56,12 @@ mode for trying out new pattern generation.
 | --- | --- |
 | `game/gem_catalog.gd` | `GemCatalog`: every unlockable (gem colors, shapes and cuts, themes as gem colors, puzzle types) and what she starts with. |
 | `game/puzzle_maker.gd` | `PuzzleMaker`: a puzzle request (type, seed, pattern seed, theme) → a collage made from her unlocks only. Safe on worker threads. |
-| `game/save_store.gd` | `SaveStore`: her profile (unlocks and puzzle list) and each puzzle's picture, progress (one bit per slot) and thumbnail under `user://saves`, written via a temporary file. |
+| `game/save_store.gd` | `SaveStore`: her profile (unlocks, settings and puzzle list) and each puzzle's picture, progress (one bit per slot) and thumbnail under `user://saves`, written via a temporary file. |
 | `game/thumbnail.gd` | Small flat pictures for the menu: placed stones in color, open slots as pale dots. |
 | `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
+| `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
 | `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
 
 Buzzes need the `VIBRATE` permission in the Android export preset

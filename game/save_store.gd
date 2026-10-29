@@ -1,7 +1,7 @@
 class_name SaveStore
 extends RefCounted
 ## Her saved games, under user://saves:
-##   profile.json: {version, unlocks (see GemCatalog), puzzles: [meta]},
+##   profile.json: {version, unlocks (see GemCatalog), settings, puzzles: [meta]},
 ##     where each meta is {id, type, seed, pattern_seed, theme, created,
 ##     updated, total, filled, done}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
@@ -13,6 +13,10 @@ extends RefCounted
 
 const DIR := "user://saves"
 const VERSION := 1
+## Her settings and their defaults. fill_animation: how a placed gem goes
+## in, "fly" (from the gem row into the slot) or "pop" (grows in place).
+const DEFAULT_SETTINGS := {"fill_animation": "fly"}
+const FILL_ANIMATIONS := {"fly": "Fly in from the gem row", "pop": "Pop in place"}
 
 
 static func load_profile() -> Dictionary:
@@ -29,6 +33,11 @@ static func load_profile() -> Dictionary:
 		if not unlocks.has(key):
 			unlocks[key] = defaults[key]
 	profile["unlocks"] = unlocks
+	var settings: Dictionary = profile.get("settings", {})
+	for key: String in DEFAULT_SETTINGS:
+		if not settings.has(key):
+			settings[key] = DEFAULT_SETTINGS[key]
+	profile["settings"] = settings
 	var puzzles: Array = profile.get("puzzles", [])
 	for meta: Dictionary in puzzles:
 		for key in ["seed", "pattern_seed", "created", "updated", "total", "filled"]:
