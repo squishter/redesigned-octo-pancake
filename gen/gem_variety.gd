@@ -30,9 +30,11 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 	var units := {}  # key -> {slots, shape, color, gem, combo}
 	var unit_keys := []
 	for s in slots:
-		var key := "%d|%d|%s|%s" % [group_of[s["region"]], s.get("part", 0), s["shape"], _gem_key(s["target_gem"], s["target_color"])]
+		var key := "%d|%d|%d|%s|%s" % [group_of[s["region"]], s.get("part", 0), s.get("seq", -1), s["shape"],
+				_gem_key(s["target_gem"], s["target_color"])]
 		if not units.has(key):
-			units[key] = {"slots": [], "shape": s["shape"], "color": s["target_color"], "gem": s["target_gem"]}
+			units[key] = {"slots": [], "shape": s["shape"], "color": s["target_color"], "gem": s["target_gem"],
+					"locked": s.get("seq", -1) >= 0}
 			unit_keys.append(key)
 		units[key]["slots"].append(s)
 	unit_keys.sort()
@@ -86,10 +88,19 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 	guard = 0
 	while holders.size() > target and guard < 500:
 		guard += 1
+		# Steps of a line sequence never fold, or the sequence would vanish.
+		var locked := {}
+		for key in unit_keys:
+			if units[key]["locked"]:
+				locked[_combo(units[key])] = true
 		var rare := ""
 		for combo in stones:
+			if locked.has(combo):
+				continue
 			if rare == "" or stones[combo] < stones[rare] or (stones[combo] == stones[rare] and combo < rare):
 				rare = combo
+		if rare == "":
+			break
 		var into: Variant = null
 		for key in unit_keys:
 			var u: Dictionary = units[key]

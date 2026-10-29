@@ -131,7 +131,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		depths.sort()
 		var typical: float = depths[depths.size() / 2] if not depths.is_empty() else unit * 3.0
 		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
-		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry)
+		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value)
 		area_mask = LineRaster.stamp_slots(mask, w, h, line_slots, gap * 1.2)
 	else:
 		line_gems = ""
@@ -193,12 +193,13 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 				if key is int:
 					var c: Color = accents[groups.find(key)]
 					colors.append(c)
-					accents.append(c)
-					features.append(c)
 				else:
 					colors.append(neutral[1] if key == "outer" else neutral[0])
-					accents.append(colors[colors.size() - 1])
-					features.append(colors[colors.size() - 1])
+				# Second and third colors for lines that repeat a sequence.
+				var base: Color = colors[colors.size() - 1]
+				var seq_colors := _distinct_colors(base, theme + PackedColorArray(neutral), 2, hash([seed_value, str(key)]))
+				accents.append(seq_colors[0])
+				features.append(seq_colors[1])
 			sl["region"] = n + k
 
 	var gems: Array = options.get("gems", Palettes.starter_gems())
@@ -318,6 +319,37 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"regions": regions,
 		"slots": slots,
 	}
+
+
+## `count` colors from `choices`, each clearly different from `base` and
+## from each other (picked in a seeded order), for the steps of a line
+## sequence. Falls back to lighter and darker shades of `base`.
+static func _distinct_colors(base: Color, choices: PackedColorArray, count: int, seed_value: int) -> PackedColorArray:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var pool := Array(choices)
+	for i in range(pool.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t: Color = pool[i]
+		pool[i] = pool[j]
+		pool[j] = t
+	var out := PackedColorArray()
+	var taken := [LabColor.from_color(base)]
+	for c: Color in pool:
+		if out.size() >= count:
+			break
+		var lab := LabColor.from_color(c)
+		var far := true
+		for t: Vector3 in taken:
+			if lab.distance_to(t) < 25.0:
+				far = false
+				break
+		if far:
+			out.append(c)
+			taken.append(lab)
+	while out.size() < count:
+		out.append(base.lightened(0.5) if out.size() == 0 else base.darkened(0.5))
+	return out
 
 
 ## Colors GemVariety may recolor parts with, best first: the gem colors the

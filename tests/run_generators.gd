@@ -456,6 +456,7 @@ func test_pattern_seeds() -> void:
 		check(overlaps == 0, "line_gems %s: %d overlapping slot pairs" % [line_style, overlaps])
 		render_collage(p).save_png(out_dir.path_join("lines_%s.png" % line_style))
 	var in_range := 0
+	var sequences := 0
 	for i in 12:
 		var p := PictureSources.mandala_collage(2010 + i % 4, {"pattern_seed": i})
 		settings[p["setting"]] = settings.get(p["setting"], 0) + 1
@@ -466,11 +467,30 @@ func test_pattern_seeds() -> void:
 		check(p["gem_types"] == p["gem_kinds"].size(), "pattern %d: gem_types disagrees with gem_kinds" % i)
 		if p["gem_types"] >= CollageGenerator.GEM_TYPES_MIN:
 			in_range += 1
+		# A line that repeats a sequence keeps one distinct gem type per step.
+		var step_types := {}
+		for sl in p["slots"]:
+			if sl.get("seq", -1) >= 0:
+				var line := "%d|%d" % [sl["region"], sl["part"]]
+				if not step_types.has(line):
+					step_types[line] = {}
+				var t := "%s|%s" % [sl["shape"], sl["target_gem"]]
+				var steps: Dictionary = step_types[line]
+				if not steps.has(sl["seq"]):
+					steps[sl["seq"]] = t
+				check(steps[sl["seq"]] == t, "pattern %d: a sequence step changes type along its line" % i)
+		for line in step_types:
+			var types: Array = step_types[line].values()
+			sequences += 1
+			for x in types.size():
+				for y in range(x + 1, types.size()):
+					check(types[x] != types[y], "pattern %d: two steps of a line sequence share a gem type" % i)
 		for r in p["regions"]:
 			if r["kind"] == "area":
 				styles[r["style"]] = true
-	print("  settings %s, patterns %s, %d of 12 with %d-%d gem types" % [settings, styles.keys(), in_range,
-			CollageGenerator.GEM_TYPES_MIN, CollageGenerator.GEM_TYPES_MAX])
+	print("  settings %s, patterns %s, %d of 12 with %d-%d gem types, %d sequence lines" % [settings, styles.keys(),
+			in_range, CollageGenerator.GEM_TYPES_MIN, CollageGenerator.GEM_TYPES_MAX, sequences])
+	check(sequences > 0, "no line repeated a sequence of stones")
 	# Busy radial pictures can run out of parts to vary; most reach the range.
 	check(in_range >= 8, "only %d of 12 collages reached %d gem types" % [in_range, CollageGenerator.GEM_TYPES_MIN])
 	check(settings.get("gems", 0) > settings.get("metal", 0), "gem lines should be the usual setting")

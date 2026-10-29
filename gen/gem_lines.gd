@@ -22,6 +22,15 @@ extends RefCounted
 ## its stones at every point.
 
 const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "taper", "pulse", "ramp", "radial", "hub"]
+## Step sequences an occasional long line repeats, one gem type per step.
+## Open lines count from both ends toward the middle, so the sequence reads
+## the same either way and mirrored copies match; closed loops only take
+## the simple alternation, and only with an even number of stones.
+const SEQUENCES := [[0, 1], [0, 1], [0, 1, 1, 1], [0, 1, 2], [0, 1, 1, 2, 2, 1, 1, 0]]
+## Share of line classes with long enough lines that get a sequence.
+const SEQUENCE_CHANCE := 0.2
+## Stones a line needs before it can carry a sequence.
+const SEQUENCE_MIN_STONES := 10
 ## Junction stones' parts start here, after the lines' own.
 const NODE_PARTS := 100000
 ## Smallest stone, as a share of the full line stone.
@@ -36,9 +45,12 @@ const HUB_DEGREE := 4
 ## region 0 for inner lines and 1 for the silhouette; the caller renumbers.
 ## `part` is the line's symmetry class (lines that are copies of each other
 ## under `symmetry` share one), and junction stones get classes of their own,
-## so a line's stones always stay one gem type.
+## so a line's stones always stay one gem type, except on the occasional
+## long line that repeats a sequence (see SEQUENCES): there `seq` (and
+## `tone`) gives each stone's step, 0, 1 or 2, for the caller to color;
+## `seq` is -1 on other lines.
 static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String,
-		symmetry: String = "none") -> Array[Dictionary]:
+		symmetry: String = "none", seed_value: int = 1) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var hash := {}
 	var cell := r * 4.0
@@ -174,13 +186,24 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 		elif used > 0.0:
 			stretch = maxf(0.0, span) / used
 		var tone := outer[k]
+		var n_stones := at_list.size()
+		var seq: Array = []
+		var seq_rng := RandomNumberGenerator.new()
+		seq_rng.seed = hash([seed_value, path_class[k], "sequence"])
+		if n_stones >= SEQUENCE_MIN_STONES and seq_rng.randf() < SEQUENCE_CHANCE:
+			seq = SEQUENCES[seq_rng.randi_range(0, SEQUENCES.size() - 1)]
+			if closed and (seq.size() != 2 or n_stones % 2 == 1):
+				seq = []
 		for i in at_list.size():
 			var at := start + at_list[i] * stretch
 			var sample: Array = Contours.sample(pts, closed, at)
 			var rot: float = (sample[1] as Vector2).angle()
 			var rr := _radius(field, prof, at, i)
 			var h := rr * (aspect - 1.0)
-			_add(out, hash, cell, sample[0], rot, rr, h, shape, tone, gap, path_class[k])
+			var step := 0
+			if not seq.is_empty():
+				step = seq[(i if closed else mini(i, n_stones - 1 - i)) % seq.size()]
+			_add(out, hash, cell, sample[0], rot, rr, h, shape, tone, gap, path_class[k], step if not seq.is_empty() else -1)
 	return out
 
 
@@ -292,7 +315,7 @@ static func _is_outer(pts: PackedVector2Array, map: RegionMap, reach: float) -> 
 ## Adds a stone unless it would crowd another line stone; crowded stones
 ## shrink to fit (down to 55%) or are left out.
 static func _add(out: Array[Dictionary], hash: Dictionary, cell: float, c: Vector2, rot: float, r: float,
-		h: float, shape: String, region: int, gap: float, part: int) -> void:
+		h: float, shape: String, region: int, gap: float, part: int, step: int = -1) -> void:
 	var dir := Vector2.from_angle(rot)
 	var cx := floori(c.x / cell)
 	var cy := floori(c.y / cell)
@@ -320,7 +343,8 @@ static func _add(out: Array[Dictionary], hash: Dictionary, cell: float, c: Vecto
 		"rotation": wrapf(rot, -PI, PI),
 		"size": 2.0 * (r + h),
 		"width": 2.0 * r,
-		"tone": 0,
+		"tone": maxi(step, 0),
+		"seq": step,
 		"part": part,
 	}
 	out.append(slot)
