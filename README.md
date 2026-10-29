@@ -27,8 +27,18 @@ mode for trying out new pattern generation.
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
   mandala collages, with no frames or collars, placing gems with Pop or
   Fly and the Ripple finale. Everything else comes from packs.
+- **Colors and themes.** 105 gem colors, at least 10 of each hue (red,
+  orange, yellow, green, teal, blue, purple, pink, brown and neutrals; some,
+  like pearl, ivory, jade and turquoise, are opaque stones), and 33 themes:
+  one per hue, the starting rainbow ones and mixes like Tropical, Galaxy and
+  Seaside. A theme is hers as soon as she has all its colors; themes don't
+  come from packs. Collection shows a locked theme's colors she has found so far.
+- **Photos.** *Photo collage…* and *Photo kit…* in the New puzzle panel pick
+  one of her photos (the phone's own picker) and turn it into a collage
+  (traced into line art) or a kit of drills, in her unlocked colors. Photo
+  puzzles can't be recolored: their colors come from the photo.
 - **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,
-  Shape, Facet, Picture, Theme, Flourish, Sparkle) gives one thing she
+  Shape, Facet, Picture, Flourish, Sparkle) gives one thing she
   doesn't have yet from its category, never a repeat, and is sold out once
   she has it all; the Everything pack picks a category with something left
   (each as likely) and gives something from it; the Power-up pack gives
@@ -40,7 +50,8 @@ mode for trying out new pattern generation.
   gem color and every shape in every cut as real rendered gems, then
   themes, picture types (collages and Diamond kits), flourishes (frames,
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
-  place gems (Pop, Fly, Drop, Spin, Twinkle), finales (Ripple, Spiral,
+  place gems (Pop, Fly, Drop, Spin, Twinkle, and ones that read even zoomed
+  far out: Bounce, Comet, Firework, Beam, Halo), finales (Ripple, Spiral,
   Sweep, Shimmer) and power-up charges. Locked things stay a mystery: gems
   show only as flat silhouettes of their outline, and names, theme colors
   and descriptions stay hidden.
@@ -92,6 +103,8 @@ mode for trying out new pattern generation.
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
 | `scenes/game/collection_screen.gd` | Collection & packs: pack cards, opening and revealing, and everything unlocked or still hidden. |
+| `scenes/game/drag_scroll.gd` | `DragScroll`: makes a list scroll (and fling) wherever a drag starts, buttons included, without pressing them. |
+| `scenes/game/gem_icons.gd` | `GemIcons`: single gems laid out on an icon sheet, sized to stay inside their own cell. |
 | `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
 | `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
 

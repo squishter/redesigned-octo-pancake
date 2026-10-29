@@ -45,7 +45,7 @@ const ROW_DEADZONE := 20.0
 const FLING_DECAY := 4.0
 ## Placement styles and power-ups this screen knows: GemCatalog.ANIMATIONS
 ## and POWERS must be among them (an unknown style pops in).
-const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle"]
+const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle", "bounce", "comet", "firework", "beam", "halo"]
 const POWER_EFFECTS := ["big_brush", "auto_finish", "free_hand", "double_coins", "finish_gem", "sweep", "finder",
 		"sprinkle"]
 
@@ -146,6 +146,7 @@ func _ready() -> void:
 	powers_scroll.custom_minimum_size.y = 760
 	powers_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_powers_panel.add_child(powers_scroll)
+	DragScroll.attach(powers_scroll)
 	_powers_list = VBoxContainer.new()
 	_powers_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	powers_scroll.add_child(_powers_list)
@@ -263,20 +264,8 @@ func _build_icons() -> void:
 	var stones := []
 	for t in n:
 		var ty := _types[t]
-		var shape: String = ty["shape"]
-		var long := shape in GemVariety.LONG_FAMILY or shape in GemVariety.BOX_FAMILY
-		var length := ICON_CELL * (0.8 if long else 0.62)
-		stones.append({
-			"x": (t % cols + 0.5) * ICON_CELL,
-			"y": (t / cols + 0.5) * ICON_CELL,
-			"size": length,
-			"width": length * ty["ratio"] if long else length,
-			"rotation": -PI / 4.0 if long else SlotPacker.upright(shape),
-			"shape": shape,
-			"cut": ty["cut"],
-			"target_color": ty["color"],
-			"target_gem": ty["gem"],
-		})
+		stones.append(GemIcons.stone(ty["shape"], ty["cut"], ty["color"], ty["gem"], ty["ratio"], ICON_CELL,
+				Vector2(t % cols + 0.5, t / cols + 0.5) * ICON_CELL))
 	_icons = GemBoard3D.new()
 	_icons.margin = 0.0
 	_icons.input_enabled = false
@@ -495,7 +484,7 @@ func _fill(i: int) -> void:
 	var s: Dictionary = _overlay.slots[i]
 	var moved := false
 	match _fill_animation:
-		"fly", "drop", "spin":
+		"fly", "drop", "spin", "bounce", "comet", "firework", "beam", "halo":
 			moved = _send(i, t, _fill_animation)
 		"twinkle":
 			_board.fill_slot(i)
@@ -523,7 +512,7 @@ func _fill(i: int) -> void:
 ## False if it couldn't go.
 func _send(i: int, t: int, style: String) -> bool:
 	var ty := _types[t]
-	if not ty.has("icon") or (style == "fly" and not _item_icons.has(t)):
+	if not ty.has("icon") or (style in ["fly", "bounce"] and not _item_icons.has(t)):
 		return false
 	var from := Vector2.ZERO
 	var size := 0.0

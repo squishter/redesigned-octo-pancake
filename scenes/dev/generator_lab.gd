@@ -107,8 +107,8 @@ func _ready() -> void:
 	_options_panel = panel
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.scroll_deadzone = 24
 	panel.add_child(scroll)
+	DragScroll.attach(scroll)
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)

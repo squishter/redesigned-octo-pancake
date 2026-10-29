@@ -48,7 +48,8 @@ const LAND_TIME := 0.18
 const OVERSHOOT := 1.70158
 ## Gem colors cut as opaque polished stones rather than see-through ones,
 ## so white reads apart from clear diamond.
-const OPAQUE_GEMS := ["snow"]
+## Only ever add to it: changing a color already in use would change old puzzles.
+const OPAQUE_GEMS := ["snow", "pearl", "ivory", "cream", "jade", "turquoise"]
 ## A stone's girdle stands this high above the paper, and its crown rises
 ## about this much above that, in its half-widths.
 const GIRDLE_HEIGHT := 0.45
@@ -109,6 +110,8 @@ var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
 var _paper := MeshInstance3D.new()
 var _env := Environment.new()
+## Draw star flares (off on transparent boards).
+var _flares := true
 var _layers := Node3D.new()
 var _gem_material := ShaderMaterial.new()
 var _shadow_material := ShaderMaterial.new()
@@ -288,8 +291,12 @@ func land_slot(i: int) -> void:
 
 
 ## Draws only the stones, no paper, over a transparent background (for
-## icons and stones flying over the screen).
+## icons and stones flying over the screen). Star flares are left out: their
+## additive planes would write solid black squares into the transparency,
+## reaching past their stone into its neighbors' icons. Call it before
+## show_collage().
 func set_transparent() -> void:
+	_flares = false
 	_viewport.transparent_bg = true
 	_env.background_mode = Environment.BG_CLEAR_COLOR
 	_env.glow_enabled = false
@@ -466,9 +473,10 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
 	_add_layer(shadow_plane, _shadow_material, slots, all, "shadow")
-	var sparkle_plane := PlaneMesh.new()
-	sparkle_plane.size = Vector2(2.0, 2.0)
-	_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
+	if _flares:
+		var sparkle_plane := PlaneMesh.new()
+		sparkle_plane.size = Vector2(2.0, 2.0)
+		_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
 	update_light()
 	reset_view()
 

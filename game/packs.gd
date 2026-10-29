@@ -25,7 +25,6 @@ const PACKS := {
 	"shapes": {"name": "Shape pack", "about": "A new gem shape, in its classic cut."},
 	"cuts": {"name": "Facet pack", "about": "A new cut for a shape you have."},
 	"puzzles": {"name": "Picture pack", "about": "A new kind of puzzle."},
-	"themes": {"name": "Theme pack", "about": "A new color theme."},
 	"features": {"name": "Flourish pack", "about": "Frames, collars and other picture touches."},
 	"animations": {"name": "Sparkle pack", "about": "A new way for gems to go in, or a new finale."},
 	"powers": {"name": "Power-up pack", "about": "Charges of a power-up."},

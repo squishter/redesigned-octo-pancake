@@ -155,11 +155,16 @@ func _pack_card(pack: String) -> Control:
 
 
 func _open(pack: String, with_pick: bool) -> void:
+	var before: Dictionary = (profile["unlocks"] as Dictionary).duplicate(true)
 	var item := Packs.open(profile, pack, with_pick, _rng)
 	if item.is_empty():
 		return
 	SaveStore.save_profile(profile)
 	_refresh()
+	# A new color may complete themes: say so on the same card.
+	var themes := Unlockables.themes_gained(before, profile["unlocks"])
+	if not themes.is_empty():
+		item["themes"] = themes
 	_reveal(item)
 
 
@@ -197,6 +202,15 @@ func _reveal(item: Dictionary) -> void:
 	box.add_child(title)
 	var about := _note(box, item.get("about", ""))
 	about.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for t: String in item.get("themes", []):
+		var done := Label.new()
+		done.text = "Completes the %s theme!" % GemCatalog.theme_name(t)
+		done.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		done.add_theme_color_override("font_color", LabTheme.GOLD)
+		box.add_child(done)
+		var holder := CenterContainer.new()
+		holder.add_child(_swatches(t, 44.0))
+		box.add_child(holder)
 	var ok := _button(box, "Lovely!", func() -> void: shade.queue_free())
 	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ok.custom_minimum_size.x = 360
@@ -302,10 +316,7 @@ func _build_sheet() -> void:
 
 
 static func _stone(shape: String, cut: String, color: Color, gem: String) -> Dictionary:
-	var long := shape in GemVariety.LONG_FAMILY or shape in GemVariety.BOX_FAMILY
-	var length := ICON_CELL * (0.8 if long else 0.62)
-	return {"shape": shape, "cut": cut, "size": length, "width": length * (0.5 if long else 1.0),
-			"rotation": -PI / 4.0 if long else SlotPacker.upright(shape), "target_color": color, "target_gem": gem}
+	return GemIcons.stone(shape, cut, color, gem, 0.5, ICON_CELL, Vector2.ZERO)
 
 
 func _fill_collection() -> void:
@@ -313,11 +324,16 @@ func _fill_collection() -> void:
 	var unlocks: Dictionary = profile["unlocks"]
 
 	var colors := GemCatalog.all_colors()
-	_heading(_collection_list, "Gem colors", unlocks["colors"].size(), colors.size())
-	var color_flow := _flow(_collection_list)
-	for g in colors:
-		var have: bool = g["id"] in unlocks["colors"]
-		color_flow.add_child(_gem_cell(g["id"], g["name"] if have else "?", have))
+	var colors_owned := colors.filter(func(g: Dictionary) -> bool: return g["id"] in unlocks["colors"])
+	_heading(_collection_list, "Gem colors", colors_owned.size(), colors.size())
+	for hue: String in GemCatalog.HUE_ORDER:
+		var of_hue := colors.filter(func(g: Dictionary) -> bool: return g["hue"] == hue)
+		var have_hue := of_hue.filter(func(g: Dictionary) -> bool: return g["id"] in unlocks["colors"])
+		_subheading(_collection_list, "%s  %d / %d" % [hue.capitalize(), have_hue.size(), of_hue.size()])
+		var color_flow := _flow(_collection_list)
+		for g: Dictionary in of_hue:
+			var have: bool = g["id"] in unlocks["colors"]
+			color_flow.add_child(_gem_cell(g["id"], g["name"] if have else "?", have))
 
 	var pairs := GemCatalog.all_cuts()
 	var owned := 0
@@ -327,26 +343,29 @@ func _fill_collection() -> void:
 	_heading(_collection_list, "Shapes and cuts", owned, pairs.size())
 	for shape: String in GemCatalog.ALL_SHAPES:
 		var have_shape: bool = unlocks["shapes"].has(shape)
-		var label := Label.new()
-		label.text = shape.capitalize() if have_shape else "???"
-		label.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-		label.add_theme_color_override("font_color", LabTheme.TEXT if have_shape else LabTheme.TEXT_DIM)
-		_collection_list.add_child(label)
+		_subheading(_collection_list, shape.capitalize() if have_shape else "???", have_shape)
 		var flow := _flow(_collection_list)
 		for cut: String in GemCuts.for_shape(shape):
 			var have := GemCatalog.has_cut(unlocks, shape, cut)
 			flow.add_child(_gem_cell("%s|%s" % [shape, cut], cut if have else "?", have))
 
-	_heading(_collection_list, "Color themes", unlocks["themes"].size(), GemCatalog.THEMES.size())
+	# Themes come with their colors: a locked one shows only the colors
+	# she has found so far, and how many it needs.
+	var themes: Array = GemCatalog.unlocked_themes(unlocks)
+	_heading(_collection_list, "Color themes", themes.size(), GemCatalog.THEMES.size())
+	_note(_collection_list, "A theme is yours once you have all its colors.")
 	for t: String in GemCatalog.THEMES:
-		var have: bool = t in unlocks["themes"]
+		var have := GemCatalog.has_theme(unlocks, t)
 		var row := HBoxContainer.new()
 		_collection_list.add_child(row)
 		var name_label := Label.new()
-		name_label.text = GemCatalog.theme_name(t) if have else "?"
-		name_label.custom_minimum_size.x = 360
+		var gems: Array = GemCatalog.THEMES[t]["gems"]
+		var found := gems.filter(func(g: String) -> bool: return g in unlocks["colors"]).size()
+		name_label.text = GemCatalog.theme_name(t) if have else "?  (%d / %d colors)" % [found, gems.size()]
+		name_label.custom_minimum_size.x = 400
+		name_label.add_theme_color_override("font_color", LabTheme.TEXT if have else LabTheme.TEXT_DIM)
 		row.add_child(name_label)
-		row.add_child(_swatches(t, 48.0, not have))
+		row.add_child(_swatches(t, 48.0, not have, unlocks["colors"]))
 
 	# Every other kind of unlockable, as a list (a new kind shows up here).
 	for kind: String in Unlockables.KINDS:
@@ -399,13 +418,15 @@ func _gem_cell(key: String, caption: String, have: bool) -> Control:
 	return box
 
 
-## A theme's colors as a strip of squares (blank ones when `hidden`).
-func _swatches(theme_id: String, px: float, hidden := false) -> Control:
+## A theme's colors as a strip of squares; when `hidden`, only the ones in
+## `shown` (colors she has) show and the rest are blank.
+func _swatches(theme_id: String, px: float, hidden := false, shown: Array = []) -> Control:
 	var strip := HBoxContainer.new()
 	strip.add_theme_constant_override("separation", 4)
-	for c in GemCatalog.theme_colors(theme_id):
+	var gems: Array = GemCatalog.THEMES.get(theme_id, {"gems": []})["gems"]
+	for gem: String in gems:
 		var swatch := ColorRect.new()
-		swatch.color = HIDDEN_SWATCH if hidden else c
+		swatch.color = HIDDEN_SWATCH if hidden and not gem in shown else GemCatalog.color_of(gem)
 		swatch.custom_minimum_size = Vector2(px, px)
 		strip.add_child(swatch)
 	return strip
@@ -416,6 +437,14 @@ func _heading(parent: Control, text: String, have: int, total: int) -> void:
 	l.text = text if total < 0 else "%s  %d / %d" % [text, have, total]
 	l.add_theme_font_size_override("font_size", 48)
 	l.add_theme_color_override("font_color", LabTheme.GOLD)
+	parent.add_child(l)
+
+
+func _subheading(parent: Control, text: String, bright := true) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	l.add_theme_color_override("font_color", LabTheme.TEXT if bright else LabTheme.TEXT_DIM)
 	parent.add_child(l)
 
 
@@ -445,11 +474,11 @@ func _scroll(parent: Control) -> ScrollContainer:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.scroll_deadzone = 24
 	parent.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
+	DragScroll.attach(scroll)
 	return scroll
 
 

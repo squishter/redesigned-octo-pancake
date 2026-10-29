@@ -20,12 +20,13 @@ extends RefCounted
 ## whatever is added later.
 
 ## kind -> {key: the profile's unlock list ("" for power-ups, which are
-## charges), pack: the pack that gives it, title, found: what a reveal says}.
+## charges), pack: the pack that gives it ("" for kinds no pack gives:
+## themes come with their colors), title, found: what a reveal says}.
 const KINDS := {
 	"color": {"key": "colors", "pack": "colors", "title": "Gem colors", "found": "New gem color!"},
 	"shape": {"key": "shapes", "pack": "shapes", "title": "Shapes and cuts", "found": "New gem shape!"},
 	"cut": {"key": "shapes", "pack": "cuts", "title": "Shapes and cuts", "found": "New cut!"},
-	"theme": {"key": "themes", "pack": "themes", "title": "Color themes", "found": "New color theme!"},
+	"theme": {"key": "themes", "pack": "", "title": "Color themes", "found": "New color theme!"},
 	"puzzle": {"key": "puzzles", "pack": "puzzles", "title": "Picture types", "found": "New picture type!"},
 	"feature": {"key": "features", "pack": "features", "title": "Flourishes", "found": "New flourish!"},
 	"animation": {"key": "animations", "pack": "animations", "title": "Ways to place gems",
@@ -123,15 +124,23 @@ static func has(unlocks: Dictionary, item: Dictionary) -> bool:
 			return unlocks.get("shapes", {}).has(item["id"])
 		"cut":
 			return GemCatalog.has_cut(unlocks, item["shape"], item["cut"])
+		"theme":
+			return GemCatalog.has_theme(unlocks, item["id"])
 	return item["id"] in unlocks.get(KINDS[item["kind"]]["key"], [])
 
 
-## Whether an item can come out of a pack yet: not had, and a cut only for
-## a shape she has.
+## Whether an item can come out of a pack yet: not had, of a kind packs
+## give, and a cut only for a shape she has.
 static func findable(unlocks: Dictionary, item: Dictionary) -> bool:
-	if has(unlocks, item):
+	if has(unlocks, item) or KINDS[item["kind"]]["pack"] == "":
 		return false
 	return item["kind"] != "cut" or unlocks.get("shapes", {}).has(item["shape"])
+
+
+## Every theme she has with `after` unlocks but not with `before`.
+static func themes_gained(before: Dictionary, after: Dictionary) -> Array:
+	return GemCatalog.THEMES.keys().filter(func(t: String) -> bool:
+		return GemCatalog.has_theme(after, t) and not GemCatalog.has_theme(before, t))
 
 
 ## Gives her an item: unlocks only ever grow, a power-up adds its charges.

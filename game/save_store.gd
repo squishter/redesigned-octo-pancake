@@ -83,7 +83,7 @@ static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
 		"type": request.get("type", "mandala"),
 		"seed": int(request.get("seed", 0)),
 		"pattern_seed": int(request.get("pattern_seed", 0)),
-		"theme": request.get("theme", "rainbow"),
+		"theme": request.get("theme", ""),
 		"created": now,
 		"updated": now,
 		"total": picture["slots"].size(),

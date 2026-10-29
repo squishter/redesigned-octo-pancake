@@ -776,6 +776,12 @@ func test_packs() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
 	check(Packs.open(profile, "colors", true, rng).is_empty(), "opened a pack with no picks")
+	# Themes come with their colors, never from a pack.
+	check(not Packs.PACKS.has("themes"), "there's still a theme pack")
+	var before: Dictionary = profile["unlocks"].duplicate(true)
+	for gem: String in GemCatalog.THEMES["reds"]["gems"]:
+		Unlockables.grant(profile, {"kind": "color", "id": gem})
+	check(Unlockables.themes_gained(before, profile["unlocks"]).has("reds"), "the reds didn't bring Ruby Reds")
 	check(Packs.daily_open(profile) and not Packs.daily_open(profile), "daily pick not exactly once a day")
 	var got := Packs.open(profile, "colors", true, rng)
 	check(got.get("kind") == "color" and Packs.picks(profile) == 0, "free pick didn't open a color pack")
@@ -801,6 +807,7 @@ func test_packs() -> void:
 		check(Packs.sold_out(pack, profile), "%s pack never sold out" % pack)
 	var unlocks: Dictionary = profile["unlocks"]
 	check(unlocks["colors"].size() == GemCatalog.all_colors().size(), "not every color unlocked")
+	check(GemCatalog.unlocked_themes(unlocks).size() == GemCatalog.THEMES.size(), "all colors didn't bring every theme")
 	check(unlocks["shapes"].size() == GemCatalog.ALL_SHAPES.size(), "not every shape unlocked")
 	for pair: Array in GemCatalog.all_cuts():
 		check(GemCatalog.has_cut(unlocks, pair[0], pair[1]), "cut %s not unlocked" % [pair])
@@ -836,7 +843,8 @@ func test_catalog_complete() -> void:
 	}
 	for kind: String in Unlockables.KINDS:
 		var info: Dictionary = Unlockables.KINDS[kind]
-		check(Packs.PACKS.has(info["pack"]), "kind %s comes from unknown pack %s" % [kind, info["pack"]])
+		check(info["pack"] == "" or Packs.PACKS.has(info["pack"]), "kind %s comes from unknown pack %s" % [kind,
+				info["pack"]])
 		var ids := {}
 		for item: Dictionary in Unlockables.items(kind):
 			check(not ids.has(item["id"]), "%s id %s is listed twice" % [kind, item["id"]])
@@ -847,6 +855,15 @@ func test_catalog_complete() -> void:
 				check(item["id"] in handled[kind], "%s %s isn't handled by the game" % [kind, item["id"]])
 		for id in Unlockables.starting(kind):
 			check(ids.has(id), "starting %s %s isn't in its catalog" % [kind, id])
+	# At least 10 colors of every hue, and a theme mostly of each.
+	for hue: String in GemCatalog.HUE_ORDER:
+		var n := GemCatalog.all_colors().filter(func(g: Dictionary) -> bool: return g["hue"] == hue).size()
+		check(n >= 10, "only %d %s colors" % [n, hue])
+	for g in GemCatalog.all_colors():
+		check(g["hue"] in GemCatalog.HUE_ORDER, "color %s has unknown hue %s" % [g["id"], g["hue"]])
+	# Starting themes must come with the starting colors.
+	for t: String in GemCatalog.STARTING_THEMES:
+		check(GemCatalog.has_theme({"colors": GemCatalog.STARTING_COLORS}, t), "starting theme %s needs locked colors" % t)
 	for pack: String in Packs.PACKS:
 		if pack != "all":
 			check(Unlockables.KINDS.values().any(func(k: Dictionary) -> bool: return k["pack"] == pack),
@@ -895,7 +912,7 @@ func test_old_profiles() -> void:
 
 
 ## Kits and unlocked picture features: a kit uses only unlocked colors and
-## drills, and unlocked frames show up.
+## drills, and unlocked frames show up. Photos make collages and kits.
 func test_kit_puzzles() -> void:
 	print("Kit puzzles")
 	var unlocks := GemCatalog.default_unlocks()
@@ -916,6 +933,25 @@ func test_kit_puzzles() -> void:
 		if p["source"].has("frame"):
 			framed += 1
 	check(framed > 0, "no frames with frames unlocked")
+	# Photo puzzles: a made-up photo becomes a collage and a kit, in unlocked colors only.
+	var photo := Image.create(400, 300, false, Image.FORMAT_RGB8)
+	for y in 300:
+		for x in 400:
+			var c := Color.from_hsv(fposmod(x / 400.0 + 0.3 * sin(y / 40.0), 1.0), 0.7, 0.4 + 0.5 * float(y) / 300.0)
+			if Vector2(x, y).distance_to(Vector2(200, 150)) < 70:
+				c = Color("#f7e04a")
+			photo.set_pixel(x, y, c)
+	for kind: String in GemCatalog.PHOTO_MODES:
+		var req := PuzzleMaker.new_request(kind, "")
+		req["photo"] = photo
+		var p := PuzzleMaker.make(req, GemCatalog.default_unlocks())
+		var off := 0
+		for s in p["slots"]:
+			if not colors.has(str(s["target_gem"])):
+				off += 1
+		check(p["slots"].size() >= 300 and off == 0, "%s: %d slots, %d in locked colors" % [kind, p["slots"].size(), off])
+		check(not p["puzzle"].has("photo"), "%s keeps the photo in its request" % kind)
+		check(PatternIO.from_json(PatternIO.to_json(p))["slots"].size() == p["slots"].size(), "%s didn't save" % kind)
 
 
 ## Progress saves bit by bit and comes back the same.

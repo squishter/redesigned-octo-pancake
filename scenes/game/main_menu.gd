@@ -27,6 +27,10 @@ var _type: OptionButton
 var _theme: OptionButton
 var _start: Button
 var _new_title: Label
+var _photo_row: Control
+var _photo_dialog: FileDialog
+## Which photo puzzle the picker is choosing a photo for.
+var _photo_kind := ""
 ## The puzzle being recolored, or empty for a brand new one.
 var _recolor: Dictionary = {}
 var _busy: Control
@@ -85,6 +89,20 @@ func _ready() -> void:
 	_start = _button(actions, "Start", _start_making)
 	_start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_button(actions, "Cancel", func() -> void: _new_panel.visible = false)
+	# Or from one of her photos: colors come from the photo (snapped to her
+	# gem colors), so there's no theme to pick.
+	_photo_row = HBoxContainer.new()
+	form.add_child(_photo_row)
+	for kind: String in GemCatalog.PHOTO_MODES:
+		var b := _button(_photo_row, GemCatalog.PHOTO_MODES[kind]["name"] + "…", func() -> void: _pick_photo(kind))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_photo_dialog = FileDialog.new()
+	_photo_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_photo_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_photo_dialog.use_native_dialog = true
+	_photo_dialog.filters = PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Photos"])
+	_photo_dialog.file_selected.connect(_on_photo_picked)
+	add_child(_photo_dialog)
 
 	var saved := Label.new()
 	saved.text = "Your puzzles"
@@ -93,8 +111,8 @@ func _ready() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.scroll_deadzone = 24
 	root.add_child(scroll)
+	DragScroll.attach(scroll)
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
@@ -158,6 +176,7 @@ func _open_new(recolor: Dictionary) -> void:
 			if _type.get_item_metadata(i) == recolor["type"]:
 				_type.select(i)
 	_new_title.text = "Recolor this picture" if not recolor.is_empty() else "A new puzzle"
+	_photo_row.visible = recolor.is_empty()
 	_start.disabled = _type.item_count == 0 or _theme.item_count == 0
 	_new_panel.visible = true
 
@@ -178,6 +197,40 @@ func _start_making() -> void:
 	_busy.visible = true
 	var unlocks: Dictionary = (profile["unlocks"] as Dictionary).duplicate(true)
 	_task_id = WorkerThreadPool.add_task(_make.bind(_request.duplicate(), unlocks), false, "make puzzle")
+
+
+func _pick_photo(kind: String) -> void:
+	_photo_kind = kind
+	_photo_dialog.popup_centered_ratio(0.9)
+
+
+## A photo was picked: make its puzzle, shrunk first (big phone photos
+## would only slow it down).
+func _on_photo_picked(path: String) -> void:
+	if _task_id >= 0:
+		return
+	var photo := Image.load_from_file(path)
+	if photo == null or photo.is_empty():
+		_busy_label.text = "Couldn't open that photo."
+		_busy.visible = true
+		get_tree().create_timer(1.5).timeout.connect(func() -> void: _busy.visible = false)
+		return
+	_start_photo(photo, _photo_kind)
+
+
+## Makes a puzzle of `kind` (see GemCatalog.PHOTO_MODES) from `photo`.
+func _start_photo(photo: Image, kind: String) -> void:
+	var longest := maxi(photo.get_width(), photo.get_height())
+	if longest > PuzzleMaker.PHOTO_MAX:
+		var k := float(PuzzleMaker.PHOTO_MAX) / longest
+		photo.resize(maxi(1, int(photo.get_width() * k)), maxi(1, int(photo.get_height() * k)), Image.INTERPOLATE_LANCZOS)
+	_request = PuzzleMaker.new_request(kind, "")
+	_request["photo"] = photo
+	_new_panel.visible = false
+	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(kind).to_lower()
+	_busy.visible = true
+	var unlocks: Dictionary = (profile["unlocks"] as Dictionary).duplicate(true)
+	_task_id = WorkerThreadPool.add_task(_make.bind(_request, unlocks), false, "make photo puzzle")
 
 
 ## Runs on a worker thread; touches no nodes.
@@ -246,7 +299,9 @@ func _card(meta: Dictionary) -> Control:
 	var detail := Label.new()
 	var total := maxi(1, int(meta["total"]))
 	var state := "Finished" if meta["done"] else "%d%% placed" % int(100.0 * meta["filled"] / total)
-	detail.text = "%s · %s · %s" % [GemCatalog.theme_name(meta["theme"]), state, _ago(meta["updated"])]
+	var colors: String = "From your photo" if GemCatalog.PHOTO_MODES.has(meta["type"]) else GemCatalog.theme_name(
+			meta["theme"])
+	detail.text = "%s · %s · %s" % [colors, state, _ago(meta["updated"])]
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
 	detail.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
@@ -257,7 +312,9 @@ func _card(meta: Dictionary) -> Control:
 	_small_button(buttons, "View" if meta["done"] else "Continue", func() -> void: play_requested.emit(id))
 	var restart := _small_button(buttons, "Restart", Callable())
 	restart.pressed.connect(_confirmed.bind(restart, func() -> void: _restart(meta)))
-	_small_button(buttons, "Recolor", func() -> void: _open_new(meta))
+	# Photo puzzles take their colors from the photo, so they don't recolor.
+	if not GemCatalog.PHOTO_MODES.has(meta["type"]):
+		_small_button(buttons, "Recolor", func() -> void: _open_new(meta))
 	var delete := _small_button(buttons, "Delete", Callable())
 	delete.pressed.connect(_confirmed.bind(delete, func() -> void:
 		SaveStore.delete_puzzle(profile, id)
