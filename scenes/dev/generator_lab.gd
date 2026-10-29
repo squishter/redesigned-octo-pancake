@@ -6,7 +6,10 @@ extends Control
 ## every setting in an Options panel above it. The Lines box above the
 ## picture flips to the line art it was made from, without regenerating, and
 ## the 3D box shows collages and kits as real gems (GemBoard3D) instead of
-## flat shapes.
+## flat shapes. Opened from the game's menu (`show_back`), a Menu button
+## goes back to it.
+
+signal back_requested
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
@@ -43,6 +46,8 @@ var _options_panel: Control
 var _options_button: Button
 var _file_dialog: FileDialog
 
+## Show a Menu button that goes back to the game.
+var show_back := false
 var _photo: Image
 var _task_id := -1
 var _task_started := 0
@@ -59,6 +64,8 @@ func _ready() -> void:
 
 	var top := HBoxContainer.new()
 	root.add_child(top)
+	if show_back:
+		_button(top, "‹ Menu", go_back)
 	_summary = Label.new()
 	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -168,6 +175,16 @@ func _ready() -> void:
 	add_child(_file_dialog)
 
 	_generate()
+
+
+## Back to the game (a picture being made finishes first: its worker writes here).
+func go_back() -> void:
+	if not show_back:
+		return
+	if _task_id >= 0:
+		WorkerThreadPool.wait_for_task_completion(_task_id)
+		_task_id = -1
+	back_requested.emit()
 
 
 ## Keeps the layout clear of notches and rounded corners.

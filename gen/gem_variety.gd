@@ -18,18 +18,26 @@ extends RefCounted
 ## trillion, triangle and star fit a circle; oval, marquise, lozenge, kite and
 ## teardrop fit a capsule (baguette and emerald corners don't, so nothing
 ## becomes one).
+##
+## A game passes the shapes and cuts she has unlocked (`allowed`, shape ->
+## its cuts): restrict() first gives every other stone a stand-in shape
+## resized to fit its slot, and balance() only swaps among allowed ones.
 
 const ROUND_FAMILY := ["round", "cushion", "octagon", "hexagon", "flower", "square", "pentagon", "heart", "trillion",
 		"triangle", "star"]  # most fitting first
 const LONG_FAMILY := ["oval", "marquise", "lozenge", "kite", "teardrop"]
+const BOX_FAMILY := ["baguette", "emerald"]
 
 
 ## slots: the collage's slots, each with shape, part, target_color and
 ##   target_gem; `group_of` gives each slot's region a group id.
 ## colors: Array of {"color", "gem"} to recolor with, best first (gem may be
 ##   null when colors aren't snapped to gems); empty to only swap shapes.
+## allowed: shape -> Array of cuts it may take (empty: every shape and cut);
+##   run restrict() with it first.
 ## Sets every slot's "cut". Returns the number of gem types afterwards.
-static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, target: int, seed_value: int) -> int:
+static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, target: int, seed_value: int,
+		allowed: Dictionary = {}) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "variety"])
 	var units := {}  # key -> {slots, shape, color, gem, combo}
@@ -40,7 +48,8 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 		if not units.has(key):
 			units[key] = {"slots": [], "shape": s["shape"], "color": s["target_color"], "gem": s["target_gem"],
 					"locked": s.get("seq", -1) >= 0,
-					"cut": GemCuts.pick(s["shape"], _gem_key(s["target_gem"], s["target_color"]), seed_value)}
+					"cut": GemCuts.pick(s["shape"], _gem_key(s["target_gem"], s["target_color"]), seed_value,
+							_cuts(s["shape"], allowed))}
 			unit_keys.append(key)
 		units[key]["slots"].append(s)
 	unit_keys.sort()
@@ -69,8 +78,8 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			# then a new cut of it, then a new color (colors are ordered best first).
 			var shape: String = u["shape"]
 			var gem_key := _gem_key(u["gem"], u["color"])
-			for alt in _family(shape):
-				var alt_cut := GemCuts.pick(alt, gem_key, seed_value)
+			for alt in _family(shape, allowed):
+				var alt_cut := GemCuts.pick(alt, gem_key, seed_value, _cuts(alt, allowed))
 				if alt != shape and not holders.has(_combo_of(alt, alt_cut, u["gem"], u["color"])):
 					_count(holders, stones, u, -1)
 					u["shape"] = alt
@@ -80,7 +89,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 					break
 			if changed:
 				break
-			for cut: String in GemCuts.for_shape(shape):
+			for cut: String in _cuts(shape, allowed):
 				if not holders.has(_combo_of(shape, cut, u["gem"], u["color"])):
 					_count(holders, stones, u, -1)
 					u["cut"] = cut
@@ -130,7 +139,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			for key2 in unit_keys:
 				var v: Dictionary = units[key2]
 				var cv := _combo(v)
-				if cv == rare or not v["shape"] in _family(u["shape"]):
+				if cv == rare or not v["shape"] in _family(u["shape"], allowed):
 					continue
 				if colors.is_empty() and v["shape"] == u["shape"]:
 					continue
@@ -177,12 +186,101 @@ static func kinds(slots: Array) -> Array:
 	return out
 
 
-static func _family(shape: String) -> Array:
+## Gives every slot whose shape isn't in `allowed` (shape -> cuts) the
+## nearest allowed shape: one of its own family if any (round, long or box),
+## else one from another family, resized to fit inside the slot.
+static func restrict(slots: Array, allowed: Dictionary) -> void:
+	if allowed.is_empty():
+		return
+	var stand_ins := {}
+	for s in slots:
+		var shape: String = s["shape"]
+		if allowed.has(shape):
+			continue
+		if not stand_ins.has(shape):
+			stand_ins[shape] = _stand_in(shape, allowed)
+		var alt: String = stand_ins[shape]
+		if alt != "":
+			_reshape(s, alt)
+
+
+## The allowed shape nearest `shape`: its family's neighbors first (the
+## families list their shapes most alike next to each other), then the
+## other families; "" if nothing is allowed.
+static func _stand_in(shape: String, allowed: Dictionary) -> String:
+	var order := []
+	for fam: Array in [_whole_family(shape), LONG_FAMILY, ROUND_FAMILY, BOX_FAMILY]:
+		var at := fam.find(shape)
+		var by_near := fam.duplicate()
+		if at >= 0:
+			by_near.sort_custom(func(a: String, b: String) -> bool:
+				return absi(fam.find(a) - at) < absi(fam.find(b) - at))
+		for f: String in by_near:
+			if not f in order:
+				order.append(f)
+	for f: String in order:
+		if allowed.has(f):
+			return f
+	for f: String in allowed:
+		return f
+	return ""
+
+
+## Turns a slot into `to`, keeping it inside the slot it had: a circle's
+## stone fits a capsule as wide as it, a capsule's fits the circle it spans,
+## and a box's corners are pulled in.
+static func _reshape(s: Dictionary, to: String) -> void:
+	var from: Array = _whole_family(s["shape"])
+	var into: Array = _whole_family(to)
+	var size: float = s["size"]
+	var width: float = s["width"]
+	if from != into:
+		if into == ROUND_FAMILY:
+			s["size"] = minf(size, width)
+			s["width"] = s["size"]
+		elif into == LONG_FAMILY:
+			if from == ROUND_FAMILY:
+				s["width"] = size * 0.7
+		elif from == ROUND_FAMILY:
+			s["size"] = size * 0.8
+			s["width"] = size * 0.55
+		else:
+			s["size"] = size - width * 0.3
+			s["width"] = width * 0.75
+	s["shape"] = to
+
+
+static func _whole_family(shape: String) -> Array:
 	if shape in ROUND_FAMILY:
 		return ROUND_FAMILY
 	if shape in LONG_FAMILY:
 		return LONG_FAMILY
+	if shape in BOX_FAMILY:
+		return BOX_FAMILY
 	return [shape]
+
+
+## The shapes `shape` may swap with: its family (only round and long ones
+## swap), narrowed to the allowed shapes.
+static func _family(shape: String, allowed: Dictionary = {}) -> Array:
+	var fam: Array = [shape]
+	if shape in ROUND_FAMILY:
+		fam = ROUND_FAMILY
+	elif shape in LONG_FAMILY:
+		fam = LONG_FAMILY
+	if allowed.is_empty():
+		return fam
+	return fam.filter(func(f: String) -> bool: return allowed.has(f) or f == shape)
+
+
+## The cuts `shape` may take, classic first: every one of them, or those allowed.
+static func _cuts(shape: String, allowed: Dictionary) -> Array:
+	var cuts := GemCuts.for_shape(shape)
+	if not allowed.has(shape):
+		return cuts
+	var ok: Array = allowed[shape]
+	var out := cuts.filter(func(c: String) -> bool: return c in ok)
+	return out if not out.is_empty() else [cuts[0]]
 
 
 static func _same_color(u: Dictionary, v: Dictionary) -> bool:
