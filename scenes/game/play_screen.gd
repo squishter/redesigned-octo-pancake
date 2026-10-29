@@ -61,7 +61,7 @@ var _last_buzz := -BUZZ_GAP_MS
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 24)
 	add_child(root)
@@ -105,11 +105,11 @@ func _ready() -> void:
 	_area.clip_contents = true
 	root.add_child(_area)
 	_board = GemBoard3D.new()
-	_board.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_board.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_area.add_child(_board)
 	_overlay = SlotOverlay.new()
 	_overlay.board = _board
-	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_area.add_child(_overlay)
 	_board.stroke_filter = _can_stroke
 	_board.stroke_started.connect(_on_stroke_started)
@@ -399,7 +399,7 @@ func _finish(celebrate: bool) -> void:
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner.set_anchors_preset(Control.PRESET_FULL_RECT)
+	banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_area.add_child(banner)
 	banner.pivot_offset = _area.size / 2.0
 	banner.scale = Vector2(0.3, 0.3)

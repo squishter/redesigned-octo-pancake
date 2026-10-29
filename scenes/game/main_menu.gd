@@ -33,7 +33,7 @@ var _result: Dictionary = {}
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 32)
 	add_child(root)
@@ -89,12 +89,12 @@ func _ready() -> void:
 	# Covers the menu while a puzzle is being made.
 	_busy = ColorRect.new()
 	(_busy as ColorRect).color = Color(LabTheme.BG, 0.85)
-	_busy.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_busy.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_busy.mouse_filter = Control.MOUSE_FILTER_STOP
 	_busy.visible = false
 	add_child(_busy)
 	_busy_label = Label.new()
-	_busy_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_busy_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_busy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_busy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_busy_label.add_theme_color_override("font_color", LabTheme.GOLD)

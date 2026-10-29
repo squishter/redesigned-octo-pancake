@@ -59,7 +59,7 @@ func _ready() -> void:
 	add_child(_shapes)
 	_shapes.draw.connect(_draw_shapes)
 	_labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_labels.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_labels.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_labels)
 	_labels.draw.connect(_draw_labels)
 	board.view_changed.connect(_follow_view)
