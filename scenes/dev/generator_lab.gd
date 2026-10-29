@@ -10,6 +10,7 @@ var _template: OptionButton
 var _collar: OptionButton
 var _silhouette: OptionButton
 var _zoom: OptionButton
+var _frame: OptionButton
 var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
@@ -42,6 +43,7 @@ func _ready() -> void:
 	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS)
 	_silhouette = _options(controls, "Outline", ["random"] + MandalaDesign.SILHOUETTES)
 	_zoom = _options(controls, "Zoom", ["auto", "off", "on"])
+	_frame = _options(controls, "Frame", ["auto", "off", "on"])
 	_theme = _options(controls, "Theme", Array(Palettes.theme_names()))
 	_mode = _options(controls, "Mode", ["Collage", "Kit", "Line art"])
 	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
@@ -160,6 +162,7 @@ func _generate() -> void:
 		"collar": _selected(_collar),
 		"silhouette": _selected(_silhouette),
 		"zoom": _selected(_zoom),
+		"frame": _selected(_frame),
 		"theme": _selected(_theme),
 		"wobble": _wobble.value,
 		"detail": _detail.value,
@@ -190,6 +193,8 @@ func _run_job(job: Dictionary) -> void:
 	}
 	if job["zoom"] != "auto":
 		opts["zoom"] = job["zoom"] == "on"
+	if job["frame"] != "auto":
+		opts["frame"] = job["frame"] == "on"
 	var photo: Image = job["photo"]
 	var out := {"mode": job["mode"]}
 	match job["mode"]:
@@ -238,6 +243,10 @@ func _process(_delta: float) -> void:
 				var f: Dictionary = p["source"]["snowflake"]
 				flower = ", %s center, %s arms, %s tips, between %s, details %s" % [f["center"], f["arm"], f["tip"],
 						" + ".join(PackedStringArray(f["between"])), " + ".join(PackedStringArray(f["details"]))]
+			if p["source"].has("frame"):
+				var fr: Dictionary = p["source"]["frame"]
+				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],
+						fr["background"]]
 			_status.text = "Collage%s: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
 				flower, p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
 				p["line_style"], fills, ms]

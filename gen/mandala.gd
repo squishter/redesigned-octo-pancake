@@ -9,16 +9,19 @@ extends RefCounted
 ##
 ## Each variant has its own generator: MandalaDesign, FlowerGenerator,
 ## SnowflakeGenerator, HeartGenerator and ButterflyGenerator. This class picks
-## one and holds the small shape helpers they share.
+## one, frames most pictures with FrameDesign, and holds the small shape
+## helpers they share.
 
 const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 
 
 ## options: variant (one of VARIANTS or "random", default "mandala"), wobble
-## (0..1, the "semi-symmetric" strength, default 0), plus the chosen
-## generator's own options (see each generator). Returns
+## (0..1, the "semi-symmetric" strength, default 0), FrameDesign's options
+## (frame, frame_shape, frame_band, frame_corner, background, frame_recent),
+## plus the chosen generator's own options (see each generator). Returns
 ## {"seed", "variant", "symmetry": "radial" | "mirror" | "none", "polylines",
-## "closed"}, plus the design's choices under the variant's name: "mandala"
+## "closed", "frame"} ("frame" is FrameDesign's choices, or empty), plus the
+## design's choices under the variant's name: "mandala"
 ## (folds, silhouette, center, rings, extras, zoom), "flower" (template,
 ## rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
 ## (shape, border, body, antennae, fore, hind) or "snowflake" (center, arm,
@@ -57,14 +60,26 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var info := {}
 	for key in keys:
 		info[key] = design[key]
+	var framing := {"polylines": design["polylines"], "closed": design["closed"], "frame": {}}
+	if _frameable(variant, design):
+		framing = FrameDesign.apply(design["polylines"], design["closed"], seed_value, options)
 	return {
 		"seed": seed_value,
 		"variant": variant,
 		"symmetry": symmetry,
-		"polylines": design["polylines"],
-		"closed": design["closed"],
+		"polylines": framing["polylines"],
+		"closed": framing["closed"],
+		"frame": framing["frame"],
 		variant: info,
 	}
+
+
+## Mandalas that are zoomed in, or already have a frame or corner fans of
+## their own, aren't framed again.
+static func _frameable(variant: String, design: Dictionary) -> bool:
+	if variant != "mandala":
+		return true
+	return not design["zoom"] and not ("frame" in design["extras"] or "corners" in design["extras"])
 
 
 # --- shared helpers ---------------------------------------------------------------

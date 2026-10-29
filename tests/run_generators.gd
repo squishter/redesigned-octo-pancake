@@ -26,6 +26,7 @@ func _init() -> void:
 	test_hearts()
 	test_butterflies()
 	test_snowflakes()
+	test_frames()
 	test_collages()
 	test_design_plans()
 	test_kits()
@@ -75,7 +76,7 @@ func test_mandalas() -> void:
 	var combined := 0
 	for i in count:
 		var seed_value := 7000 + i
-		var opts := {"variant": "mandala", "recent": recent}
+		var opts := {"variant": "mandala", "recent": recent, "frame": false}
 		if i == 5 or i == 17:
 			opts["zoom"] = true
 		var lines := PictureSources.mandala_lines(seed_value, opts)
@@ -124,7 +125,8 @@ func test_flowers() -> void:
 	var counts := {}
 	for i in count:
 		var seed_value := 3000 + i
-		var lines := PictureSources.mandala_lines(seed_value, {"variant": "flower", "recent": recent, "wobble": 0.4})
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "flower", "recent": recent, "wobble": 0.4,
+				"frame": false})
 		var flower: Dictionary = lines["mandala"]["flower"]
 		var template: String = flower["template"]
 		check(not template in recent.slice(maxi(0, recent.size() - FlowerGenerator.AVOID_RECENT)),
@@ -167,7 +169,7 @@ func test_hearts() -> void:
 	var combined := 0
 	for i in count:
 		var seed_value := 4000 + i
-		var lines := PictureSources.mandala_lines(seed_value, {"variant": "heart", "recent": recent})
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "heart", "recent": recent, "frame": false})
 		var heart: Dictionary = lines["mandala"]["heart"]
 		recent.append(heart)
 		seen[heart["shape"]] = true
@@ -208,7 +210,7 @@ func test_butterflies() -> void:
 	var differ := 0
 	for i in count:
 		var seed_value := 5000 + i
-		var lines := PictureSources.mandala_lines(seed_value, {"variant": "butterfly", "recent": recent})
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "butterfly", "recent": recent, "frame": false})
 		var b: Dictionary = lines["mandala"]["butterfly"]
 		recent.append(b)
 		for key in ["shape", "border", "body", "antennae"]:
@@ -250,7 +252,7 @@ func test_snowflakes() -> void:
 	var bare := 0
 	for i in count:
 		var seed_value := 6000 + i
-		var lines := PictureSources.mandala_lines(seed_value, {"variant": "snowflake", "recent": recent})
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "snowflake", "recent": recent, "frame": false})
 		var f: Dictionary = lines["mandala"]["snowflake"]
 		recent.append(f)
 		for key in ["center", "arm", "tip"]:
@@ -275,6 +277,48 @@ func test_snowflakes() -> void:
 	sheet.save_png(out_dir.path_join("snowflakes_contact_sheet.png"))
 
 
+## Frames: about three in four pictures are framed by default; 24 framed
+## pictures in a row (across all variants) use every frame shape, band,
+## corner and background. Writes a contact sheet.
+func test_frames() -> void:
+	print("Frames")
+	var framed := 0
+	for i in 40:
+		var m := MandalaGenerator.generate(9000 + i, {"variant": MandalaGenerator.VARIANTS[i % 5], "zoom": false,
+				"extras": []})
+		if not m["frame"].is_empty():
+			framed += 1
+	print("  %d of 40 framed by default" % framed)
+	check(framed >= 22 and framed <= 37, "%d of 40 framed, expected about 30" % framed)
+
+	var count := 24
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 4, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	for i in count:
+		var seed_value := 8000 + i
+		var variant: String = MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()]
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": variant, "frame": true, "frame_recent": recent,
+				"zoom": false, "extras": []})
+		var frame: Dictionary = lines["mandala"]["frame"]
+		recent.append(frame)
+		for key in frame:
+			seen[frame[key]] = true
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
+		print("  seed %d %-9s %-8s %-8s %-8s %-9s %3d regions" % [seed_value, variant, frame["shape"], frame["band"],
+				frame["corner"], frame["background"], map.regions.size()])
+		check(map.regions.size() >= 10, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		sheet_cell(sheet, lines, i, cell)
+	var expected := FrameDesign.SHAPES + FrameDesign.BANDS + FrameDesign.CORNERS + FrameDesign.BACKGROUNDS
+	for choice in expected:
+		check(seen.has(choice), "%s never showed up in %d frames" % [choice, count])
+	sheet.save_png(out_dir.path_join("frames_contact_sheet.png"))
+
+
 ## Packs `seeds` mandalas across all variants and themes and checks the slots
 ## stay inside their regions, don't overlap, and cover the regions well.
 func test_collages() -> void:
@@ -288,6 +332,7 @@ func test_collages() -> void:
 			"variant": variant,
 			"wobble": 0.5 if i % 2 else 0.0,
 			"theme": themes[i % themes.size()],
+			"frame": false,
 		})
 		var ms := Time.get_ticks_msec() - t0
 		var slots: Array = p["slots"]

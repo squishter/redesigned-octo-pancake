@@ -14,7 +14,8 @@ const BACKGROUND := Color("#f4eee6")
 ## hearts (see HeartGenerator), shape, border, body, antennae and recent for
 ## butterflies (see ButterflyGenerator), center, arm, tip, between, details
 ## and recent for snowflakes (see SnowflakeGenerator), size (raster px,
-## default 768), line_width (px, default size / 170).
+## default 768), line_width (px, default size / 170), and FrameDesign's
+## framing options (frame, background, ...); most pictures get a frame.
 ## Returns {"mask", "width", "height", "mandala"}.
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
@@ -49,6 +50,8 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictio
 		opts["source"]["snowflake"] = mandala["snowflake"]
 	if mandala.has("mandala"):
 		opts["source"]["mandala"] = mandala["mandala"]
+	if not mandala["frame"].is_empty():
+		opts["source"]["frame"] = mandala["frame"]
 	return CollageGenerator.generate(lines["mask"], lines["width"], lines["height"], opts)
 
 
