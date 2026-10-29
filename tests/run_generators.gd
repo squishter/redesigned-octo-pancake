@@ -24,6 +24,7 @@ func _init() -> void:
 	test_flowers()
 	test_hearts()
 	test_butterflies()
+	test_snowflakes()
 	test_collages()
 	test_design_plans()
 	test_kits()
@@ -181,6 +182,45 @@ func test_butterflies() -> void:
 		check(seen.has(choice), "%s never showed up in %d butterflies" % [choice, count])
 	check(differ >= count / 2, "forewing and hindwing patterns match in %d of %d" % [count - differ, count])
 	sheet.save_png(out_dir.path_join("butterflies_contact_sheet.png"))
+
+
+## 24 snowflakes in a row: every center, arm, tip, in-between content and
+## detail shows up, nearly all have content between the arms, and each has
+## plenty of closed regions. Writes a contact sheet.
+func test_snowflakes() -> void:
+	print("Snowflakes")
+	var count := 24
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 4, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	var bare := 0
+	for i in count:
+		var seed_value := 6000 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "snowflake", "recent": recent})
+		var f: Dictionary = lines["mandala"]["snowflake"]
+		recent.append(f)
+		for key in ["center", "arm", "tip"]:
+			seen[f[key]] = true
+		for b in f["between"] + f["details"]:
+			seen[b] = true
+		if f["between"].is_empty():
+			bare += 1
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
+		print("  seed %d %-8s %-9s %-8s between %-18s details %-12s %3d regions" % [seed_value, f["center"], f["arm"],
+				f["tip"], " + ".join(PackedStringArray(f["between"])), " + ".join(PackedStringArray(f["details"])),
+				map.regions.size()])
+		check(map.regions.size() >= 6, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		sheet_cell(sheet, lines, i, cell)
+	var expected := (SnowflakeGenerator.CENTERS + SnowflakeGenerator.ARMS + SnowflakeGenerator.TIPS
+			+ SnowflakeGenerator.BETWEEN + SnowflakeGenerator.DETAILS)
+	for choice in expected:
+		check(seen.has(choice), "%s never showed up in %d snowflakes" % [choice, count])
+	check(bare <= count / 4, "%d of %d snowflakes have nothing between the arms" % [bare, count])
+	sheet.save_png(out_dir.path_join("snowflakes_contact_sheet.png"))
 
 
 ## Packs `seeds` mandalas across all variants and themes and checks the slots

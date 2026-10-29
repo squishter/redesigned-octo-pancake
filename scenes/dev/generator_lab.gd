@@ -221,6 +221,10 @@ func _process(_delta: float) -> void:
 				var b: Dictionary = p["source"]["butterfly"]
 				flower = ", %s wings, %s border, fore %s, hind %s" % [b["shape"], b["border"],
 						" + ".join(PackedStringArray(b["fore"])), " + ".join(PackedStringArray(b["hind"]))]
+			if p["source"].has("snowflake"):
+				var f: Dictionary = p["source"]["snowflake"]
+				flower = ", %s center, %s arms, %s tips, between %s, details %s" % [f["center"], f["arm"], f["tip"],
+						" + ".join(PackedStringArray(f["between"])), " + ".join(PackedStringArray(f["details"]))]
 			_status.text = "Collage%s: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
 				flower, p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
 				p["line_style"], fills, ms]

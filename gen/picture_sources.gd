@@ -11,8 +11,9 @@ const BACKGROUND := Color("#f4eee6")
 ## Mandala options: variant, wobble (see MandalaGenerator), template and recent
 ## for flowers (see FlowerGenerator), shape, collar, patterns and recent for
 ## hearts (see HeartGenerator), shape, border, body, antennae and recent for
-## butterflies (see ButterflyGenerator), size (raster px, default 768),
-## line_width (px, default size / 170).
+## butterflies (see ButterflyGenerator), center, arm, tip, between, details
+## and recent for snowflakes (see SnowflakeGenerator), size (raster px,
+## default 768), line_width (px, default size / 170).
 ## Returns {"mask", "width", "height", "mandala"}.
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
@@ -43,6 +44,8 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictio
 		opts["source"]["heart"] = mandala["heart"]
 	if mandala.has("butterfly"):
 		opts["source"]["butterfly"] = mandala["butterfly"]
+	if mandala.has("snowflake"):
+		opts["source"]["snowflake"] = mandala["snowflake"]
 	return CollageGenerator.generate(lines["mask"], lines["width"], lines["height"], opts)
 
 

@@ -14,7 +14,8 @@ extends RefCounted
 ## boundaries, so every region stays closed.
 ##
 ## Flowers come from FlowerGenerator's petal templates, hearts from
-## HeartGenerator and butterflies from ButterflyGenerator.
+## HeartGenerator, butterflies from ButterflyGenerator and snowflakes from
+## SnowflakeGenerator.
 
 const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 const MOTIFS := ["petals", "scallops", "dots", "zigzag", "lattice", "leaves"]
@@ -29,11 +30,13 @@ var closed := PackedByteArray()
 ## "semi-symmetric" strength, default 0); flowers also take FlowerGenerator's
 ## template and recent, hearts HeartGenerator's shape, collar, patterns and
 ## recent, butterflies ButterflyGenerator's shape, border, body, antennae and
-## recent. Returns
+## recent, snowflakes SnowflakeGenerator's center, arm, tip, between, details
+## and recent. Returns
 ## {"seed", "variant", "symmetry": "radial" | "mirror", "polylines", "closed"},
 ## plus "flower" (FlowerGenerator's template, rings and center) for flowers,
-## "heart" (shape, collar, patterns, divider) for hearts and "butterfly"
-## (shape, border, body, antennae, fore, hind) for butterflies.
+## "heart" (shape, collar, patterns, divider) for hearts, "butterfly"
+## (shape, border, body, antennae, fore, hind) for butterflies and
+## "snowflake" (center, arm, tip, between, details) for snowflakes.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var g := MandalaGenerator.new()
 	g.rng.seed = seed_value
@@ -53,7 +56,16 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 				"flower": {"template": f["template"], "rings": f["rings"], "center": f["center"]},
 			}
 		"snowflake":
-			g._build_snowflake()
+			var f := SnowflakeGenerator.generate(seed_value, options)
+			return {
+				"seed": seed_value,
+				"variant": variant,
+				"symmetry": "radial",
+				"polylines": f["polylines"],
+				"closed": f["closed"],
+				"snowflake": {"center": f["center"], "arm": f["arm"], "tip": f["tip"], "between": f["between"],
+						"details": f["details"]},
+			}
 		"heart":
 			var h := HeartGenerator.generate(seed_value, options)
 			return {
@@ -260,49 +272,3 @@ func _build_mandala() -> void:
 		_add_ring_motif(parts, m, r, r_out, rot)
 		_add(circle(Vector2.ZERO, r_out), true)
 		r = r_out
-
-
-func _build_snowflake() -> void:
-	var w := rng.randf_range(0.035, 0.055)
-	var c0 := rng.randf_range(0.14, 0.22)
-	for s in [c0, c0 * 0.55]:
-		var hex := PackedVector2Array()
-		for i in 6:
-			hex.append(_polar(s, TAU * i / 6.0 + TAU / 12.0))
-		_add(hex, true)
-	# One arm along +x, then rotated six times.
-	var x0 := c0 * cos(TAU / 12.0) - 0.002
-	var parts: Array[PackedVector2Array] = [
-		PackedVector2Array([Vector2(x0, -w), Vector2(0.88, -w), Vector2(1.0, 0.0), Vector2(0.88, w), Vector2(x0, w)]),
-	]
-	var branches := rng.randi_range(2, 3)
-	for i in branches:
-		var bx := x0 + (1.0 - x0) * (0.22 + 0.45 * i / maxf(1.0, branches - 1.0)) * rng.randf_range(0.95, 1.05)
-		var bl := (1.0 - bx) * rng.randf_range(0.5, 0.7) + 0.1
-		var bw := w * rng.randf_range(1.6, 2.0)
-		var dir := Vector2.from_angle(deg_to_rad(rng.randf_range(50.0, 60.0)))
-		var normal := Vector2(dir.y, -dir.x)
-		var mid := Vector2(bx, w) + dir * bl * 0.35
-		# A blade whose base sits on the arm's edge, so it closes against it,
-		# widest a third of the way out. Built on the +y side, then mirrored.
-		var blade := PackedVector2Array([
-			Vector2(bx - bw, w),
-			mid - normal * bw * 0.75,
-			Vector2(bx, w) + dir * bl,
-			mid + normal * bw * 0.75,
-			Vector2(bx + bw, w),
-		])
-		parts.append(blade)
-		var mirrored := PackedVector2Array()
-		for v in blade:
-			mirrored.append(Vector2(v.x, -v.y))
-		parts.append(mirrored)
-	var dx := x0 + (1.0 - x0) * 0.62
-	parts.append(PackedVector2Array([Vector2(dx - 0.05, 0), Vector2(dx, -w * 0.55), Vector2(dx + 0.05, 0), Vector2(dx, w * 0.55)]))
-	for k in 6:
-		var rot := TAU * k / 6.0
-		for p in parts:
-			var pts := PackedVector2Array()
-			for v in p:
-				pts.append(v.rotated(rot))
-			_add(pts, true)
