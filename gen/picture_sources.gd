@@ -28,9 +28,11 @@ static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictiona
 ## A Collage puzzle from a seeded mandala. Options as mandala_lines plus
 ## CollageGenerator's (theme, gems, setting, line_gems, ...). The seed picks
 ## the lines; `pattern_seed` picks how they become gems, so one line art
-## makes many collages.
-static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictionary:
-	var lines := mandala_lines(seed_value, options)
+## makes many collages. Pass `lines` (mandala_lines of the same seed and
+## options) to reuse line art already made.
+static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Dictionary = {}) -> Dictionary:
+	if lines.is_empty():
+		lines = mandala_lines(seed_value, options)
 	var mandala: Dictionary = lines["mandala"]
 	var opts := options.duplicate()
 	opts["seed"] = seed_value
@@ -62,8 +64,10 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}) -> Dictio
 ## The same design plan as the collage applies (sparsity, line_style options):
 ## bare regions take the background color, other sparse fills a pale tint of
 ## their color, and hidden lines take the color of the regions beside them.
-static func mandala_image(seed_value: int, options: Dictionary = {}) -> Image:
-	var lines := mandala_lines(seed_value, options)
+## Pass `lines` (mandala_lines of the same seed and options) to reuse them.
+static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dictionary = {}) -> Image:
+	if lines.is_empty():
+		lines = mandala_lines(seed_value, options)
 	var w: int = lines["width"]
 	var h: int = lines["height"]
 	var symmetry: String = lines["mandala"]["symmetry"]
@@ -84,8 +88,10 @@ static func mandala_image(seed_value: int, options: Dictionary = {}) -> Image:
 
 ## A Collage puzzle from a photo: photo -> line art, region colors sampled
 ## from the photo. Options: detail (0..1), max_size, plus CollageGenerator's.
-static func photo_collage(photo: Image, options: Dictionary = {}) -> Dictionary:
-	var art := PhotoLineArt.generate(photo, options)
+## Pass `art` (PhotoLineArt.generate of the same photo and options) to reuse it.
+static func photo_collage(photo: Image, options: Dictionary = {}, art: Dictionary = {}) -> Dictionary:
+	if art.is_empty():
+		art = PhotoLineArt.generate(photo, options)
 	var opts := options.duplicate()
 	opts["colors_image"] = art["image"]
 	opts["source"] = {"kind": "photo", "detail": options.get("detail", 0.5)}

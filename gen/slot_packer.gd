@@ -62,6 +62,9 @@ const TIER_SHAPES := ["round", "round", "hexagon", "square", "oval", "marquise",
 const SPACER := 0.5
 ## Smallest stone scale at the picture's center when sizes shrink inward.
 const RADIAL_MIN := 0.55
+## Smallest stone radius (in units) in thin places: chains along slivers
+## and rows where a region pinches.
+const MIN_STONE := 0.25
 
 var map: RegionMap
 var rng := RandomNumberGenerator.new()
@@ -79,6 +82,10 @@ var tiers := false
 ## Thin rows of small stones between a pattern's main rows, each its own part,
 ## so a picture can use more gem types while every row keeps a single type.
 var spacers := false
+## The picture is symmetric (radial or mirror): regions that map onto
+## themselves (mirrored, or turned about the center) get patterns as
+## symmetric (see SlotMirror).
+var mirror_axes := false
 var _pic_center := Vector2.ZERO
 var _pic_reach := 1.0
 
@@ -91,6 +98,12 @@ var _region := -1
 var _region_blocks := Rect2i()
 var _cur_max := 0.0
 var _tone := 0
+## The current region's own mirror axis (an angle through the picture's
+## center), or NAN.
+var _axis := NAN
+## Symmetry.ring_symmetry of the current region when it lies around the
+## picture's center (or of the lines around it, see _ring_sym), for its rings.
+var _ring := {}
 ## Which step of the pattern is placing stones (a row, a ring, the center
 ## stone...). Counted from 0 in every region, so symmetric copies agree.
 var _part := 0
@@ -104,7 +117,9 @@ var _part := 0
 ##   tiers (bool): some groups first get a few large, then a few medium stones,
 ##   spacers (bool): every row pattern gets thin rows of small stones between
 ##     its main rows (otherwise only some groups, picked per seed),
-##   styles (Dictionary region id -> style, to force a style or sparse fill).
+##   styles (Dictionary region id -> style, to force a style or sparse fill),
+##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
+##     regions that map onto themselves get patterns as symmetric.
 ## Returns slots: {id, region, shape, x, y, rotation, size, width, tone, part},
 ## in px of the map; size is the length along the rotation, width across it;
 ## tone 1 marks stones in the region's accent color, tone 2 in its feature
@@ -119,13 +134,27 @@ static func pack(region_map: RegionMap, options: Dictionary = {}) -> Array[Dicti
 	var order := region_map.regions.duplicate()
 	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["area"] > b["area"])
 	# Each group's pattern is designed on its biggest member (first in order).
+	# A region is packed once and copied onto every symmetric copy of it by
+	# the rotation or reflection that maps one onto the other, so copies get
+	# the same stones. A group can hold more than one shape (rings of
+	# different regions at the same distance): each shape is packed once.
 	var designs := {}
+	var masters := {}
 	for region in order:
 		var id: int = region["id"]
 		var g: int = groups[id] if id < groups.size() else -1 - id
 		if not designs.has(g):
 			designs[g] = p._design(region, forced.get(id, ""), g)
-		p._pack_region(region, designs[g])
+			masters[g] = []
+		var copied := false
+		for m: Dictionary in masters[g]:
+			if forced.get(id, "") == m["style"] and SlotMirror.copy_region(p, region, m):
+				copied = true
+				break
+		if not copied:
+			var first := p.slots.size()
+			p._pack_region(region, designs[g])
+			masters[g].append({"region": region, "slots": p.slots.slice(first), "style": forced.get(id, "")})
 	return p.slots
 
 
@@ -139,6 +168,7 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
+	mirror_axes = options.get("symmetry", "none") != "none"
 	_pic_center = Vector2(region_map.width, region_map.height) / 2.0
 	_pic_reach = side / 2.0
 	free = region_map.dist.duplicate()
@@ -220,7 +250,7 @@ static func _pick(weights: Dictionary, r: RandomNumberGenerator) -> String:
 	return weights.keys()[0]
 
 
-func _pack_region(region: Dictionary, design: Dictionary) -> void:
+func _begin_region(region: Dictionary) -> void:
 	_region = region["id"]
 	var bbox: Rect2i = region["bbox"]
 	_region_blocks = Rect2i(bbox.position.x / BLOCK, bbox.position.y / BLOCK, 0, 0)
@@ -231,6 +261,72 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 	_cur_max = region["max_dist"]
 	_tone = 0
 	_part = 0
+	_ring = {}
+
+
+## Clears the current region's stones from the free field.
+func _reset_free(region: Dictionary) -> void:
+	var bbox: Rect2i = region["bbox"]
+	for y in range(bbox.position.y, bbox.end.y):
+		for x in range(bbox.position.x, bbox.end.x):
+			var i := y * map.width + x
+			if map.labels[i] == _region:
+				free[i] = map.dist[i]
+	for by in range(_region_blocks.position.y, _region_blocks.end.y):
+		for bx in range(_region_blocks.position.x, _region_blocks.end.x):
+			_block_dirty[by * _bw + bx] = 1
+	_cur_max = region["max_dist"]
+
+
+## Least free room along a capsule's axis (centre c, half-length h along dir).
+func _room(c: Vector2, dir: Vector2, h: float) -> float:
+	var n := maxi(1, ceili(h / 2.0))
+	var room := INF
+	for i in range(-n, n + 1):
+		room = minf(room, _free_at(c + dir * (h * i / n)))
+	return room
+
+
+## Distance from a capsule's axis (centre c, half-length h along dir) to the
+## nearest edge of region `id`, sampled along the axis.
+func _edge_room(c: Vector2, dir: Vector2, h: float, id: int) -> float:
+	var n := maxi(1, ceili(h / 2.0))
+	var room := INF
+	for i in range(-n, n + 1):
+		var q := c + dir * (h * i / n)
+		var x := int(q.x)
+		var y := int(q.y)
+		if map.label_at(x, y) != id:
+			return 0.0
+		room = minf(room, map.dist[y * map.width + x])
+	return room
+
+
+func _pack_region(region: Dictionary, design: Dictionary) -> void:
+	_begin_region(region)
+	# The region's own symmetry: turns about the picture's center for a region
+	# around it (or, when it's round, those of the lines around it), and a
+	# mirror axis.
+	_axis = NAN
+	var folds := 1
+	if mirror_axes:
+		if (region["centroid"] as Vector2).distance_to(_pic_center) <= unit:
+			var id: int = region["id"]
+			_ring = Symmetry.ring_symmetry(Symmetry.sample_pixels(map, region, 1200), _pic_center,
+					func(q: Vector2) -> bool: return map.label_at(int(q.x), int(q.y)) == id)
+			if _ring["folds"] >= Symmetry.MAX_FOLDS:
+				_ring = {}
+				_ring_sym()
+			folds = _ring["folds"] if _ring["folds"] < Symmetry.MAX_FOLDS else 1
+			_axis = _ring["axis"]
+		else:
+			_axis = Symmetry.self_axis(map, region, _pic_center)
+	var first := slots.size()
+	_pack_pattern(region, design)
+	SlotMirror.symmetrize(self, region, first, design["style"] in PATTERNS, folds, _axis)
+
+
+func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	var style: String = design["style"]
 	region["style"] = style
 	var u := unit
@@ -315,7 +411,7 @@ func _pack_region(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([u * 1.2, u * 0.85, u * 0.6, u * 0.45])
 		"spine":
 			_tone = 1 if toning == "heart" else 0
-			_spine(region, u * 2.0, u * 0.4)
+			_spine(region, u * 2.0, u * MIN_STONE)
 		"solitaire":
 			_tone = 1 if toning == "heart" else 0
 			_center_stone(region, INF, design)
@@ -333,7 +429,7 @@ func _tier_stones(region: Dictionary, design: Dictionary) -> void:
 	if large > 0.0:
 		_part += 1
 		_tone = 2
-		var peak := _argmax()
+		var peak := _peak()
 		if peak >= 0:
 			var c := _center(peak)
 			var r := minf(large * _scale_at(c), free[peak] - gap)
@@ -421,15 +517,20 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 	var start := 0.0
 	if closed:
 		n = maxi(1, floori(length / pitch))
+		if mirror_axes and Geometry2D.is_point_in_polygon(_pic_center, pts):
+			# A row around the picture's center keeps its symmetry.
+			var lay := Symmetry.ring_layout(n, _ring_sym(), pts, _pic_center)
+			n = lay[0]
+			start = lay[1]
 		step = length / n
 	else:
 		n = floori(length / pitch) + 1
 		step = length / (n - 1) if n > 1 else 0.0
 		if n == 1:
 			start = length / 2.0
-	var floor_r := maxf(r * 0.55, unit * 0.3)
+	var floor_r := maxf(r * 0.5, unit * MIN_STONE)
 	for i in n:
-		var at: Array = Contours.sample(pts, closed, start + step * i)
+		var at: Array = Contours.sample(pts, closed, fposmod(start + step * i, length) if closed else start + step * i)
 		var p: Vector2 = at[0]
 		var f := _free_at(p)
 		var rf := minf(r * _scale_at(p), f - gap)
@@ -444,12 +545,40 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 			_place(shape, p, rot + ROW_TURN.get(shape, 0.0), rf, 0.0)
 
 
+## Symmetry.ring_symmetry of the lines in a band around the current region,
+## worked out once per region.
+func _ring_sym() -> Dictionary:
+	if _ring.is_empty():
+		var region: Dictionary = map.regions[_region]
+		var near := INF
+		var reach := 0.0
+		for p in Symmetry.sample_pixels(map, region, 400):
+			near = minf(near, p.distance_to(_pic_center))
+			reach = maxf(reach, p.distance_to(_pic_center))
+		_ring = Symmetry.ring_near(map, _pic_center, near - unit * 2.5, reach + unit * 2.5)
+	return _ring
+
+
+## Spokes (or petals) around the center of a region that sits on the
+## picture's center: `n` rounded down to a multiple of the symmetry around
+## it, and the angle of the first. Elsewhere n and the region's axis.
+func _spokes(region: Dictionary, n: int) -> Array:
+	var c: Vector2 = region["centroid"]
+	if not mirror_axes or c.distance_to(_pic_center) > unit:
+		return [n, region["axis"]]
+	var sym := _ring_sym()
+	var folds: int = sym["folds"]
+	if folds < Symmetry.MAX_FOLDS and n >= folds:
+		n = n / folds * folds
+	return [n, sym["axis"] if not is_nan(sym["axis"]) else region["axis"]]
+
+
 ## The biggest stone that fits at the region's deepest free point, shaped to
 ## the region (the design's long shapes when it is long, its center shape
 ## otherwise), at most `cap` in radius.
 func _center_stone(region: Dictionary, cap: float, design: Dictionary) -> void:
 	_part += 1
-	var peak := _argmax()
+	var peak := _peak()
 	if peak < 0:
 		return
 	var c := _center(peak)
@@ -466,7 +595,7 @@ func _center_stone(region: Dictionary, cap: float, design: Dictionary) -> void:
 ## A center stone ringed by outward petals (teardrops, kites or marquises).
 ## Returns the ring's outer radius.
 func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
-	var peak := _argmax()
+	var peak := _peak()
 	if peak < 0:
 		return 0.0
 	var c := _center(peak)
@@ -478,8 +607,9 @@ func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
 	_part += 1
 	var rt := maxf(unit * 0.5, minf(rc * 0.6, r_row))
 	var ring := rc + gap + rt * 1.5
-	var k := maxi(5, int(TAU * ring / (2.0 * rt + gap * 2.0)))
-	var offset: float = region["axis"]
+	var spokes := _spokes(region, maxi(5, int(TAU * ring / (2.0 * rt + gap * 2.0))))
+	var k: int = spokes[0]
+	var offset: float = spokes[1]
 	for j in k:
 		var a := offset + TAU * j / k
 		var p := c + Vector2.from_angle(a) * ring
@@ -579,7 +709,7 @@ func _stripes(region: Dictionary, r0: float, shape: String, turn: float, banded:
 ## A center stone, then rings of stones on shared spokes, each ring's stones
 ## as big as the spacing between spokes allows, so they grow outward.
 func _sunburst(region: Dictionary, r_row: float, toning: String) -> void:
-	var peak := _argmax()
+	var peak := _peak()
 	if peak < 0:
 		return
 	var c := _center(peak)
@@ -591,7 +721,9 @@ func _sunburst(region: Dictionary, r_row: float, toning: String) -> void:
 	var spokes := clampi(int(TAU * (rc + gap + r_row * 0.6) / (r_row * 1.2 + gap)), 6, 24)
 	if spokes % 2 == 1:
 		spokes += 1
-	var a0: float = region["axis"]
+	var turned := _spokes(region, spokes)
+	spokes = turned[0]
+	var a0: float = turned[1]
 	var rad := rc + gap
 	var ring := 0
 	var reach: float = Vector2(region["bbox"].size).length()
@@ -652,7 +784,7 @@ func _spine(region: Dictionary, r_max: float, r_min: float) -> void:
 			else:
 				s += 1.0
 	# Wide spots the axis missed (a fat end, a corner) get one stone each.
-	_fill_rest([r_max * 0.5, unit * 0.6])
+	_fill_rest([r_max * 0.5, unit * 0.6, unit * MIN_STONE])
 
 
 func _dist_at(p: Vector2) -> float:
@@ -766,6 +898,29 @@ func _stamp(c: Vector2, dir: Vector2, h: float, r: float) -> void:
 	for by in range(y0 / BLOCK, y1 / BLOCK + 1):
 		for bx in range(x0 / BLOCK, x1 / BLOCK + 1):
 			_block_dirty[by * _bw + bx] = 1
+
+
+## Pixel index of the deepest free point for a single, centered stone: on
+## the region's own mirror axis when it has one, so the stone sits centered
+## instead of on one of two equally deep spots; anywhere otherwise, or when
+## the axis only crosses a thin part (the symmetry pass then pairs it).
+func _peak() -> int:
+	var deepest := _argmax()
+	if is_nan(_axis) or deepest < 0:
+		return deepest
+	var dir := Vector2.from_angle(_axis)
+	var reach := Vector2(map.width, map.height).length() / 2.0
+	var best := -1
+	var best_v := 0.0
+	var t := -reach
+	while t <= reach:
+		var p := _pic_center + dir * t
+		var f := _free_at(p)
+		if f > best_v:
+			best_v = f
+			best = int(p.y) * map.width + int(p.x)
+		t += 1.0
+	return best if best >= 0 and best_v >= free[deepest] * 0.6 else deepest
 
 
 ## Pixel index of the current region's largest free value, or -1.

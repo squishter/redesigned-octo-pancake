@@ -3,7 +3,8 @@ extends Control
 ## or a photo) and a mode, generate on a worker thread, and look at the result.
 ## Laid out for phones: the picture fills the screen (pinch to zoom, drag to
 ## pan, double-tap to fit), with the main actions in a bar at the bottom and
-## every setting in an Options panel above it.
+## every setting in an Options panel above it. The Lines box above the
+## picture flips to the line art it was made from, without regenerating.
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
@@ -29,6 +30,7 @@ var _detail: HSlider
 var _colors: SpinBox
 var _status: Label
 var _summary: Label
+var _show_lines: CheckBox
 var _canvas: PreviewCanvas
 var _options_panel: Control
 var _options_button: Button
@@ -56,6 +58,12 @@ func _ready() -> void:
 	_summary.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
 	_summary.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
 	top.add_child(_summary)
+	# Same picture, as its line art: tells line-art problems from gem-pattern ones.
+	_show_lines = CheckBox.new()
+	_show_lines.text = "Lines"
+	_show_lines.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	_show_lines.toggled.connect(func(on: bool) -> void: _canvas.line_art = on)
+	top.add_child(_show_lines)
 	_button(top, "Fit", func() -> void: _canvas.reset_view()).size_flags_horizontal = Control.SIZE_SHRINK_END
 
 	_canvas = PreviewCanvas.new()
@@ -311,15 +319,16 @@ func _run_job(job: Dictionary) -> void:
 	if job["frame"] != "auto":
 		opts["frame"] = job["frame"] == "on"
 	var photo: Image = job["photo"]
-	var out := {"mode": job["mode"]}
+	# The line art is made once and kept, so the Lines box can show it.
+	var lines := PhotoLineArt.generate(photo, opts) if photo else PictureSources.mandala_lines(job["seed"], opts)
+	var out := {"mode": job["mode"], "lines": lines}
 	match job["mode"]:
 		"Collage":
-			out["picture"] = PictureSources.photo_collage(photo, opts) if photo else PictureSources.mandala_collage(job["seed"], opts)
+			out["picture"] = (PictureSources.photo_collage(photo, opts, lines) if photo
+					else PictureSources.mandala_collage(job["seed"], opts, lines))
 		"Kit":
-			var src: Image = photo if photo else PictureSources.mandala_image(job["seed"], opts)
+			var src: Image = photo if photo else PictureSources.mandala_image(job["seed"], opts, lines)
 			out["picture"] = KitGenerator.generate(src, {"size": job["kit_size"], "colors": job["colors"], "seed": job["seed"]})
-		_:
-			out["lines"] = PhotoLineArt.generate(photo, opts) if photo else PictureSources.mandala_lines(job["seed"], opts)
 	_result = out
 
 
@@ -330,6 +339,8 @@ func _process(_delta: float) -> void:
 	_task_id = -1
 	var ms := Time.get_ticks_msec() - _task_started
 	var out := _result
+	var art: Dictionary = out["lines"]
+	_canvas.set_line_art(art["mask"], art["width"], art["height"])
 	match out.get("mode"):
 		"Collage":
 			var p: Dictionary = out["picture"]
@@ -368,7 +379,7 @@ func _process(_delta: float) -> void:
 					patterns[r["style"]] = patterns.get(r["style"], 0) + 1
 			var setting: String = p["setting"]
 			if setting == "gems":
-				setting = "gem lines (%s, %s colors)" % [p["line_gems"], p["line_colors"]]
+				setting = "gem lines (%s, %s colors, %d bold)" % [p["line_gems"], p["line_colors"], p["bold_lines"]]
 			_say("Collage · %d stones · %d gem types · pattern %d · %d ms" % [p["slots"].size(), p["gem_types"],
 					p["pattern_seed"], ms], ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
 					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [
@@ -380,9 +391,8 @@ func _process(_delta: float) -> void:
 			_canvas.show_kit(k)
 			_say("Kit: %d×%d, %d colors — %d ms" % [k["width"], k["height"], k["palette"].size(), ms])
 		_:
-			var l: Dictionary = out["lines"]
-			_canvas.show_lines(l["mask"], l["width"], l["height"])
-			_say("Line art %d×%d — %d ms" % [l["width"], l["height"], ms])
+			_canvas.show_lines(art["mask"], art["width"], art["height"])
+			_say("Line art %d×%d — %d ms" % [art["width"], art["height"], ms])
 
 
 func _save() -> void:

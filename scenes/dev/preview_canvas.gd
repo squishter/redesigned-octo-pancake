@@ -1,6 +1,8 @@
 extends Control
 ## Draws a generated picture: a collage (setting lines + slots), a kit
-## pattern (colored cells with legend symbols) or raw line art.
+## pattern (colored cells with legend symbols) or raw line art. It keeps the
+## picture's line art beside it, so `line_art` flips between the two without
+## regenerating anything (and keeps the zoom, to compare one spot).
 ##
 ## Pinch to zoom, drag to pan and double-tap to fit again (mouse wheel zooms
 ## on desktop). The picture is drawn once into a child node; zooming and
@@ -15,7 +17,12 @@ const DOUBLE_TAP_SLOP := 60.0
 
 var collage: Dictionary = {}
 var kit: Dictionary = {}
-var view := "collage"  # collage | kit | lines
+var view := "collage"  # collage | kit | lines: the main picture
+## Draw the line art instead of the main picture.
+var line_art := false:
+	set(value):
+		line_art = value
+		_content.queue_redraw()
 var _lines_tex: ImageTexture
 var _art_tex: ImageTexture
 ## Collage slot outlines in picture pixels, built once per picture.
@@ -64,10 +71,16 @@ func show_kit(pattern: Dictionary) -> void:
 	_content.queue_redraw()
 
 
+## Shows line art as the main picture.
 func show_lines(mask: PackedByteArray, w: int, h: int) -> void:
 	collage = {}
 	kit = {}
 	view = "lines"
+	set_line_art(mask, w, h)
+
+
+## The line art behind the main picture, drawn while `line_art` is on.
+func set_line_art(mask: PackedByteArray, w: int, h: int) -> void:
 	var img := Image.create(w, h, false, Image.FORMAT_L8)
 	var inverted := PackedByteArray()
 	inverted.resize(mask.size())
@@ -165,7 +178,7 @@ func _apply_view() -> void:
 
 
 func _draw_content() -> void:
-	match view:
+	match "lines" if line_art else view:
 		"collage":
 			if not collage.is_empty():
 				_draw_collage()

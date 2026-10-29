@@ -44,8 +44,9 @@ static func outline(shape: String, length: float, width: float, segments: int = 
 			for i in 6:
 				pts.append(Vector2.from_angle(PI / 3.0 * i) * a * 0.95)
 		"triangle":
+			# A corner at +x, so it mirrors onto itself across its axis.
 			for i in 3:
-				pts.append(Vector2.from_angle(TAU / 3.0 * i - PI / 2.0) * a)
+				pts.append(Vector2.from_angle(TAU / 3.0 * i) * a)
 		"emerald":
 			# Step cut: a rectangle with its corners clipped.
 			var c := b * 0.35

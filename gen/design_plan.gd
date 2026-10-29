@@ -10,7 +10,8 @@ extends RefCounted
 ##   scatter: a few small stones spread out with breathing room
 ##   accent: a single stone at the region's heart
 ##   outline: only a rhinestone border along the region's edge
-##   bare: no stones; the background shows through as negative space
+##   bare: no stones; the background shows through as negative space (only
+##         regions roomy enough for it to look deliberate)
 ##
 ## Line styles:
 ##   full: every line is drawn
@@ -30,6 +31,9 @@ const AUTO_LINE_WEIGHTS := {"full": 0.5, "partial": 0.25, "outer": 0.15, "none":
 ## Caps on how much of the picture's area may go sparse, and how much bare.
 const MAX_SPARSE_AREA := 0.6
 const MAX_BARE_AREA := 0.3
+## Bare regions are at least this deep (in stone units), so they read as
+## negative space rather than gaps.
+const BARE_MIN_DEPTH := 2.0
 
 
 ## options:
@@ -80,7 +84,8 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 			choices.append("accent")
 		if depth >= unit * 3.0:
 			choices.append_array(["scatter", "scatter", "outline"])
-		if bare_area + group_area[g] <= MAX_BARE_AREA * total_area:
+		# Small bare regions read as holes, not negative space.
+		if depth >= unit * BARE_MIN_DEPTH and bare_area + group_area[g] <= MAX_BARE_AREA * total_area:
 			choices.append("bare")
 		if choices.is_empty():
 			continue

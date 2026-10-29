@@ -17,6 +17,7 @@ extends RefCounted
 ## {
 ##   version, type: "collage", width, height, symmetry, source: {...},
 ##   setting: "gems" | "metal", pattern_seed, line_gems: GemLines style or "",
+##   bold_lines: how many classes of lines got medium or large stones,
 ##   lines: PackedByteArray mask (255 = line); every line separates regions
 ##     (in the gems setting, the widened channel the line gems sit in),
 ##   lines_visible: the part of `lines` to draw as the metal setting,
@@ -40,9 +41,9 @@ const GEMS_SETTING_CHANCE := 0.75
 ## Stones per collage: pictures outside this range are rebuilt with bigger or
 ## smaller stones, aiming a little inside it.
 const MIN_SLOTS := 300
-const MAX_SLOTS := 1500
+const MAX_SLOTS := 5000
 const SLOTS_LOW_AIM := 450.0
-const SLOTS_HIGH_AIM := 1250.0
+const SLOTS_HIGH_AIM := 4200.0
 ## Gem types (shape + color, any size) a collage aims for.
 const GEM_TYPES_MIN := 25
 const GEM_TYPES_MAX := 30
@@ -57,6 +58,8 @@ const GEM_TYPES_MAX := 30
 ##   min_area: px; smaller regions merge into the lines (default 0.05% of the picture)
 ##   setting: "gems" | "metal" | "auto" (default "auto": picked per seed)
 ##   line_gems: one of GemLines.STYLES (default: picked per seed)
+##   bold_lines: how many classes of lines through the middle get medium or
+##               large stones (default: 2 or 3, picked per seed; 0 for none)
 ##   pattern_seed: int (default 0); another value makes another collage from
 ##                 the same lines
 ##   sparsity, line_style: see DesignPlan (default: picked per seed)
@@ -116,6 +119,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var line_r := 0.0
 	var graph := {}
 	var line_slots: Array[Dictionary] = []
+	var bold_lines := {}
 	var area_mask := mask
 	if setting == "gems":
 		if not line_gems in GemLines.STYLES:
@@ -132,7 +136,11 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		depths.sort()
 		var typical: float = depths[depths.size() / 2] if not depths.is_empty() else unit * 3.0
 		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
-		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value)
+		var bold: int = options.get("bold_lines", rng.randi_range(2, 3))
+		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold)
+		for sl in line_slots:
+			if sl["seq"] < 0 and sl["tone"] == 1:
+				bold_lines[sl["part"]] = true
 		area_mask = LineRaster.stamp_slots(mask, w, h, line_slots, gap * 1.2)
 	else:
 		line_gems = ""
@@ -140,6 +148,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var map := RegionMap.build(area_mask, w, h, min_area)
 	var groups := RegionPaint.symmetry_groups(map, symmetry)
 	var plan_options := options.duplicate()
+	plan_options["unit"] = unit
 	if setting == "gems":
 		plan_options["line_style"] = "none"
 	var plan := DesignPlan.make(map, groups, plan_options, seed_value)
@@ -306,6 +315,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"pattern_seed": pattern_seed,
 		"line_gems": line_gems,
 		"line_colors": ("matched" if line_matched else "neutral") if setting == "gems" else "",
+		"bold_lines": bold_lines.size(),
 		"radial_size": pack_options["radial_size"],
 		"tiers": pack_options["tiers"],
 		"spacers": pack_options.get("spacers", false),

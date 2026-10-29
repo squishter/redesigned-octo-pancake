@@ -30,6 +30,7 @@ func _init() -> void:
 	test_collages()
 	test_design_plans()
 	test_pattern_seeds()
+	test_symmetry()
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
@@ -496,6 +497,61 @@ func test_pattern_seeds() -> void:
 	check(settings.get("gems", 0) > settings.get("metal", 0), "gem lines should be the usual setting")
 	for style in ["echo", "halo", "spine", "solitaire"]:
 		check(styles.has(style), "pattern %s never used" % style)
+
+
+## Symmetric pictures get symmetric stones: turned by one repeat, nearly
+## every stone of an unframed mandala lands on a matching one. Junctions
+## that thinning put a pixel or two apart keep gem lines a little lower.
+## Most gem-line pictures get bold lines through the middle.
+func test_symmetry() -> void:
+	print("Symmetry")
+	var bold := 0
+	for i in 6:
+		var seed_value := 3100 + i
+		var p := PictureSources.mandala_collage(seed_value, {"variant": "mandala", "frame": false, "zoom": false,
+				"setting": "metal" if i % 3 == 0 else "gems", "pattern_seed": i})
+		var share := turn_match(p)
+		print("  seed %d: %s, %d stones, %.0f%% match a turn later, %d bold lines" % [seed_value, p["setting"],
+				p["slots"].size(), share * 100.0, p["bold_lines"]])
+		check(share >= (0.9 if p["setting"] == "metal" else 0.7), "seed %d: only %.0f%% of stones symmetric" % [
+				seed_value, share * 100.0])
+		if p["bold_lines"] > 0:
+			bold += 1
+	check(bold >= 2, "only %d of 4 gem-line pictures got bold lines" % bold)
+
+
+## Share of a mandala's stones (within its rings, short of the silhouette)
+## that land on a stone of about the same size when the picture turns by
+## one repeat (half the folds past 8, as centers repeat half as often).
+static func turn_match(p: Dictionary) -> float:
+	var folds: int = p["source"]["mandala"]["folds"]
+	if folds > 8:
+		folds /= 2
+	var c := Vector2(p["width"], p["height"]) / 2.0
+	var grid := {}
+	for sl in p["slots"]:
+		var k := Vector2i(int(sl["x"] / 8.0), int(sl["y"] / 8.0))
+		if not grid.has(k):
+			grid[k] = []
+		grid[k].append(sl)
+	var hit := 0
+	var counted := 0
+	for sl in p["slots"]:
+		var at := Vector2(sl["x"], sl["y"])
+		if at.distance_to(c) > p["width"] * 0.38:
+			continue
+		counted += 1
+		var q := c + (at - c).rotated(TAU / folds)
+		var cell := Vector2i(int(q.x / 8.0), int(q.y / 8.0))
+		var found := false
+		for dy in [-1, 0, 1]:
+			for dx in [-1, 0, 1]:
+				for o in grid.get(cell + Vector2i(dx, dy), []):
+					if Vector2(o["x"], o["y"]).distance_to(q) < 2.5 and absf(o["width"] - sl["width"]) <= 0.15 * sl["width"] + 0.5:
+						found = true
+		if found:
+			hit += 1
+	return float(hit) / maxi(1, counted)
 
 
 func test_kits() -> void:
