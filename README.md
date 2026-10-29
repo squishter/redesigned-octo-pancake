@@ -42,8 +42,8 @@ mode for trying out new pattern generation.
   how many are left; a gem leaves the row once all its slots are filled,
   and the next one is picked up. Picking one makes its open slots stand out
   (darker outlines over a tint of its color). The row scrolls with a drag
-  (flinging on), and a tap picks a gem or lets it go. Tap a slot, or drag
-  across many: each gem flies from its card in the row into the slot with a
+  (flinging on), and a tap picks a gem or lets it go; picking never scrolls it. Tap a slot, or drag
+  across many: each gem flies from its card (even one scrolled out of view) into the slot with a
   trail of tiny sparkles and a little burst as it lands, or (in *Settings*
   on the menu) pops in place, either way with a tiny buzz. A drag that doesn't start
   on the selected gem's slot pans instead, and two fingers pinch. When the

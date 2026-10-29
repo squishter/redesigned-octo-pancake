@@ -322,23 +322,7 @@ func _select(t: int) -> void:
 	_selected = t
 	_overlay.selected = t
 	if _items.has(t):
-		var b: Control = _items[t]
-		b.add_theme_stylebox_override("panel", _picked_style)
-		_show_item.call_deferred(b)
-
-
-## Scrolls the row just far enough to show a card.
-func _show_item(b: Control) -> void:
-	if not is_instance_valid(b):
-		return
-	var lo := b.position.x
-	var hi := lo + b.size.x
-	if lo < _scroll_x:
-		_scroll_x = lo
-	elif hi > _scroll_x + _palette.size.x:
-		_scroll_x = hi - _palette.size.x
-	_fling = 0.0
-	_apply_scroll()
+		(_items[t] as Control).add_theme_stylebox_override("panel", _picked_style)
 
 
 func _apply_scroll() -> void:
@@ -457,16 +441,14 @@ func _fill(i: int) -> void:
 		_try_finish()
 
 
-## Sends the gem flying from its card (or the row's nearer end, when the
-## card is scrolled away) into slot i; false if it couldn't go.
+## Sends the gem flying from its card into slot i, from wherever the card
+## is, scrolled out of view or not; false if it couldn't go.
 func _fly(i: int, t: int) -> bool:
 	var ty := _types[t]
 	if not _item_icons.has(t) or not ty.has("icon"):
 		return false
 	var icon: Control = _item_icons[t]
-	var row := _palette.get_global_rect()
 	var from := icon.get_global_rect().get_center()
-	from.x = clampf(from.x, row.position.x + icon.size.x / 2.0, row.end.x - icon.size.x / 2.0)
 	from = _flights.get_global_transform_with_canvas().affine_inverse() * from
 	var s: Dictionary = _overlay.slots[i]
 	var size := minf(icon.size.x, icon.size.y)
