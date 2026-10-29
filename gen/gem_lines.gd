@@ -26,7 +26,18 @@ const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "taper", "p
 ## Open lines count from both ends toward the middle, so the sequence reads
 ## the same either way and mirrored copies match; closed loops only take
 ## the simple alternation, and only with an even number of stones.
-const SEQUENCES := [[0, 1], [0, 1], [0, 1, 1, 1], [0, 1, 2], [0, 1, 1, 2, 2, 1, 1, 0]]
+## All use at most 3 types and, apart from the wave, repeat within 4 stones.
+const SEQUENCES := [
+	[0, 1], [0, 1],  # 1-2
+	[0, 1, 1],  # 1-2-2
+	[0, 0, 1],  # 1-1-2
+	[0, 0, 1, 1],  # 1-1-2-2
+	[0, 1, 1, 1],  # 1-2-2-2
+	[0, 1, 2],  # 1-2-3
+	[0, 1, 2, 1],  # 1-2-3-2
+	[0, 1, 0, 2],  # 1-2-1-3
+	[0, 1, 1, 2, 2, 1, 1, 0],  # 1-2-2-3-3-2-2-1, a wave
+]
 ## Share of line classes with long enough lines that get a sequence.
 const SEQUENCE_CHANCE := 0.2
 ## Stones a line needs before it can carry a sequence.
