@@ -10,8 +10,58 @@ pictures. There are no timers, no fail states and no ads. There are two modes:
   `pattern_seed`.
 
 So far there are the **puzzle generators**: pure-logic GDScript in `gen/`
-that turns a source picture into a playable puzzle for either mode, and the
-**3D board** in `render/` that shows a puzzle as real faceted gems.
+that turns a source picture into a playable puzzle for either mode, the
+**3D board** in `render/` that shows a puzzle as real faceted gems, and the
+first playable **game** (`game/`, `scenes/game/`): Gem Collage puzzles made
+only from the gems she has unlocked. The generator lab stays as a debug
+mode for trying out new pattern generation.
+
+## The game (`game/`, `scenes/game/`)
+
+- **Unlocks.** Puzzles use only the gem colors, shapes and cuts, color
+  themes and puzzle types she has unlocked. She starts with about half the
+  shapes (round, oval, cushion, square, hexagon, heart, marquise, teardrop
+  and baguette), each in one cut (its classic one), the primary colors
+  (ruby, tangerine, sunflower, leaf, sapphire, indigo and amethyst, plus
+  black onyx, white and clear diamond), six themes made of those colors
+  (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
+  mandala collages, with no frames or collars. Nothing unlocks more yet;
+  the profile keeps the lists, so it only needs adding to them.
+- **Menu.** *New puzzle* picks an unlocked type and theme and makes a fresh
+  one (on a worker thread). Every puzzle keeps its own save, so starting a
+  new one never touches the others. Each saved puzzle shows a thumbnail and
+  how far along it is, and can be continued, restarted (asks "Sure?"
+  first), recolored (the same picture made again in another unlocked theme,
+  saved as a new puzzle beside the original) or deleted. *Generator lab
+  (debug)* at the bottom opens the lab; its *‹ Menu* button comes back.
+- **Playing.** Every gem type (a shape in a cut and a color) gets a number,
+  the most used first. Open slots show as thin outlines of their shape with
+  the number inside, drawn at screen size so it grows as you zoom, and
+  hidden where the slot is too small to hold it. The gems still to place
+  run along the top as fully rendered, glinting gems with their number and
+  how many are left; a gem leaves the row once all its slots are filled,
+  and the next one is picked up. Picking one makes its open slots stand out
+  (darker outlines over a tint of its color). Tap a slot, or drag across
+  many: each one pops into place with a tiny buzz. A drag that doesn't start
+  on the selected gem's slot pans instead, and two fingers pinch. When the
+  last stone is in, a wave ripples out from the middle while the light
+  sweeps over the gems, and the picture is left to look at, zoomed and
+  panned at will, until *‹ Menu*. Progress saves every couple of seconds
+  and whenever she leaves or the app goes to the background.
+
+| File | What it does |
+| --- | --- |
+| `game/gem_catalog.gd` | `GemCatalog`: every unlockable (gem colors, shapes and cuts, themes as gem colors, puzzle types) and what she starts with. |
+| `game/puzzle_maker.gd` | `PuzzleMaker`: a puzzle request (type, seed, pattern seed, theme) → a collage made from her unlocks only. Safe on worker threads. |
+| `game/save_store.gd` | `SaveStore`: her profile (unlocks and puzzle list) and each puzzle's picture, progress (one bit per slot) and thumbnail under `user://saves`, written via a temporary file. |
+| `game/thumbnail.gd` | Small flat pictures for the menu: placed stones in color, open slots as pale dots. |
+| `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
+| `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
+| `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
+| `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
+
+Buzzes need the `VIBRATE` permission in the Android export preset
+(*Permissions → Vibrate*).
 
 ## Picture sources → puzzles
 
@@ -36,7 +86,7 @@ that turns a source picture into a playable puzzle for either mode, and the
 | `color_quantizer.gd`, `lab_color.gd` | Weighted k-means++ in Lab over a color histogram, plus sRGB ↔ Lab conversion. |
 | `line_raster.gd` | Polylines or line-art images → line masks; dilation to close gaps; carving channels around line stones. |
 | `contours.gd` | Vector paths from rasters: iso-lines of a region's edge distance (marching squares) and centerlines of a line mask (thinning, spur pruning, split at junctions). |
-| `gem_variety.gd` | Steers each collage to 25–30 **gem types** (a shape in one of its cuts in a gem color; sizes don't count) and gives every stone its `cut`: each shape in a color starts with its own seeded cut. It changes whole pattern parts (one row, one ring, the center stones, one symmetry class of lines) across symmetric copies, so every row and every line keeps a single type: first a sibling shape (round ↔ cushion ↔ octagon ↔ hexagon ↔ flower ↔ square ↔ pentagon ↔ heart ↔ trillion ↔ triangle ↔ star, oval ↔ marquise ↔ lozenge ↔ kite ↔ teardrop, which fit the same slot), then another cut of the same shape, then a color, choosing colors the picture already uses before harmonious new ones. Too many types fold into common ones. If a picture is still short, it is rebuilt with **spacer rows** (thin rows of small stones between the main rows) to give it more rows to vary. |
+| `gem_variety.gd` | Steers each collage to 25–30 **gem types** (a shape in one of its cuts in a gem color; sizes don't count) and gives every stone its `cut`: each shape in a color starts with its own seeded cut. It changes whole pattern parts (one row, one ring, the center stones, one symmetry class of lines) across symmetric copies, so every row and every line keeps a single type: first a sibling shape (round ↔ cushion ↔ octagon ↔ hexagon ↔ flower ↔ square ↔ pentagon ↔ heart ↔ trillion ↔ triangle ↔ star, oval ↔ marquise ↔ lozenge ↔ kite ↔ teardrop, which fit the same slot), then another cut of the same shape, then a color, choosing colors the picture already uses before harmonious new ones. Given the shapes and cuts she has unlocked (`shapes`), it first gives every other stone the nearest unlocked shape (its own family first, resized to fit when it comes from another) and only swaps among unlocked ones. Too many types fold into common ones. If a picture is still short, it is rebuilt with **spacer rows** (thin rows of small stones between the main rows) to give it more rows to vary. |
 | `gem_lines.gd` | Gem lines: stones slotted along every line's centerline, one on each junction, evenly spaced between, narrowing toward loose ends. 12 styles: beads, pearls (big/small), marquise, baguette, emerald (clipped-corner step cuts), lozenge, taper (swells mid-stroke), pulse (grows and shrinks in waves from the middle of each line), ramp (grows outward along some classes of lines and inward along others; lines that run around the center swell or pinch instead), radial (shrinks toward the picture's center) and hub (shrinks toward the nearest hub where 4+ lines meet). Lines carry on through junctions where they continue nearly straight (**strokes**), and sizes change along a whole stroke; in the styles of one size, 60% of longer strokes grow, shrink or swell too (0.35× to 1.45× the line stone), so runs of stones change size as they go. Each line's stones are sized to the room beside it (down to 0.35× the line stone), so short lines in fine details carry stones too, and junction stones are no bigger than their smallest line's; a last pass adds a stone wherever one still fits along a line. The channel around the stones is carved to their sizes, so a line is as wide as its stones at every point. Lines that are symmetric copies (same distance from the center and length) form one class, so a ring of lines can take its own gem type. About 1 in 5 classes of longer lines (10+ stones) instead repeat a short **sequence** of gem types: 1-2, 1-2-2, 1-1-2, 1-1-2-2, 1-2-2-2, 1-2-3, 1-2-3-2, 1-2-1-3 or the wave 1-2-2-3-3-2-2-1 (never more than 3 types), counted from both ends toward the middle so it reads the same either way (loops only alternate 1-2). Each step gets its own color, and the variety pass never merges steps. 2 or 3 classes of **bold lines** through the middle of the picture (spread from the center outward, where the areas beside have room; a little further out when the middle has too few) take medium or large stones (1.7× or 2.3×) in the line's accent color, to break up the run of small stones there. A line is laid out once and its symmetric copies copy its stones (by the rotation or reflection that carries it onto them), junctions included (each set of matching junctions snapped to one radius and angle), so copies match stone for stone; loops around the center take a multiple of the symmetry around them, starting on a mirror axis. Finally `line_mirror.gd` makes all line stones exactly as symmetric as the line art: band by band around the center, each band's folds and mirror axis are read from the line art, one wedge's stones are kept and repeated around (mirrored across the vertical axis for hearts and butterflies). |
 | `region_map.gd` | Flood-fills closed regions, merges tiny ones into the lines (except one holding a given point: collages keep a symmetric picture's center), and computes a chamfer distance transform with per-region stats (area, centroid, elongation, principal axis, deepest point). |
 | `slot_packer.gd` | Patterned fills, chosen per symmetry group so copies match. **echo**: rows of stones following the outline inward (round, hexagon, square, cushion, octagon, flower, heart, marquise, lozenge or oval; optionally alternating big/small rows, or graded smaller or bigger row by row); **halo**: 1–2 outline rows around a big center stone shaped to the region (round, cushion, octagon, heart, flower, star, trillion or pentagon; marquise, oval, lozenge or kite when the region is long); **rosette**: center stone, ring of teardrops (or kites or marquises), outline rows; **honeycomb**: an even lattice (round, hexagon, flower or cushion stones) lined up with the region's axis, optionally graded smaller toward the rim; **stripes**: straight parallel rows, optionally graded from the middle; **sunburst**: a center stone with spokes of stones growing outward; **spine**: a chain along the region's medial axis, each stone as wide as the region there, so petals taper; **solitaire**: one shaped stone; **pave**: the old free-form packing, kept for some variety. Patterns can use the region's accent color (alternate rows, outer row or center stone), and a picture can shrink all its stones toward its center. Every stone shrinks to the room left where it lands (a "free distance" field), down to a quarter of a stone unit in thin places, or is left out. **Symmetry** (see `slot_mirror.gd`): a region is packed once and its symmetric copies get the same stones; a region that mirrors onto itself gets a mirror-symmetric pattern, with single stones (accents, centers, big tier stones) on its axis; a region around the picture's center repeats one wedge all the way round, and its rows take a multiple of its folds; the region holding the center, when at most 3 stone units deep, gets one centerpiece stone of any center shape, standing upright (a heart point down, a star or pentagon point up; hearts elsewhere follow their pattern). Some groups get **spacer rows** between their main rows. Some pattern seeds are **tiered**: groups first get one large stone in a feature color, then a few medium ones (round, hexagon, square, cushion, octagon, heart, star, flower, oval, marquise or kite), and their pattern fills around them. |
@@ -90,7 +140,7 @@ hold still when it does.
 
 | File | What it does |
 | --- | --- |
-| `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
+| `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). For play, stones can start hidden, pop in when placed (`fill_slot`) and pulse in a wave when the picture is done (`celebrate`); a `stroke_filter` turns touches into strokes instead of pans, and `view_transform()` maps the board onto the screen for drawing over it. White stones are opaque, with a soft glaze, so they read apart from clear diamonds. Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
 | `gem_mesh.gd` | Builds a stone's crown in 3D from its outline: the girdle resampled so corners stay sharp, then rings of points pulled in and raised (every 1st, 2nd or 4th point, half a step apart for brilliants) zipped into flat triangular facets up to a table or a point. Cached per shape and cut. |
 | `gem.gdshader` | Facets mirror a small studio (a key softbox with window bars, a fill, a ring of low lamps, the paper below); light also refracts in, bounces off two pavilion facets (sectors under a brilliant, nested rectangles under a step cut), comes back out tinted by the gem and split a little per color for fire, with soft light playing through the body (shifting as the light moves) and a darker rim. Cabochons glow smoothly toward the light. |
 | `gem_shadow.gdshader` | Each stone's soft shadow on the paper (lighter under the tiniest stones), cast away from the light by how high it stands, with the colored caustic light it focuses inside it, shifting as the light moves; both fade out before the edge of their plane. |
@@ -100,8 +150,9 @@ hold still when it does.
 
 ## Trying it
 
-- Open the project in Godot 4.7. The main scene, `scenes/dev/generator_lab.tscn`,
-  is a dev screen. Pick a mandala shape, theme, seed and wobble, or load a
+- Open the project in Godot 4.7. The main scene, `scenes/game/app.tscn`, is
+  the game; *Generator lab (debug)* in its menu opens the lab
+  (`scenes/dev/generator_lab.tscn`, which also runs on its own), a dev screen. Pick a mandala shape, theme, seed and wobble, or load a
   photo. *New pattern* (or the Pattern box) makes another collage of the same
   lines; Setting and Line gems force a choice. Then view it as a collage, a kit or plain line art, and save the JSON.
   The **Lines** box above the picture flips between the collage (or kit) and
@@ -129,8 +180,9 @@ hold still when it does.
   with facets facing up; stones of one part share a cut), the board's light
   following a phone held still or tilted, crossing over the stones when it
   is tilted 30° either way flat or turned 30° either way upright, and
-  staying overhead however it's held, kits at every size (owned colors only), photo line art and a JSON
-  round trip:
+  staying overhead however it's held, kits at every size (owned colors only), photo line art, a JSON
+  round trip, game puzzles using only the starting unlocks (and keeping their lines when recolored)
+  and progress saves:
 
   ```sh
   godot --headless --import
@@ -143,4 +195,4 @@ hold still when it does.
   godot --headless -s res://tests/collage_sheet.gd -- --out=/tmp/sheet --seeds=1000,1003 --patterns=3
   ```
 
-Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen scenes tests`.
+Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen game scenes tests`.

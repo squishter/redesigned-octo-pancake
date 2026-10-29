@@ -42,9 +42,11 @@ static func for_shape(shape: String) -> Array:
 
 
 ## The cut a gem type (shape in a color, keyed by `type_key`) gets in a
-## picture: the same for every stone of that type.
-static func pick(shape: String, type_key: String, seed_value: int) -> String:
-	var cuts := for_shape(shape)
+## picture: the same for every stone of that type. `cuts` narrows the
+## choice (in for_shape's order, so its first is the classic one if allowed).
+static func pick(shape: String, type_key: String, seed_value: int, cuts: Array = []) -> String:
+	if cuts.is_empty():
+		cuts = for_shape(shape)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, shape, type_key, "cut"])
 	if cuts.size() == 1 or rng.randf() < CLASSIC_CHANCE:

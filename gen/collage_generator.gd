@@ -62,6 +62,7 @@ const GEM_TYPES_MAX := 30
 ## options:
 ##   symmetry: "radial" | "mirror" | "none"   (default "none")
 ##   theme: theme name for region colors        (default "sunset")
+##   theme_colors: PackedColorArray to use instead of a named theme
 ##   colors_image: Image to sample region colors from instead of a theme
 ##   gems: Array of {"id", "color"} to snap target colors to (default starter gems;
 ##         pass [] to keep exact colors)
@@ -81,6 +82,8 @@ const GEM_TYPES_MAX := 30
 ##            (default: some groups; all when the picture is short of gem types)
 ##   gem_types: how many gem types (shape + color, any size) to aim for
 ##              (default: 25-30, picked per seed)
+##   shapes: the only shapes and cuts to use, {shape: [cuts]} (default {}: all);
+##           other stones take a stand-in shape (see GemVariety.restrict)
 ##   seed, gap: passed to SlotPacker
 ##   unit: base stone radius in px; by default SlotPacker.UNIT of the picture, then scaled
 ##         so the collage has MIN_SLOTS..MAX_SLOTS stones (gem-line pictures
@@ -212,7 +215,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var slots := SlotPacker.pack(map, pack_options)
 
 	var n := map.regions.size()
-	var theme := Palettes.theme_colors(options.get("theme", "sunset"))
+	var theme: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
+			else Palettes.theme_colors(options.get("theme", "sunset")))
 	var colors: PackedColorArray
 	var accents := PackedColorArray()
 	var features := PackedColorArray()
@@ -304,8 +308,10 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var type_rng := RandomNumberGenerator.new()
 	type_rng.seed = hash([seed_value, "gem types"])
 	var type_target: int = options.get("gem_types", type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
+	var allowed: Dictionary = options.get("shapes", {})
+	GemVariety.restrict(slots, allowed)
 	var gem_types := GemVariety.balance(slots, group_of,
-			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value)
+			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed)
 	# The centerpiece may have changed shape: stand it upright again.
 	for s in slots:
 		if s.get("centerpiece", false):

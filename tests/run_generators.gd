@@ -36,6 +36,8 @@ func _init() -> void:
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
+	test_game_puzzles()
+	test_saves()
 
 	print("\n%s (%d failures). Previews in %s" % ["FAILED" if failures else "PASSED", failures,
 			ProjectSettings.globalize_path(out_dir)])
@@ -726,6 +728,52 @@ func test_json_round_trip() -> void:
 	var kit_back := PatternIO.from_json(PatternIO.to_json(kit))
 	check(kit_back["cells"] == kit["cells"], "kit cells changed")
 	check(kit_back["width"] is int, "width not an int")
+
+
+## Game puzzles use only what she has unlocked: the starting shapes in
+## their one cut, the starting colors, no frame; recoloring keeps the slots.
+func test_game_puzzles() -> void:
+	print("Game puzzles")
+	var unlocks := GemCatalog.default_unlocks()
+	check(unlocks["shapes"].size() * 2 == GemCatalog.ALL_SHAPES.size(), "not half the shapes to start")
+	var colors := {}
+	for g in GemCatalog.unlocked_gems(unlocks):
+		colors[g["id"]] = true
+	check(colors.size() == 10, "expected 10 starting colors, got %d" % colors.size())
+	for seed_value in [3, 11, 27]:
+		var request := {"type": "mandala", "seed": seed_value, "pattern_seed": seed_value * 7, "theme": "rainbow"}
+		var p := PuzzleMaker.make(request, unlocks)
+		var n: int = p["slots"].size()
+		check(n >= CollageGenerator.MIN_SLOTS, "seed %d: only %d slots" % [seed_value, n])
+		check(not p["source"].has("frame"), "seed %d: framed" % seed_value)
+		var bad := 0
+		for s in p["slots"]:
+			var cuts: Array = unlocks["shapes"].get(s["shape"], [])
+			if not s.get("cut", "") in cuts or not colors.has(str(s["target_gem"])):
+				bad += 1
+		check(bad == 0, "seed %d: %d stones use locked shapes, cuts or colors" % [seed_value, bad])
+		var again := PuzzleMaker.make({"type": "mandala", "seed": seed_value, "pattern_seed": seed_value * 7,
+				"theme": "ocean"}, unlocks)
+		check(again["lines"] == p["lines"], "seed %d: recoloring changed the lines" % seed_value)
+	var restricted := [{"shape": "star", "size": 10.0, "width": 10.0}, {"shape": "kite", "size": 12.0, "width": 5.0},
+			{"shape": "emerald", "size": 12.0, "width": 4.0}]
+	GemVariety.restrict(restricted, {"round": ["brilliant"]})
+	for s in restricted:
+		check(s["shape"] == "round" and s["size"] == s["width"], "restrict gave %s %.1f x %.1f" % [s["shape"], s["size"],
+				s["width"]])
+
+
+## Progress saves bit by bit and comes back the same.
+func test_saves() -> void:
+	print("Saves")
+	var placed := PackedByteArray()
+	placed.resize(37)
+	for i in [0, 5, 8, 36]:
+		placed[i] = 1
+	var id := "test_%d" % Time.get_ticks_usec()
+	check(SaveStore.save_progress(id, placed) == OK, "progress didn't save")
+	check(SaveStore.load_progress(id, placed.size()) == placed, "progress came back different")
+	DirAccess.remove_absolute("%s/%s.progress" % [SaveStore.DIR, id])
 
 
 # --- helpers -----------------------------------------------------------------

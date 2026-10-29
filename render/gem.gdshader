@@ -14,7 +14,8 @@ render_mode unshaded, cull_disabled;
 #include "res://render/gem_light.gdshaderinc"
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y refractive index,
-// z dispersion, w cut (its index in GemCuts.ALL). COLOR is the gem color.
+// z dispersion, w cut (its index in GemCuts.ALL). COLOR is the gem color;
+// its alpha is 0 for opaque stones.
 varying vec3 w_normal;
 varying vec3 l_pos;
 varying vec4 stone;
@@ -105,6 +106,16 @@ void fragment() {
 	float drift = glow_drift(p * 1.3 + stone.x * 9.0 + light_shift() * 0.5, light_phase() * 1.4 + stone.x * 5.0);
 	inside += tint * drift * 0.3 * light_strength;
 	inside *= 0.45 + 0.55 * rim;
+	if (COLOR.a < 0.5) {
+		// Opaque stones (white): no light through them, just a soft glaze lit
+		// by the key and fill, with a faint pearly sheen that drifts with the light.
+		float lit = clamp(dot(n, key_dir), 0.0, 1.0);
+		float fl = clamp(dot(n, fill_dir), 0.0, 1.0);
+		float sheen = glow_drift(p * 1.1 + stone.x * 7.0 + light_shift() * 0.4, light_phase() + stone.x * 3.0);
+		inside = tint * (0.3 + 0.5 * lit + 0.2 * fl) * light_strength;
+		inside += vec3(0.05, 0.04, 0.07) * sheen * light_strength;
+		inside *= 0.75 + 0.25 * rim;
+	}
 
 	ALBEDO = refl * fres + inside * (1.0 - fres);
 }

@@ -14,6 +14,18 @@ extends SubViewportContainer
 ## Stones of one shape and cut share a mesh and draw as one MultiMesh, so
 ## thousands stay cheap. Pinch to zoom, drag to pan, double-tap to fit (mouse
 ## wheel on desktop), like PreviewCanvas.
+##
+## For play, stones can be hidden until they are placed (`shown` in
+## show_collage, set_slot_shown), pop in when placed (fill_slot), and ripple
+## out from a point when the picture is done (celebrate). A `stroke_filter`
+## turns one-finger touches that start where it says into strokes
+## (stroke_* signals, in board units) instead of pans, and view_transform()
+## maps board units onto the control, for drawing over the board.
+
+signal view_changed
+signal stroke_started(at: Vector2)
+signal stroke_moved(from: Vector2, to: Vector2)
+signal stroke_ended
 
 const GEM_SHADER := preload("res://render/gem.gdshader")
 const SHADOW_SHADER := preload("res://render/gem_shadow.gdshader")
@@ -25,6 +37,16 @@ const DOUBLE_TAP_MS := 300
 const DOUBLE_TAP_SLOP := 60.0
 ## Room around the picture when fitted, as a share of its size.
 const MARGIN := 0.03
+## A placed stone pops in over this long, overshooting a little; done
+## pictures pulse each stone for PULSE_TIME, in a wave CELEBRATE_TIME long.
+const POP_TIME := 0.32
+const PULSE_TIME := 0.6
+const CELEBRATE_TIME := 1.4
+## How far a pop overshoots (the usual "back" easing constant).
+const OVERSHOOT := 1.70158
+## Gem colors cut as opaque polished stones rather than see-through ones,
+## so white reads apart from clear diamond.
+const OPAQUE_GEMS := ["snow"]
 ## A stone's girdle stands this high above the paper, and its crown rises
 ## about this much above that, in its half-widths.
 const GIRDLE_HEIGHT := 0.45
@@ -72,6 +94,14 @@ var shadows := true:
 	set(value):
 		shadows = value
 		_shadow_material.set_shader_parameter("shadow_strength", 1.0 if value else 0.0)
+## Room around the fitted picture, as a share of its size.
+var margin := MARGIN
+## Off: touches, drags and the wheel leave the board alone.
+var input_enabled := true
+## Called with the board point where a lone finger touches down: true makes
+## that touch a stroke (stroke_started, stroke_moved, stroke_ended) instead
+## of a pan. Unset, every touch pans.
+var stroke_filter := Callable()
 
 var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
@@ -97,6 +127,16 @@ var _settle := false
 var _touches := {}
 var _last_tap_ms := -DOUBLE_TAP_MS
 var _last_tap_pos := Vector2.ZERO
+## The touch drawing a stroke, or -1.
+var _stroke := -1
+## Each slot's instances in every layer: [MultiMesh, index, full transform].
+var _refs: Array = []
+## Slots animating: slot -> [start (on _clock), 0 pop in or 1 pulse].
+var _anims := {}
+var _clock := 0.0
+## The light drifts faster until then (on _clock), sweeping glints over a
+## finished picture.
+var _sweep_until := 0.0
 
 
 func _init() -> void:
@@ -142,8 +182,12 @@ func _init() -> void:
 func _process(delta: float) -> void:
 	if not is_visible_in_tree():
 		return
+	_clock += delta
 	if animate:
-		light_time += delta
+		var sweep := clampf((_sweep_until - _clock) / CELEBRATE_TIME, 0.0, 1.0)
+		light_time += delta * (1.0 + 5.0 * sin(PI * sweep))
+	if not _anims.is_empty():
+		_step_anims()
 	if use_sensor:
 		_read_sensors(delta)
 	update_light(delta)
@@ -209,11 +253,108 @@ func _turned(board_dir: Vector3, lowest: float) -> Vector3:
 	return b
 
 
-func show_collage(picture: Dictionary) -> void:
+## `shown` (one byte per slot, 0 hides it) leaves stones out until they are
+## placed; empty shows them all.
+func show_collage(picture: Dictionary, shown := PackedByteArray()) -> void:
 	var w: float = picture["width"]
 	var h: float = picture["height"]
 	var lines: PackedByteArray = picture.get("lines_visible", PackedByteArray())
 	_build(picture["slots"], Vector2(w, h), lines, Vector2i(int(w), int(h)))
+	if not shown.is_empty():
+		for i in mini(shown.size(), _refs.size()):
+			if shown[i] == 0:
+				_apply_scale(i, 0.0)
+
+
+## Shows or hides one stone at once.
+func set_slot_shown(i: int, on: bool) -> void:
+	_anims.erase(i)
+	_apply_scale(i, 1.0 if on else 0.0)
+
+
+## Shows one stone, popping it in.
+func fill_slot(i: int) -> void:
+	_apply_scale(i, 0.0)
+	_anims[i] = [_clock, 0]
+
+
+## A wave of pulses through every stone, outward from board point `from`,
+## while the light sweeps over them. Returns how long it lasts (seconds).
+func celebrate(from: Vector2) -> float:
+	var far := 1.0
+	var at := []
+	for refs: Array in _refs:
+		if refs.is_empty():
+			at.append(0.0)
+			continue
+		var o: Vector3 = refs[0][2].origin
+		var d := Vector2(o.x, o.z).distance_to(from)
+		at.append(d)
+		far = maxf(far, d)
+	for i in _refs.size():
+		_anims[i] = [_clock + at[i] / far * CELEBRATE_TIME, 1]
+	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
+	return CELEBRATE_TIME + PULSE_TIME
+
+
+## Moves animating stones along: pops ease out with an overshoot, pulses
+## swell and settle.
+func _step_anims() -> void:
+	var done := []
+	for i: int in _anims:
+		var a: Array = _anims[i]
+		var t: float = _clock - a[0]
+		if t < 0.0:
+			continue
+		var u := minf(t / (POP_TIME if a[1] == 0 else PULSE_TIME), 1.0)
+		var f := 1.0
+		if a[1] == 0:
+			f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
+		else:
+			f = 1.0 + 0.3 * sin(PI * u)
+		_apply_scale(i, f)
+		if u >= 1.0:
+			done.append(i)
+	for i: int in done:
+		_anims.erase(i)
+
+
+## Scales a stone (gem, shadow and sparkle) about its own place; 0 hides it.
+func _apply_scale(i: int, f: float) -> void:
+	if i < 0 or i >= _refs.size():
+		return
+	var k := maxf(f, 0.001)
+	for ref: Array in _refs[i]:
+		var xf: Transform3D = ref[2]
+		var o := xf.origin
+		(ref[0] as MultiMesh).set_instance_transform(ref[1],
+				Transform3D(xf.basis.scaled(Vector3(k, k, k)), Vector3(o.x, o.y * k, o.z)))
+
+
+## The board's picture as a texture (for icons cut from a board of single stones).
+func get_view_texture() -> ViewportTexture:
+	return _viewport.get_texture()
+
+
+## Keeps rendering while off screen.
+func set_always_render() -> void:
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+
+## Board units to this control's px, as the view stands.
+func view_transform() -> Transform2D:
+	var s := _scale_px()
+	return Transform2D(0.0, Vector2(s, s), 0.0, size / 2.0 - _center * s)
+
+
+## This control's px to board units.
+func screen_to_board(p: Vector2) -> Vector2:
+	return _center + (p - size / 2.0) / _scale_px()
+
+
+## Screen px per board unit.
+func scale_px() -> float:
+	return _scale_px()
 
 
 ## A kit pattern's drills, round or square, one per cell.
@@ -247,6 +388,11 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	turn = Basis.IDENTITY
 	_settle = false
 	_board = board
+	_anims.clear()
+	_refs = []
+	_refs.resize(slots.size())
+	for i in slots.size():
+		_refs[i] = []
 	var plane := PlaneMesh.new()
 	plane.size = board
 	_paper.mesh = plane
@@ -295,22 +441,29 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 		var at := Vector3(s["x"], 0.0, s["y"])
 		var color: Color = s["target_color"]
 		var random := fposmod(sin(i * 12.9898 + 78.233) * 43758.5453, 1.0)
+		var xf: Transform3D
 		match kind:
 			"gem":
 				at.y = GIRDLE_HEIGHT * small
-				mm.set_instance_transform(k, Transform3D(turn * Basis.from_scale(Vector3(half_len, small, half_wid)), at))
-				var optics := _optics(color)
+				xf = Transform3D(turn * Basis.from_scale(Vector3(half_len, small, half_wid)), at)
+				# Opaque stones say so in their color's alpha.
+				var opaque: bool = str(s.get("target_gem", "")) in OPAQUE_GEMS
+				var optics := Vector2(1.55, 0.0) if opaque else _optics(color)
 				mm.set_instance_custom_data(k, Color(random, optics.x, optics.y, cut))
+				color = Color(color, 0.0 if opaque else 1.0)
 			"shadow":
 				at.y = 0.02
-				mm.set_instance_transform(k, Transform3D(turn * Basis.from_scale(Vector3(half_len, 1.0, half_wid)), at))
+				xf = Transform3D(turn * Basis.from_scale(Vector3(half_len, 1.0, half_wid)), at)
 				mm.set_instance_custom_data(k, Color(random, (GIRDLE_HEIGHT + CROWN_HEIGHT) * small, 0.0, 0.0))
 			_:
 				at.y = (GIRDLE_HEIGHT + CROWN_HEIGHT) * small + 0.1
 				var reach := maxf(half_len, half_wid) * SPARKLE_SPAN
-				mm.set_instance_transform(k, Transform3D(Basis.from_scale(Vector3(reach, 1.0, reach)), at))
+				xf = Transform3D(Basis.from_scale(Vector3(reach, 1.0, reach)), at)
 				mm.set_instance_custom_data(k, Color(random, 0.0, 0.0, 0.0))
+		mm.set_instance_transform(k, xf)
 		mm.set_instance_color(k, color)
+		if i < _refs.size():
+			_refs[i].append([mm, k, xf])
 	var layer := MultiMeshInstance3D.new()
 	layer.multimesh = mm
 	layer.material_override = material
@@ -341,7 +494,7 @@ static func _mask_texture(mask: PackedByteArray, size: Vector2i) -> ImageTexture
 ## the view (or centered when it's smaller).
 func _apply_view() -> void:
 	var view := Vector2(maxf(size.x, 1.0), maxf(size.y, 1.0))
-	var fit := minf(view.x / (_board.x * (1.0 + MARGIN * 2.0)), view.y / (_board.y * (1.0 + MARGIN * 2.0)))
+	var fit := minf(view.x / (_board.x * (1.0 + margin * 2.0)), view.y / (_board.y * (1.0 + margin * 2.0)))
 	var scale_px := fit * _zoom  # screen px per board unit
 	var seen := view / scale_px
 	for axis in 2:
@@ -352,10 +505,11 @@ func _apply_view() -> void:
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
+	view_changed.emit()
 
 
 func _input(event: InputEvent) -> void:
-	if not is_visible_in_tree():
+	if not is_visible_in_tree() or not input_enabled:
 		return
 	if event is InputEventScreenTouch:
 		var p := _local(event.position)
@@ -363,7 +517,15 @@ func _input(event: InputEvent) -> void:
 			if not Rect2(Vector2.ZERO, size).has_point(p):
 				return
 			_touches[event.index] = p
+			if _touches.size() > 1 and _stroke >= 0:
+				# A second finger: the stroke ends and the pair pinches.
+				_stroke = -1
+				stroke_ended.emit()
 			if _touches.size() == 1:
+				if stroke_filter.is_valid() and stroke_filter.call(screen_to_board(p)):
+					_stroke = event.index
+					stroke_started.emit(screen_to_board(p))
+					return
 				var now := Time.get_ticks_msec()
 				if now - _last_tap_ms < DOUBLE_TAP_MS and p.distance_to(_last_tap_pos) < DOUBLE_TAP_SLOP:
 					reset_view()
@@ -372,9 +534,16 @@ func _input(event: InputEvent) -> void:
 				_last_tap_pos = p
 		else:
 			_touches.erase(event.index)
+			if event.index == _stroke:
+				_stroke = -1
+				stroke_ended.emit()
 	elif event is InputEventScreenDrag and _touches.has(event.index):
 		var p := _local(event.position)
 		var prev: Vector2 = _touches[event.index]
+		if event.index == _stroke:
+			_touches[event.index] = p
+			stroke_moved.emit(screen_to_board(prev), screen_to_board(p))
+			return
 		if _touches.size() == 1:
 			_pan(p - prev)
 		else:
@@ -403,10 +572,9 @@ func _local(viewport_pos: Vector2) -> Vector2:
 	return get_global_transform_with_canvas().affine_inverse() * viewport_pos
 
 
-## Screen px per board unit.
 func _scale_px() -> float:
 	var view := Vector2(maxf(size.x, 1.0), maxf(size.y, 1.0))
-	return minf(view.x / (_board.x * (1.0 + MARGIN * 2.0)), view.y / (_board.y * (1.0 + MARGIN * 2.0))) * _zoom
+	return minf(view.x / (_board.x * (1.0 + margin * 2.0)), view.y / (_board.y * (1.0 + margin * 2.0))) * _zoom
 
 
 func _pan(screen_delta: Vector2) -> void:
