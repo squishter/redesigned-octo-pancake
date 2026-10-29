@@ -83,6 +83,7 @@ mode for trying out new pattern generation.
 | File | What it does |
 | --- | --- |
 | `game/gem_catalog.gd` | `GemCatalog`: every unlockable (gem colors, shapes and cuts, themes as gem colors, puzzle types) and what she starts with. |
+| `game/unlockables.gd` | `Unlockables`: the table of every kind of unlockable, its items, starting items, and granting and upgrading profiles. |
 | `game/packs.gd` | `Packs`: what each pack can still give, opening packs with picks or coins, daily picks, puzzle rewards and power-up charges. |
 | `game/puzzle_maker.gd` | `PuzzleMaker`: a puzzle request (type, seed, pattern seed, theme) → a collage made from her unlocks only. Safe on worker threads. |
 | `game/save_store.gd` | `SaveStore`: her profile (unlocks, settings and puzzle list) and each puzzle's picture, progress (one bit per slot) and thumbnail under `user://saves`, written via a temporary file. |
@@ -93,6 +94,36 @@ mode for trying out new pattern generation.
 | `scenes/game/collection_screen.gd` | Collection & packs: pack cards, opening and revealing, and everything unlocked or still hidden. |
 | `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
 | `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
+
+### Adding unlockables
+
+Every kind of unlockable (colors, shapes, cuts, themes, picture types,
+flourishes, placement styles, finales, power-ups) is a row in
+`Unlockables.KINDS`, and packs, Collection and profiles all work from that
+table, so additions never touch old puzzles or what she has:
+
+- **A new item:** add it to its catalog in `GemCatalog` (cuts go in
+  `GemCuts.BY_SHAPE`, with a `GemCuts.SHADER_STYLE`). Packs offer it at once,
+  and a sold-out pack comes back in stock. New placement styles, finales,
+  flourishes and power-ups also need their code (and an entry in
+  `PlayScreen.FILL_STYLES` / `POWER_EFFECTS`, `GemBoard3D.FINALES` or
+  `PuzzleMaker.FEATURES`); new shapes need a `GemShapes` outline and a
+  `GemVariety` family. The *Catalog complete* check fails until all of
+  that is in place.
+- **A new starting item:** add it to its `STARTING_` list. Existing players
+  get it the next time the game starts. Starting power-up charges are given
+  only once, ever, through the profile's `granted` ledger.
+- **A new kind:** add a row to `Unlockables.KINDS` (its unlock list and its
+  pack), its items to `Unlockables.items()`, and the pack to `Packs.PACKS`.
+- **Ids are forever:** saves keep ids, never positions or names, so never
+  rename or reuse one (map an old id to a new one in `Unlockables.RENAMED`
+  if you must).
+
+Saved puzzles keep their whole picture (every stone's shape, cut and color),
+so they look and play the same whatever is added later. A profile from any
+earlier version loads through `SaveStore.upgrade()`, which only adds things
+and keeps anything it doesn't recognize; the *Old profiles* check covers
+this.
 
 Buzzes need the `VIBRATE` permission in the Android export preset
 (*Permissions → Vibrate*).

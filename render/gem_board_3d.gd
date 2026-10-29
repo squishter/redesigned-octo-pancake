@@ -296,6 +296,10 @@ func set_transparent() -> void:
 	_paper.visible = false
 
 
+## Finale styles celebrate() knows (GemCatalog.FINALES must be among them).
+const FINALES := ["ripple", "spiral", "sweep", "shimmer"]
+
+
 ## A wave of pulses through every stone while the light sweeps over them,
 ## timed by `style`: "ripple" outward from board point `from`, "spiral"
 ## round it, "sweep" from left to right, "shimmer" at random. Returns how
@@ -457,7 +461,7 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	for key: String in by_mesh:
 		var parts := key.split("|")
 		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, by_mesh[key], "gem",
-				GemCuts.ALL.find(parts[1]))
+				GemCuts.SHADER_STYLE.get(parts[1], 0))
 	var all := range(slots.size())
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
@@ -470,7 +474,7 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 
 
 ## One MultiMesh: `mesh` for the given slots, as gems, shadows or sparkles.
-## For gems, `cut` is the cut's index in GemCuts.ALL.
+## For gems, `cut` is the cut's shader style (GemCuts.SHADER_STYLE).
 func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array, kind: String, cut := 0) -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D

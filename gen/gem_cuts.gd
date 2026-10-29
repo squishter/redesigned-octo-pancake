@@ -11,6 +11,11 @@ extends RefCounted
 ## cabochon: a smooth polished dome, no facets
 
 const ALL := ["brilliant", "step", "rose", "checker", "cabochon"]
+## How gem.gdshader lights each cut: a fixed code per cut, never its place
+## in ALL, so adding cuts (anywhere) can't change gems already made. A new
+## cut lights like the style it's closest to (0 brilliant facets, 1 step,
+## 4 cabochon dome) until the shader learns it.
+const SHADER_STYLE := {"brilliant": 0, "step": 1, "rose": 2, "checker": 3, "cabochon": 4}
 ## Each shape's cuts, its classic one first.
 const BY_SHAPE := {
 	"round": ["brilliant", "rose", "checker", "cabochon"],

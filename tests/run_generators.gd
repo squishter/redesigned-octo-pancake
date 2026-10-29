@@ -39,6 +39,8 @@ func _init() -> void:
 	test_game_puzzles()
 	test_saves()
 	test_packs()
+	test_catalog_complete()
+	test_old_profiles()
 	test_kit_puzzles()
 
 	print("\n%s (%d failures). Previews in %s" % ["FAILED" if failures else "PASSED", failures,
@@ -807,6 +809,89 @@ func test_packs() -> void:
 	var power := Packs.open(profile, "all", false, rng)
 	check(power.get("kind") == "power" and Packs.charges(profile, power["id"]) > 0, "everything pack gave %s" % power)
 	check(Packs.spend(profile, power["id"]), "couldn't spend a power-up charge")
+
+
+## Everything a catalog lists is complete and handled, so adding an item
+## (or a kind) halfway fails here instead of quietly never showing up.
+func test_catalog_complete() -> void:
+	print("Catalog complete")
+	var families: Array = GemVariety.ROUND_FAMILY + GemVariety.LONG_FAMILY + GemVariety.BOX_FAMILY
+	check(GemCuts.BY_SHAPE.keys().size() == GemCatalog.ALL_SHAPES.size(), "GemCuts.BY_SHAPE and ALL_SHAPES differ")
+	for shape: String in GemCatalog.ALL_SHAPES:
+		check(GemCuts.BY_SHAPE.has(shape), "shape %s has no cuts" % shape)
+		check(shape in families, "shape %s is in no GemVariety family, so no puzzle would use it" % shape)
+		for cut: String in GemCuts.for_shape(shape):
+			check(GemCuts.SHADER_STYLE.has(cut), "cut %s has no shader style" % cut)
+	for t: String in GemCatalog.THEMES:
+		for gem: String in GemCatalog.THEMES[t]["gems"]:
+			check(GemCatalog.all_colors().any(func(g: Dictionary) -> bool: return g["id"] == gem),
+					"theme %s uses unknown gem %s" % [t, gem])
+	for id: String in GemCatalog.PUZZLES:
+		check(GemCatalog.PUZZLES[id]["variant"] in MandalaGenerator.VARIANTS, "puzzle %s has an unknown variant" % id)
+	var handled := {
+		"feature": PuzzleMaker.FEATURES,
+		"animation": load("res://scenes/game/play_screen.gd").FILL_STYLES,
+		"finale": GemBoard3D.FINALES,
+		"power": load("res://scenes/game/play_screen.gd").POWER_EFFECTS,
+	}
+	for kind: String in Unlockables.KINDS:
+		var info: Dictionary = Unlockables.KINDS[kind]
+		check(Packs.PACKS.has(info["pack"]), "kind %s comes from unknown pack %s" % [kind, info["pack"]])
+		var ids := {}
+		for item: Dictionary in Unlockables.items(kind):
+			check(not ids.has(item["id"]), "%s id %s is listed twice" % [kind, item["id"]])
+			ids[item["id"]] = true
+			check(str(item.get("name", "")) != "" and str(item.get("about", "")) != "", "%s %s lacks a name or about" % [
+					kind, item["id"]])
+			if handled.has(kind):
+				check(item["id"] in handled[kind], "%s %s isn't handled by the game" % [kind, item["id"]])
+		for id in Unlockables.starting(kind):
+			check(ids.has(id), "starting %s %s isn't in its catalog" % [kind, id])
+	for pack: String in Packs.PACKS:
+		if pack != "all":
+			check(Unlockables.KINDS.values().any(func(k: Dictionary) -> bool: return k["pack"] == pack),
+					"pack %s offers no kind" % pack)
+
+
+## Profiles saved by earlier versions load with nothing lost: unlocks only
+## grow (new starting items arrive, ids from a newer version stay), starting
+## power-ups aren't given twice, and loading again changes nothing.
+func test_old_profiles() -> void:
+	print("Old profiles")
+	# As version 0.3 saved it (profile version 1, no ledger), after a few packs.
+	var v1 := {"version": 1.0, "unlocks": {"colors": ["ruby", "snow", "future_gem"], "shapes": {"round": ["brilliant",
+			"rose"], "kite": ["brilliant"]}, "themes": ["rainbow"], "puzzles": ["mandala", "kit"], "features": [],
+			"animations": ["pop", "fly", "spin"], "finales": ["ripple"], "stickers": ["star"]},
+			"settings": {"fill_animation": "spin"}, "wallet": {"coins": 40.0, "picks": 1.0},
+			"daily": {"opened": "2026-10-28"}, "powers": {"finder": 0.0, "finish_gem": 3.0},
+			"puzzles": [{"id": "p1", "type": "mandala", "seed": 5.0, "total": 900.0, "filled": 12.0, "done": false}]}
+	var before: Dictionary = JSON.parse_string(JSON.stringify(v1))
+	var p := SaveStore.upgrade(JSON.parse_string(JSON.stringify(v1)))
+	var u: Dictionary = p["unlocks"]
+	for key: String in before["unlocks"]:
+		var old: Variant = before["unlocks"][key]
+		if old is Array:
+			for id in old:
+				check(id in u[key], "lost %s %s" % [key, id])
+		else:
+			for shape: String in old:
+				for cut in old[shape]:
+					check(cut in u["shapes"][shape], "lost cut %s|%s" % [shape, cut])
+	for id: String in GemCatalog.STARTING_COLORS:
+		check(id in u["colors"], "starting color %s didn't reach an old profile" % id)
+	check(u["shapes"].has("oval"), "starting shape didn't reach an old profile")
+	check(p["powers"]["finder"] == 0 and p["powers"]["finish_gem"] == 3, "starting power-ups given again: %s" % p["powers"])
+	check(p["wallet"]["coins"] == 40 and p["settings"]["fill_animation"] == "spin", "old wallet or settings changed")
+	check(p["puzzles"][0]["seed"] is int and p["puzzles"][0]["rewarded"] == false, "old puzzle meta not upgraded")
+	var again := SaveStore.upgrade(JSON.parse_string(JSON.stringify(p)))
+	check(JSON.stringify(again) == JSON.stringify(p), "upgrading twice changed the profile")
+	# A brand-new player gets the starting charges, once.
+	var fresh := SaveStore.upgrade({})
+	check(fresh["powers"] == GemCatalog.STARTING_POWERS, "new player's power-ups %s" % fresh["powers"])
+	check(SaveStore.upgrade(fresh)["powers"] == GemCatalog.STARTING_POWERS, "starting power-ups given twice")
+	# Shader styles of the original cuts never move.
+	check(GemCuts.SHADER_STYLE == {"brilliant": 0, "step": 1, "rose": 2, "checker": 3, "cabochon": 4},
+			"cut shader styles changed: old gems would light differently")
 
 
 ## Kits and unlocked picture features: a kit uses only unlocked colors and

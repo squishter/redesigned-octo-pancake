@@ -7,6 +7,8 @@ extends RefCounted
 ## "themes", "puzzles", "features", "animations", "finales"}, see
 ## default_unlocks()) kept in her profile (SaveStore); puzzles are made only
 ## from what is in it (PuzzleMaker). Packs (see Packs) unlock the rest.
+## Ids here are kept in saves: add freely, never rename or reuse one (see
+## Unlockables for how additions reach old profiles).
 
 ## Gem colors beyond the generators' starter set (Palettes.STARTER_GEMS).
 const EXTRA_COLORS := [
@@ -93,19 +95,9 @@ const POWERS := {
 const STARTING_POWERS := {"finish_gem": 1, "finder": 2}
 
 
+## A new player's unlocks (see Unlockables).
 static func default_unlocks() -> Dictionary:
-	var shapes := {}
-	for shape: String in STARTING_SHAPES:
-		shapes[shape] = [GemCuts.for_shape(shape)[0]]
-	return {
-		"colors": STARTING_COLORS.duplicate(),
-		"shapes": shapes,
-		"themes": STARTING_THEMES.duplicate(),
-		"puzzles": STARTING_PUZZLES.duplicate(),
-		"features": [],
-		"animations": STARTING_ANIMATIONS.duplicate(),
-		"finales": STARTING_FINALES.duplicate(),
-	}
+	return Unlockables.default_unlocks()
 
 
 ## Every gem color, parsed: [{id, name, color}].

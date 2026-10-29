@@ -14,7 +14,7 @@ render_mode unshaded, cull_disabled;
 #include "res://render/gem_light.gdshaderinc"
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y refractive index,
-// z dispersion, w cut (its index in GemCuts.ALL). COLOR is the gem color;
+// z dispersion, w cut (its style, GemCuts.SHADER_STYLE). COLOR is the gem color;
 // its alpha is 0 for opaque stones.
 varying vec3 w_normal;
 varying vec3 l_pos;

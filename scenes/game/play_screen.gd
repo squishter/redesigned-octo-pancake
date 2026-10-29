@@ -43,6 +43,11 @@ const SPRINKLE := 40
 ## picking a gem, and how fast a fling slows (per second).
 const ROW_DEADZONE := 20.0
 const FLING_DECAY := 4.0
+## Placement styles and power-ups this screen knows: GemCatalog.ANIMATIONS
+## and POWERS must be among them (an unknown style pops in).
+const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle"]
+const POWER_EFFECTS := ["big_brush", "auto_finish", "free_hand", "double_coins", "finish_gem", "sweep", "finder",
+		"sprinkle"]
 
 ## Set before adding to the tree.
 var puzzle_id := ""

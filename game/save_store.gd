@@ -14,7 +14,10 @@ extends RefCounted
 ## so a crash mid-write leaves the old file whole.
 
 const DIR := "user://saves"
-const VERSION := 1
+## Profile format: 2 added the `granted` ledger (see Unlockables.normalize).
+## Loading brings any older profile up to date; fields it doesn't know (from
+## a newer version) are kept as they are.
+const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
 ## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES).
 const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
@@ -27,13 +30,20 @@ static func load_profile() -> Dictionary:
 		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if data is Dictionary:
 			profile = data
-	profile["version"] = VERSION
-	var unlocks: Dictionary = profile.get("unlocks", {})
-	var defaults := GemCatalog.default_unlocks()
-	for key: String in defaults:
-		if not unlocks.has(key):
-			unlocks[key] = defaults[key]
-	profile["unlocks"] = unlocks
+	return upgrade(profile)
+
+
+## A profile as loaded from JSON (any version, or {} for a new player),
+## brought up to date: missing parts get their defaults, numbers come back
+## as ints, unlocks get anything new they should have (see
+## Unlockables.normalize). Nothing she has is lost.
+static func upgrade(profile: Dictionary) -> Dictionary:
+	profile["version"] = maxi(int(profile.get("version", 1)), VERSION)
+	var powers: Dictionary = profile.get("powers", {})
+	for key: String in powers:
+		powers[key] = int(powers[key])
+	profile["powers"] = powers
+	Unlockables.normalize(profile)
 	var settings: Dictionary = profile.get("settings", {})
 	for key: String in DEFAULT_SETTINGS:
 		if not settings.has(key):
@@ -47,14 +57,13 @@ static func load_profile() -> Dictionary:
 	for key in ["opened", "completed"]:
 		daily[key] = str(daily.get(key, ""))
 	profile["daily"] = daily
-	var powers: Dictionary = profile.get("powers", GemCatalog.STARTING_POWERS.duplicate())
-	for key: String in powers:
-		powers[key] = int(powers[key])
-	profile["powers"] = powers
 	var puzzles: Array = profile.get("puzzles", [])
 	for meta: Dictionary in puzzles:
 		for key in ["seed", "pattern_seed", "created", "updated", "total", "filled"]:
 			meta[key] = int(meta.get(key, 0))
+		meta["done"] = bool(meta.get("done", false))
+		meta["rewarded"] = bool(meta.get("rewarded", false))
+		meta["powers"] = meta.get("powers", [])
 	profile["puzzles"] = puzzles
 	return profile
 

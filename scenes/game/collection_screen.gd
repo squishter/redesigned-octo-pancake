@@ -216,9 +216,7 @@ func _reveal(item: Dictionary) -> void:
 
 
 func _kind_name(item: Dictionary) -> String:
-	return {"color": "New gem color!", "shape": "New gem shape!", "cut": "New cut!", "puzzle": "New picture type!",
-			"theme": "New color theme!", "feature": "New flourish!", "animation": "New way to place gems!",
-			"finale": "New finale!", "power": "Power-up!"}.get(item["kind"], "New!")
+	return Unlockables.KINDS.get(item["kind"], {}).get("found", "New!")
 
 
 ## A picture of an item: the rendered gem for colors, shapes and cuts, a
@@ -350,10 +348,10 @@ func _fill_collection() -> void:
 		row.add_child(name_label)
 		row.add_child(_swatches(t, 48.0, not have))
 
-	_catalog_section("Picture types", GemCatalog.PUZZLES, unlocks["puzzles"])
-	_catalog_section("Flourishes", GemCatalog.FEATURES, unlocks["features"])
-	_catalog_section("Ways to place gems", GemCatalog.ANIMATIONS, unlocks["animations"])
-	_catalog_section("Finales", GemCatalog.FINALES, unlocks["finales"])
+	# Every other kind of unlockable, as a list (a new kind shows up here).
+	for kind: String in Unlockables.KINDS:
+		if not kind in ["color", "shape", "cut", "theme", "power"]:
+			_kind_section(kind)
 
 	# Power-ups she has never had stay a mystery too.
 	_heading(_collection_list, "Power-ups", -1, -1)
@@ -366,12 +364,14 @@ func _fill_collection() -> void:
 			_item_row(_collection_list, "?", "Find it in a power-up pack.", false)
 
 
-func _catalog_section(title: String, catalog: Dictionary, have: Array) -> void:
-	_heading(_collection_list, title, have.size(), catalog.size())
-	for id: String in catalog:
-		var owned := id in have
-		_item_row(_collection_list, catalog[id]["name"] if owned else "?",
-				catalog[id]["about"] if owned else "Find it in a pack.", owned)
+func _kind_section(kind: String) -> void:
+	var unlocks: Dictionary = profile["unlocks"]
+	var all := Unlockables.items(kind)
+	var owned := all.filter(func(item: Dictionary) -> bool: return Unlockables.has(unlocks, item))
+	_heading(_collection_list, Unlockables.KINDS[kind]["title"], owned.size(), all.size())
+	for item: Dictionary in all:
+		var have := Unlockables.has(unlocks, item)
+		_item_row(_collection_list, item["name"] if have else "?", item["about"] if have else "Find it in a pack.", have)
 
 
 ## A gem in Collection: rendered when she has it, else only its outline.

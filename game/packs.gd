@@ -19,9 +19,6 @@ extends RefCounted
 const COINS_PER_PUZZLE := 10
 const PACK_PRICE := 30
 const POWER_PACK_PRICE := 10
-## Charges a power-up pack gives: on-demand ones come in pairs.
-const NOW_CHARGES := 2
-const PUZZLE_CHARGES := 1
 
 const PACKS := {
 	"colors": {"name": "Color pack", "about": "A new gem color."},
@@ -34,6 +31,8 @@ const PACKS := {
 	"powers": {"name": "Power-up pack", "about": "Charges of a power-up."},
 	"all": {"name": "Everything pack", "about": "Anything from any other pack."},
 }
+## A pack for a new kind of unlockable goes in PACKS, and the kind's row in
+## Unlockables.KINDS names it.
 
 
 static func price(pack: String) -> int:
@@ -48,56 +47,19 @@ static func picks(profile: Dictionary) -> int:
 	return int(profile["wallet"]["picks"])
 
 
-## What a pack could still give: [{kind, id, name, about, ...}]. Colors
-## carry `color`, shapes and cuts `shape` and `cut`.
+## What a pack could still give: every findable item of the kinds it
+## offers (see Unlockables.KINDS; the Everything pack offers them all),
+## [{kind, id, name, about, ...}].
 static func pool(pack: String, profile: Dictionary) -> Array:
 	var unlocks: Dictionary = profile["unlocks"]
 	var out := []
-	match pack:
-		"colors":
-			for g in GemCatalog.all_colors():
-				if not g["id"] in unlocks["colors"]:
-					out.append({"kind": "color", "id": g["id"], "name": g["name"], "color": g["color"],
-							"about": "A new gem color."})
-		"shapes":
-			for shape: String in GemCatalog.ALL_SHAPES:
-				if not unlocks["shapes"].has(shape):
-					var cut: String = GemCuts.for_shape(shape)[0]
-					out.append({"kind": "shape", "id": shape, "shape": shape, "cut": cut, "name": shape.capitalize(),
-							"about": "A new gem shape, in its %s cut." % cut})
-		"cuts":
-			for pair: Array in GemCatalog.all_cuts():
-				if unlocks["shapes"].has(pair[0]) and not GemCatalog.has_cut(unlocks, pair[0], pair[1]):
-					out.append({"kind": "cut", "id": "%s|%s" % pair, "shape": pair[0], "cut": pair[1],
-							"name": GemCatalog.cut_name(pair[0], pair[1]), "about": "A new cut for your %ss." % pair[0]})
-		"puzzles":
-			out = _missing("puzzle", GemCatalog.PUZZLES, unlocks["puzzles"])
-		"themes":
-			for t: String in GemCatalog.THEMES:
-				if not t in unlocks["themes"]:
-					out.append({"kind": "theme", "id": t, "name": GemCatalog.theme_name(t), "about": "A new color theme."})
-		"features":
-			out = _missing("feature", GemCatalog.FEATURES, unlocks["features"])
-		"animations":
-			out = (_missing("animation", GemCatalog.ANIMATIONS, unlocks["animations"])
-					+ _missing("finale", GemCatalog.FINALES, unlocks["finales"]))
-		"powers":
-			for p: String in GemCatalog.POWERS:
-				var info: Dictionary = GemCatalog.POWERS[p]
-				out.append({"kind": "power", "id": p, "name": info["name"], "about": info["about"],
-						"charges": NOW_CHARGES if info["kind"] == "now" else PUZZLE_CHARGES})
-		"all":
-			for other: String in PACKS:
-				if other != "all":
-					out.append_array(pool(other, profile))
-	return out
-
-
-static func _missing(kind: String, catalog: Dictionary, have: Array) -> Array:
-	var out := []
-	for id: String in catalog:
-		if not id in have:
-			out.append({"kind": kind, "id": id, "name": catalog[id]["name"], "about": catalog[id]["about"]})
+	for kind: String in Unlockables.KINDS:
+		var from: String = Unlockables.KINDS[kind]["pack"]
+		if pack != from and not (pack == "all" and PACKS.has(from)):
+			continue
+		for item: Dictionary in Unlockables.items(kind):
+			if kind == "power" or Unlockables.findable(unlocks, item):
+				out.append(item)
 	return out
 
 
@@ -133,6 +95,8 @@ static func draw(pack: String, profile: Dictionary, rng: RandomNumberGenerator) 
 		for other: String in PACKS:
 			if other != "all" and not sold_out(other, profile):
 				open_packs.append(other)
+		if open_packs.is_empty():
+			return {}
 		pack = open_packs[rng.randi_range(0, open_packs.size() - 1)]
 	var items := pool(pack, profile)
 	var item: Dictionary = items[rng.randi_range(0, items.size() - 1)]
@@ -141,28 +105,7 @@ static func draw(pack: String, profile: Dictionary, rng: RandomNumberGenerator) 
 
 
 static func give(profile: Dictionary, item: Dictionary) -> void:
-	var unlocks: Dictionary = profile["unlocks"]
-	match item["kind"]:
-		"color":
-			unlocks["colors"].append(item["id"])
-		"shape", "cut":
-			var cuts: Array = unlocks["shapes"].get(item["shape"], [])
-			if not item["cut"] in cuts:
-				cuts.append(item["cut"])
-			unlocks["shapes"][item["shape"]] = cuts
-		"puzzle":
-			unlocks["puzzles"].append(item["id"])
-		"theme":
-			unlocks["themes"].append(item["id"])
-		"feature":
-			unlocks["features"].append(item["id"])
-		"animation":
-			unlocks["animations"].append(item["id"])
-		"finale":
-			unlocks["finales"].append(item["id"])
-		"power":
-			var powers: Dictionary = profile["powers"]
-			powers[item["id"]] = int(powers.get(item["id"], 0)) + int(item["charges"])
+	Unlockables.grant(profile, item)
 
 
 static func today() -> String:

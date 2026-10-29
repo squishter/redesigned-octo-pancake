@@ -17,6 +17,8 @@ const KIT_CELL := 10
 const KIT_DRILL := 0.9
 const SQUARE_DRILL_CHANCE := 0.4
 const MEDIUM_KIT_CHANCE := 0.4
+## Picture features make() knows (GemCatalog.FEATURES must be among them).
+const FEATURES := ["frames", "backgrounds", "collars", "zoom", "wobble"]
 
 
 ## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme}.
