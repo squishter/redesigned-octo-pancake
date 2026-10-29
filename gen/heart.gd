@@ -431,9 +431,13 @@ func _clip(path: PackedVector2Array, step: float = 0.01) -> Array[PackedVector2A
 		prev_shown = shown
 	if cur.size() >= 2:
 		pieces.append(cur)
+	# Drop crumbs where a path only grazes the visible area.
 	var out: Array[PackedVector2Array] = []
 	for piece in pieces:
-		if piece.size() >= 2 and piece[0].distance_to(piece[piece.size() - 1]) > 0.02:
+		var length := 0.0
+		for i in piece.size() - 1:
+			length += piece[i].distance_to(piece[i + 1])
+		if length > 0.02:
 			out.append(piece)
 	return out
 

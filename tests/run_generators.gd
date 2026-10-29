@@ -23,6 +23,7 @@ func _init() -> void:
 	test_mandala_determinism()
 	test_flowers()
 	test_hearts()
+	test_butterflies()
 	test_collages()
 	test_design_plans()
 	test_kits()
@@ -89,15 +90,7 @@ func test_flowers() -> void:
 		print("  seed %d %-8s petals %s center %-7s %d regions" % [seed_value, template, petals, flower["center"],
 				map.regions.size()])
 		check(map.regions.size() >= 5, "seed %d: only %d regions" % [seed_value, map.regions.size()])
-		var mask: PackedByteArray = lines["mask"]
-		var art := Image.create(w, h, false, Image.FORMAT_RGBA8)
-		art.fill(Color.WHITE)
-		for y in h:
-			for x in w:
-				if mask[y * w + x]:
-					art.set_pixel(x, y, PictureSources.LINE_COLOR)
-		art.resize(cell, cell, Image.INTERPOLATE_BILINEAR)
-		sheet.blit_rect(art, Rect2i(0, 0, cell, cell), Vector2i((i % 6) * cell, (i / 6) * cell))
+		sheet_cell(sheet, lines, i, cell)
 	var used := {}
 	for t in recent:
 		used[t] = true
@@ -134,28 +127,60 @@ func test_hearts() -> void:
 		var h: int = lines["height"]
 		var mask: PackedByteArray = lines["mask"]
 		var map := RegionMap.build(mask, w, h, int(w * h * 0.0005))
-		var mismatched := 0
-		for y in h:
-			for x in w / 2:
-				if (mask[y * w + x] != 0) != (mask[y * w + w - 1 - x] != 0):
-					mismatched += 1
+		var mismatched := mirror_mismatch(mask, w, h)
 		print("  seed %d %-10s %-8s %-32s %3d regions" % [seed_value, heart["shape"], heart["collar"],
 				" + ".join(PackedStringArray(heart["patterns"])), map.regions.size()])
 		check(map.regions.size() >= 3, "seed %d: only %d regions" % [seed_value, map.regions.size()])
 		check(mismatched < w * h * 0.002, "seed %d: not mirror-symmetric (%d px differ)" % [seed_value, mismatched])
-		var art := Image.create(w, h, false, Image.FORMAT_RGBA8)
-		art.fill(Color.WHITE)
-		for y in h:
-			for x in w:
-				if mask[y * w + x]:
-					art.set_pixel(x, y, PictureSources.LINE_COLOR)
-		art.resize(cell, cell, Image.INTERPOLATE_BILINEAR)
-		sheet.blit_rect(art, Rect2i(0, 0, cell, cell), Vector2i((i % 6) * cell, (i / 6) * cell))
+		sheet_cell(sheet, lines, i, cell)
 	var expected := HeartGenerator.SHAPES.keys() + HeartGenerator.COLLARS + HeartGenerator.MOTIFS + HeartGenerator.FIELDS
 	for choice in expected:
 		check(seen.has(choice), "%s never showed up in %d hearts" % [choice, count])
 	check(combined >= count / 2, "only %d of %d hearts combine patterns" % [combined, count])
 	sheet.save_png(out_dir.path_join("hearts_contact_sheet.png"))
+
+
+## 24 butterflies in a row: every wing shape, border, pattern, body and
+## antenna style shows up, forewings and hindwings often differ, and every
+## butterfly is mirror-symmetric with plenty of closed regions. Writes a
+## contact sheet.
+func test_butterflies() -> void:
+	print("Butterflies")
+	var count := 24
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 4, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	var differ := 0
+	for i in count:
+		var seed_value := 5000 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "butterfly", "recent": recent})
+		var b: Dictionary = lines["mandala"]["butterfly"]
+		recent.append(b)
+		for key in ["shape", "border", "body", "antennae"]:
+			seen[b[key]] = true
+		for p in b["fore"] + b["hind"]:
+			seen[p] = true
+		if b["fore"] != b["hind"]:
+			differ += 1
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var mask: PackedByteArray = lines["mask"]
+		var map := RegionMap.build(mask, w, h, int(w * h * 0.0005))
+		var mismatched := mirror_mismatch(mask, w, h)
+		print("  seed %d %-11s %-9s %-9s %-9s fore %-28s hind %-28s %3d regions" % [seed_value, b["shape"],
+				b["border"], b["body"], b["antennae"], " + ".join(PackedStringArray(b["fore"])),
+				" + ".join(PackedStringArray(b["hind"])), map.regions.size()])
+		check(map.regions.size() >= 6, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		check(mismatched < w * h * 0.002, "seed %d: not mirror-symmetric (%d px differ)" % [seed_value, mismatched])
+		sheet_cell(sheet, lines, i, cell)
+	var expected := (ButterflyGenerator.SHAPES.keys() + ButterflyGenerator.BORDERS + ButterflyGenerator.PATTERNS
+			+ ButterflyGenerator.BODIES + ButterflyGenerator.ANTENNAE)
+	for choice in expected:
+		check(seen.has(choice), "%s never showed up in %d butterflies" % [choice, count])
+	check(differ >= count / 2, "forewing and hindwing patterns match in %d of %d" % [count - differ, count])
+	sheet.save_png(out_dir.path_join("butterflies_contact_sheet.png"))
 
 
 ## Packs `seeds` mandalas across all variants and themes and checks the slots
@@ -316,6 +341,32 @@ func test_json_round_trip() -> void:
 
 
 # --- helpers -----------------------------------------------------------------
+
+## Draws line art (as mandala_lines returns it) into cell i of a 6-wide sheet.
+func sheet_cell(sheet: Image, lines: Dictionary, i: int, cell: int) -> void:
+	var w: int = lines["width"]
+	var h: int = lines["height"]
+	var mask: PackedByteArray = lines["mask"]
+	var art := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	art.fill(Color.WHITE)
+	for y in h:
+		for x in w:
+			if mask[y * w + x]:
+				art.set_pixel(x, y, PictureSources.LINE_COLOR)
+	art.resize(cell, cell, Image.INTERPOLATE_BILINEAR)
+	sheet.blit_rect(art, Rect2i(0, 0, cell, cell), Vector2i((i % 6) * cell, (i / 6) * cell))
+
+
+## Pixels of a mask that differ from their mirror image across the vertical
+## center line.
+func mirror_mismatch(mask: PackedByteArray, w: int, h: int) -> int:
+	var n := 0
+	for y in h:
+		for x in w / 2:
+			if (mask[y * w + x] != 0) != (mask[y * w + w - 1 - x] != 0):
+				n += 1
+	return n
+
 
 ## A blobby test "photo": sky, sun, hills and a flower, with some noise.
 func synthetic_photo(w: int, h: int) -> Image:

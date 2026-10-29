@@ -13,8 +13,8 @@ extends RefCounted
 ## copy a little so it looks hand-drawn; it fades to zero at the ring
 ## boundaries, so every region stays closed.
 ##
-## Flowers come from FlowerGenerator's petal templates and hearts from
-## HeartGenerator.
+## Flowers come from FlowerGenerator's petal templates, hearts from
+## HeartGenerator and butterflies from ButterflyGenerator.
 
 const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 const MOTIFS := ["petals", "scallops", "dots", "zigzag", "lattice", "leaves"]
@@ -28,10 +28,12 @@ var closed := PackedByteArray()
 ## options: variant (one of VARIANTS, default "mandala"), wobble (0..1, the
 ## "semi-symmetric" strength, default 0); flowers also take FlowerGenerator's
 ## template and recent, hearts HeartGenerator's shape, collar, patterns and
+## recent, butterflies ButterflyGenerator's shape, border, body, antennae and
 ## recent. Returns
 ## {"seed", "variant", "symmetry": "radial" | "mirror", "polylines", "closed"},
-## plus "flower" (FlowerGenerator's template, rings and center) for flowers
-## and "heart" (shape, collar, patterns, divider) for hearts.
+## plus "flower" (FlowerGenerator's template, rings and center) for flowers,
+## "heart" (shape, collar, patterns, divider) for hearts and "butterfly"
+## (shape, border, body, antennae, fore, hind) for butterflies.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var g := MandalaGenerator.new()
 	g.rng.seed = seed_value
@@ -63,7 +65,16 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 				"heart": {"shape": h["shape"], "collar": h["collar"], "patterns": h["patterns"], "divider": h["divider"]},
 			}
 		"butterfly":
-			g._build_butterfly()
+			var b := ButterflyGenerator.generate(seed_value, options)
+			return {
+				"seed": seed_value,
+				"variant": variant,
+				"symmetry": "mirror",
+				"polylines": b["polylines"],
+				"closed": b["closed"],
+				"butterfly": {"shape": b["shape"], "border": b["border"], "body": b["body"],
+						"antennae": b["antennae"], "fore": b["fore"], "hind": b["hind"]},
+			}
 		_:
 			variant = "mandala"
 			g._build_mandala()
@@ -295,58 +306,3 @@ func _build_snowflake() -> void:
 			for v in p:
 				pts.append(v.rotated(rot))
 			_add(pts, true)
-
-
-func _build_butterfly() -> void:
-	var anchor := Vector2(0.03, -0.05)
-	var wings := [
-		# phi0, phi1, size, wobble, veins
-		[deg_to_rad(-100.0), deg_to_rad(5.0), rng.randf_range(0.95, 1.05), rng.randf_range(0.05, 0.12), rng.randi_range(3, 4)],
-		[deg_to_rad(10.0), deg_to_rad(95.0), rng.randf_range(0.62, 0.75), rng.randf_range(0.03, 0.1), rng.randi_range(2, 3)],
-	]
-	var parts := []  # [points, closed]
-	for wing in wings:
-		var phi0: float = wing[0]
-		var phi1: float = wing[1]
-		var radius_at := func(t: float) -> float:
-			return wing[2] * pow(sin(PI * t), 0.55) * (1.0 + wing[3] * cos(3.0 * PI * t))
-		var outline := PackedVector2Array()
-		for i in 81:
-			var t := i / 80.0
-			outline.append(anchor + _polar(radius_at.call(t), lerpf(phi0, phi1, t)))
-		parts.append([outline, true])
-		var inner_s := rng.randf_range(0.55, 0.65)
-		var inner := PackedVector2Array()
-		for p in outline:
-			inner.append(anchor + (p - anchor) * inner_s)
-		parts.append([inner, true])
-		var veins: int = wing[4]
-		for i in range(1, veins + 1):
-			var t := float(i) / (veins + 1)
-			parts.append([PackedVector2Array([anchor, anchor + _polar(radius_at.call(t), lerpf(phi0, phi1, t))]), false])
-		# A spot in each cell of the outer band.
-		for i in veins + 1:
-			var t := (i + 0.5) / (veins + 1)
-			var rr: float = radius_at.call(t)
-			var size := rr * (1.0 - inner_s) * 0.22
-			if size > 0.012:
-				parts.append([circle(anchor + _polar(rr * (1.0 + inner_s) / 2.0, lerpf(phi0, phi1, t)), size, 24), true])
-	for part in parts:
-		_add(part[0], part[1])
-		var mirrored := PackedVector2Array()
-		for p in part[0]:
-			mirrored.append(Vector2(-p.x, p.y))
-		_add(mirrored, part[1])
-	# Body, head and antennae.
-	var body := PackedVector2Array()
-	for i in 60:
-		body.append(Vector2(0.05 * cos(TAU * i / 60.0), 0.42 * sin(TAU * i / 60.0)))
-	_add(body, true)
-	_add(circle(Vector2(0, -0.47), 0.06, 32), true)
-	for s in [-1.0, 1.0]:
-		var antenna := PackedVector2Array()
-		for i in 13:
-			var t := i / 12.0
-			antenna.append(Vector2(s * (0.02 + 0.25 * t * t), -0.52 - 0.32 * t))
-		_add(antenna)
-		_add(circle(Vector2(s * 0.27, -0.85), 0.035, 20), true)
