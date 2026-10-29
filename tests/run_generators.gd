@@ -21,6 +21,7 @@ func _init() -> void:
 
 	test_lab_round_trip()
 	test_mandala_determinism()
+	test_flowers()
 	test_collages()
 	test_design_plans()
 	test_kits()
@@ -53,6 +54,56 @@ func test_mandala_determinism() -> void:
 		var c := MandalaGenerator.generate(43, {"variant": variant, "wobble": 0.5})
 		check(a["polylines"] == b["polylines"], "%s: same seed gave different lines" % variant)
 		check(a["polylines"] != c["polylines"], "%s: different seeds gave the same lines" % variant)
+
+
+## 24 flowers in a row, as a pack's picture choices would make them: every
+## template shows up, none repeats within AVOID_RECENT flowers, petal counts
+## vary, and each flower has plenty of closed regions. Writes a contact sheet.
+func test_flowers() -> void:
+	print("Flowers")
+	var count := 24
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 4, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var counts := {}
+	for i in count:
+		var seed_value := 3000 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "flower", "recent": recent, "wobble": 0.4})
+		var flower: Dictionary = lines["mandala"]["flower"]
+		var template: String = flower["template"]
+		check(not template in recent.slice(maxi(0, recent.size() - FlowerGenerator.AVOID_RECENT)),
+				"seed %d: %s repeats within %d flowers" % [seed_value, template, FlowerGenerator.AVOID_RECENT])
+		recent.append(template)
+		var petals: Array = []
+		for ring in flower["rings"]:
+			petals.append(ring["petals"])
+		var allowed: Array = FlowerGenerator.TEMPLATES[template]["petals"]
+		# Rings that would be too thin get fewer petals, never more.
+		check(petals[0] >= 3 and petals[0] <= allowed[1], "seed %d: %s with %d petals" % [seed_value, template, petals[0]])
+		counts[petals[0]] = true
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
+		print("  seed %d %-8s petals %s center %-7s %d regions" % [seed_value, template, petals, flower["center"],
+				map.regions.size()])
+		check(map.regions.size() >= 5, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		var mask: PackedByteArray = lines["mask"]
+		var art := Image.create(w, h, false, Image.FORMAT_RGBA8)
+		art.fill(Color.WHITE)
+		for y in h:
+			for x in w:
+				if mask[y * w + x]:
+					art.set_pixel(x, y, PictureSources.LINE_COLOR)
+		art.resize(cell, cell, Image.INTERPOLATE_BILINEAR)
+		sheet.blit_rect(art, Rect2i(0, 0, cell, cell), Vector2i((i % 6) * cell, (i / 6) * cell))
+	var used := {}
+	for t in recent:
+		used[t] = true
+	check(used.size() == FlowerGenerator.TEMPLATES.size(), "only %d of %d templates in %d flowers" % [
+			used.size(), FlowerGenerator.TEMPLATES.size(), count])
+	check(counts.size() >= 8, "only %d different outer petal counts" % counts.size())
+	sheet.save_png(out_dir.path_join("flowers_contact_sheet.png"))
 
 
 ## Packs `seeds` mandalas across all variants and themes and checks the slots
@@ -175,9 +226,14 @@ func test_kits() -> void:
 		print("  %s %dx%d  %d colors  %d isolated left  %d ms" % [size, w, h, palette.size(), isolated, ms])
 		check(isolated < w * h * 0.01, "kit %s: %d isolated cells" % [size, isolated])
 		render_kit(kit).save_png(out_dir.path_join("kit_7_%s.png" % size))
-	# "any color" keeps the quantized colors.
-	var free_kit := KitGenerator.generate(src, {"size": "small", "colors": 16, "any_color": true})
-	check(free_kit["palette"][0]["gem_color_id"] == null, "any_color kit should not snap to gems")
+	# Pictures map only to colors she owns.
+	var owned := Palettes.starter_gems().slice(0, 8)
+	var owned_ids := []
+	for g in owned:
+		owned_ids.append(g["id"])
+	var owned_kit := KitGenerator.generate(src, {"size": "small", "colors": 16, "gems": owned})
+	for entry in owned_kit["palette"]:
+		check(entry["gem_color_id"] in owned_ids, "kit used %s, which she doesn't own" % entry["gem_color_id"])
 
 
 func test_photo_line_art() -> void:

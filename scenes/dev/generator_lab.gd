@@ -6,6 +6,7 @@ const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 
 var _source: OptionButton
 var _variant: OptionButton
+var _template: OptionButton
 var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
@@ -34,6 +35,7 @@ func _ready() -> void:
 	root.add_child(controls)
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
+	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
 	_theme = _options(controls, "Theme", Array(Palettes.theme_names()))
 	_mode = _options(controls, "Mode", ["Collage", "Kit", "Line art"])
 	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
@@ -148,6 +150,7 @@ func _generate() -> void:
 		"photo": _photo if use_photo else null,
 		"seed": int(_seed.value),
 		"variant": _selected(_variant),
+		"template": _selected(_template),
 		"theme": _selected(_theme),
 		"wobble": _wobble.value,
 		"detail": _detail.value,
@@ -167,6 +170,7 @@ func _run_job(job: Dictionary) -> void:
 	var opts := {
 		"seed": job["seed"],
 		"variant": job["variant"],
+		"template": job["template"],
 		"theme": job["theme"],
 		"wobble": job["wobble"],
 		"detail": job["detail"],
@@ -203,8 +207,11 @@ func _process(_delta: float) -> void:
 				if r["empty"]:
 					empty += 1
 				fills[r["fill"]] = fills.get(r["fill"], 0) + 1
-			_status.text = "Collage: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
-				p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
+			var flower := ""
+			if p["source"].has("template"):
+				flower = ", %s petals" % p["source"]["template"]
+			_status.text = "Collage%s: %d regions (%d too thin), %d slots, %.0f%% avg coverage, lines %s, fills %s — %d ms" % [
+				flower, p["regions"].size(), empty, p["slots"].size(), CollageGenerator.mean_coverage(p) * 100.0,
 				p["line_style"], fills, ms]
 		"Kit":
 			var k: Dictionary = out["picture"]

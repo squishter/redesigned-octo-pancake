@@ -12,6 +12,8 @@ extends RefCounted
 ## then rotated 6, 8, 10 or 12 times. The optional wobble nudges each wedge
 ## copy a little so it looks hand-drawn; it fades to zero at the ring
 ## boundaries, so every region stays closed.
+##
+## Flowers come from FlowerGenerator's petal templates.
 
 const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 const MOTIFS := ["petals", "scallops", "dots", "zigzag", "lattice", "leaves"]
@@ -23,8 +25,10 @@ var closed := PackedByteArray()
 
 
 ## options: variant (one of VARIANTS, default "mandala"), wobble (0..1, the
-## "semi-symmetric" strength, default 0). Returns
-## {"seed", "variant", "symmetry": "radial" | "mirror", "polylines", "closed"}.
+## "semi-symmetric" strength, default 0); flowers also take FlowerGenerator's
+## template and recent. Returns
+## {"seed", "variant", "symmetry": "radial" | "mirror", "polylines", "closed"},
+## plus "flower" (FlowerGenerator's template, rings and center) for flowers.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var g := MandalaGenerator.new()
 	g.rng.seed = seed_value
@@ -34,7 +38,15 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		variant = VARIANTS[g.rng.randi_range(0, VARIANTS.size() - 1)]
 	match variant:
 		"flower":
-			g._build_flower()
+			var f := FlowerGenerator.generate(seed_value, options)
+			return {
+				"seed": seed_value,
+				"variant": variant,
+				"symmetry": "radial",
+				"polylines": f["polylines"],
+				"closed": f["closed"],
+				"flower": {"template": f["template"], "rings": f["rings"], "center": f["center"]},
+			}
 		"snowflake":
 			g._build_snowflake()
 		"heart":
@@ -226,26 +238,6 @@ func _build_mandala() -> void:
 		_add_ring_motif(parts, m, r, r_out, rot)
 		_add(circle(Vector2.ZERO, r_out), true)
 		r = r_out
-
-
-func _build_flower() -> void:
-	var n := rng.randi_range(5, 9)
-	var rc := rng.randf_range(0.12, 0.2)
-	var alpha := TAU / n
-	var shape: String = _pick(["round", "pointed"])
-	var length := 1.0 - rc
-	# Back petals: lenses peeking out between the front petals. They start at
-	# the point where two front petals meet, so no slivers form at the base.
-	var half_width := (rc + length * 0.6) * sin(alpha / 2.0) * 0.75
-	var back := _lens(Vector2(rc, 0.0), Vector2(1.0, 0.0), 2.0 * half_width / length)
-	_add_ring_motif([[_to_polar(back), true]], n, rc, 1.0, alpha / 2.0)
-	_add_ring_motif([
-		[_petal(rc, length * rng.randf_range(0.72, 0.82), alpha / 2.0, shape, 32), false],
-		[_petal(rc, length * 0.4, alpha * 0.22, shape, 20), false],
-	], n, rc, 1.0)
-	_add(circle(Vector2.ZERO, rc), true)
-	_add(circle(Vector2.ZERO, rc * 0.55), true)
-	_add_ring_motif([[_dot(rc * 0.775, 0.0, rc * 0.16), true]], 2 * n, rc * 0.55, rc)
 
 
 func _build_snowflake() -> void:

@@ -10,10 +10,10 @@ config_version=5
 
 [application]
 
-config/name="Gem Mosaic"
+config/name="Paint With Gems"
 config/description="A cozy gem-placing picture game."
 run/main_scene="res://scenes/dev/generator_lab.tscn"
-config/features=PackedStringArray("4.4", "Mobile")
+config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
 [display]
@@ -24,7 +24,7 @@ window/size/window_width_override=540
 window/size/window_height_override=1200
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=1
+window/handheld/orientation=6
 
 [input_devices]
 

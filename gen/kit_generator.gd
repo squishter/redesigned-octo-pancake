@@ -25,7 +25,6 @@ const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 ##   size: "small" | "medium" | "large" or a Vector2i(cols, rows)   (default "small")
 ##   colors: number of palette colors, 12..40 ("detail")            (default 20)
 ##   gems: Array of {"id", "color": Color} she owns                 (default starter gems)
-##   any_color: keep the quantized colors instead of snapping       (default false)
 ##   crop: Rect2 in normalized source coords, or null for a centered crop
 ##   drill: "round" | "square"                                       (default "round")
 ##   cleanup: re-color isolated cells                                 (default true)
@@ -34,8 +33,11 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var size_opt: Variant = options.get("size", "small")
 	var board: Vector2i = size_opt if size_opt is Vector2i else BOARD_SIZES.get(size_opt, BOARD_SIZES["small"])
 	var n_colors: int = options.get("colors", 20)
+	# Pictures map only to colors she owns, so every color she unlocks makes
+	# later pictures look better.
 	var gems: Array = options.get("gems", Palettes.starter_gems())
-	var any_color: bool = options.get("any_color", false)
+	if gems.is_empty():
+		gems = Palettes.starter_gems()
 
 	var img := crop_to_aspect(source, float(board.x) / board.y, options.get("crop", null))
 	img = downscale(img, board.x, board.y)
@@ -49,26 +51,21 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var centers: PackedVector3Array = q["centers"]
 	var labels: PackedInt32Array = q["labels"]
 
-	# Palette entries: either the snapped gem colors, merging clusters that
-	# land on the same gem, or the raw cluster colors.
+	# Palette entries are the snapped gem colors; clusters that land on the
+	# same gem merge.
 	var entries := []  # {color: Color, gem_id}
 	var cluster_to_entry := PackedInt32Array()
 	cluster_to_entry.resize(centers.size())
-	if any_color or gems.is_empty():
-		for c in centers.size():
-			cluster_to_entry[c] = entries.size()
-			entries.append({"color": LabColor.to_color(centers[c]), "gem_id": null})
-	else:
-		var gem_lab := PackedVector3Array()
-		for g in gems:
-			gem_lab.append(LabColor.from_color(g["color"]))
-		var gem_to_entry := {}
-		for c in centers.size():
-			var gi := LabColor.nearest(centers[c], gem_lab)
-			if not gem_to_entry.has(gi):
-				gem_to_entry[gi] = entries.size()
-				entries.append({"color": gems[gi]["color"], "gem_id": gems[gi]["id"]})
-			cluster_to_entry[c] = gem_to_entry[gi]
+	var gem_lab := PackedVector3Array()
+	for g in gems:
+		gem_lab.append(LabColor.from_color(g["color"]))
+	var gem_to_entry := {}
+	for c in centers.size():
+		var gi := LabColor.nearest(centers[c], gem_lab)
+		if not gem_to_entry.has(gi):
+			gem_to_entry[gi] = entries.size()
+			entries.append({"color": gems[gi]["color"], "gem_id": gems[gi]["id"]})
+		cluster_to_entry[c] = gem_to_entry[gi]
 
 	var cells := PackedInt32Array()
 	cells.resize(labels.size())
