@@ -29,6 +29,7 @@ var _start: Button
 var _new_title: Label
 var _photo_row: Control
 var _subject: OptionButton
+var _kit_size: OptionButton
 var _kit_colors: OptionButton
 var _photo_dialog: FileDialog
 ## Which photo puzzle the picker is choosing a photo for.
@@ -86,6 +87,12 @@ func _ready() -> void:
 	form.add_child(grid)
 	_type = _options(grid, "Picture")
 	_theme = _options(grid, "Colors")
+	# Kits (Diamond kits and photo kits): drills on the longer side.
+	_kit_size = _options(grid, "Kit size")
+	for size: String in PuzzleMaker.KIT_SIZES:
+		_kit_size.add_item("%s (%d)" % [PuzzleMaker.KIT_SIZES[size], KitGenerator.LONG_SIDES[size]])
+		_kit_size.set_item_metadata(_kit_size.item_count - 1, size)
+	_kit_size.select(1)
 	var actions := HBoxContainer.new()
 	form.add_child(actions)
 	_start = _button(actions, "Start", _start_making)
@@ -205,11 +212,13 @@ func _start_making() -> void:
 	var type_id: String = _type.get_item_metadata(_type.selected)
 	var theme_id: String = _theme.get_item_metadata(_theme.selected)
 	_request = PuzzleMaker.new_request(type_id, theme_id)
+	_request["kit_size"] = _kit_size.get_item_metadata(maxi(_kit_size.selected, 0))
 	if not _recolor.is_empty():
 		# The same picture: same seeds, new colors.
 		_request["type"] = _recolor["type"]
 		_request["seed"] = _recolor["seed"]
 		_request["pattern_seed"] = _recolor["pattern_seed"]
+		_request["kit_size"] = _recolor.get("kit_size", _request["kit_size"])
 	_new_panel.visible = false
 	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(_request["type"]).to_lower()
 	_busy.visible = true
@@ -246,6 +255,7 @@ func _start_photo(photo: Image, kind: String) -> void:
 	_request["photo"] = photo
 	_request["subject"] = _subject.get_item_metadata(maxi(_subject.selected, 0))
 	_request["kit_colors"] = _kit_colors.get_item_metadata(maxi(_kit_colors.selected, 0))
+	_request["kit_size"] = _kit_size.get_item_metadata(maxi(_kit_size.selected, 0))
 	_new_panel.visible = false
 	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(kind).to_lower()
 	_busy.visible = true

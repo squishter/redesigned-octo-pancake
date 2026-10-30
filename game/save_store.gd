@@ -84,13 +84,19 @@ static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
 		"seed": int(request.get("seed", 0)),
 		"pattern_seed": int(request.get("pattern_seed", 0)),
 		"theme": request.get("theme", ""),
+		"kit_size": request.get("kit_size", ""),
 		"created": now,
 		"updated": now,
 		"total": picture["slots"].size(),
 		"filled": 0,
 		"done": false,
 	}
-	_write(_path(id, "json"), PatternIO.to_json(picture).to_utf8_buffer())
+	# Kits save as their grid, not their (many) slots.
+	var kept := picture
+	if picture.has("kit_grid"):
+		kept = picture.duplicate()
+		kept.erase("slots")
+	_write(_path(id, "json"), PatternIO.to_json(kept).to_utf8_buffer())
 	save_progress(id, PackedByteArray())
 	(profile["puzzles"] as Array).push_front(meta)
 	save_profile(profile)
@@ -117,7 +123,10 @@ static func delete_puzzle(profile: Dictionary, id: String) -> void:
 
 
 static func load_picture(id: String) -> Dictionary:
-	return PatternIO.load_file(_path(id, "json"))
+	var picture := PatternIO.load_file(_path(id, "json"))
+	if picture.has("kit_grid") and not picture.has("slots"):
+		picture["slots"] = PuzzleMaker.kit_slots(picture)
+	return picture
 
 
 ## Placed stones as one byte per slot (1 placed), `count` long.

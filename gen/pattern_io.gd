@@ -9,6 +9,7 @@ const BYTE_KEYS := ["cells", "lines", "lines_visible"]
 const COLOR_KEYS := ["color", "target_color", "accent_color", "feature_color"]
 ## JSON numbers come back as floats; these keys hold ints.
 const INT_KEYS := ["version", "width", "height", "id", "region", "group", "area", "count", "seed", "pattern_seed",
+		"cols", "rows",
 		"tone", "part", "gem_types"]
 const VECTOR_KEYS := ["centroid"]
 

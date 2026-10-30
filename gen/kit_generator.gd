@@ -159,6 +159,21 @@ static func own_colors(pixels: PackedColorArray, n: int, seed_value: int) -> Arr
 	return out
 
 
+## Kit sizes for the game, by the drills on the board's longer side; the
+## shorter side follows the picture's shape.
+const LONG_SIDES := {"small": 50, "medium": 90, "large": 130, "xlarge": 250}
+
+
+## A board `long_side` cells along the picture's longer side, the other side
+## scaled to its shape.
+static func board_long(img: Image, long_side: int) -> Vector2i:
+	var iw := float(img.get_width())
+	var ih := float(img.get_height())
+	if iw >= ih:
+		return Vector2i(long_side, maxi(10, int(round(long_side * ih / iw))))
+	return Vector2i(maxi(10, int(round(long_side * iw / ih))), long_side)
+
+
 ## A board about `cells` cells big in the photo's own shape, so nothing is
 ## cropped away.
 static func board_for(img: Image, cells: int) -> Vector2i:

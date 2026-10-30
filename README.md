@@ -83,9 +83,15 @@ mode for trying out new pattern generation.
   Finish gem, Sweep (the picked gem's slots on screen), Finder (zooms to
   the picked gem's slots) and Sprinkle (40 gems anywhere). She starts with
   a Finish gem and two Finders.
-- **Diamond kits**: a mandala painted with the theme, turned into a 40×50
-  or 70×90 grid of round or square drills (whichever are unlocked), played
-  like a collage.
+- **Diamond kits**: a mandala painted with the theme, turned into a grid of
+  round or square drills (whichever are unlocked), played like a collage.
+  *Kit size* in the New puzzle panel (for photo kits too) sets the drills
+  on the longer side: Small 50, Medium 90, Large 130 or X-large 250; the
+  shorter side follows the picture's shape (an X-large kit can have 62,500
+  drills). Kits save as their grid of colors (82 KB for an X-large one,
+  where every drill as a slot would be 11 MB) and turn back into drills on
+  loading; filling a drill only collapses its own outline, so big boards
+  stay quick.
 - **Menu.** *New puzzle* picks an unlocked type and theme and makes a fresh
   one (on a worker thread). Every puzzle keeps its own save, so starting a
   new one never touches the others. Each saved puzzle shows a thumbnail and

@@ -17,6 +17,8 @@ const KIT_CELL := 10
 const KIT_DRILL := 0.9
 const SQUARE_DRILL_CHANCE := 0.4
 const MEDIUM_KIT_CHANCE := 0.4
+## Kit sizes she can pick (KitGenerator.LONG_SIDES: drills on the longer side).
+const KIT_SIZES := {"small": "Small", "medium": "Medium", "large": "Large", "xlarge": "X-large"}
 ## Photos are shrunk to at most this many px on their longest side first.
 const PHOTO_MAX := 1024
 ## Photo kits: about this many drills, in the photo's own shape, each the
@@ -64,6 +66,7 @@ static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		"gems": GemCatalog.unlocked_gems(unlocks),
 		"shapes": unlocks.get("shapes", {}),
 		"pattern_seed": request["pattern_seed"],
+		"kit_size": request.get("kit_size", ""),
 	}
 	# Picture features stay off until unlocked; unlocked, the generators pick
 	# them as they usually would.
@@ -106,6 +109,7 @@ static func _photo(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash([seed_value, "kit"])
 		opts["kit_colors"] = int(request.get("kit_colors", 0))
+		opts["kit_size"] = request.get("kit_size", "")
 		picture = _kit(seed_value, opts, unlocks, rng, photo)
 		picture["source"] = {"kind": "photo", "kit_colors": opts["kit_colors"]}
 	else:
@@ -128,14 +132,20 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 		drill = "square"
 	var cut: String = shapes.get(drill, [GemCuts.for_shape(drill)[0]])[0]
 	var size: Variant = "medium" if rng.randf() < MEDIUM_KIT_CHANCE else "small"
+	var picked: String = opts.get("kit_size", "")
 	var kit_options := {"size": size, "colors": clampi(gems.size(), 6, 20), "gems": gems, "drill": drill,
 			"seed": seed_value}
 	if image == null:
 		image = PictureSources.mandala_image(seed_value, opts)
+		if KitGenerator.LONG_SIDES.has(picked):
+			size = KitGenerator.board_long(image, KitGenerator.LONG_SIDES[picked])
+			kit_options["size"] = size
 	else:
 		# A photo: every gem she has (or the photo's own `kit_colors` colors),
 		# straight from each cell's color, no crop.
 		size = KitGenerator.board_for(image, PHOTO_KIT_CELLS)
+		if KitGenerator.LONG_SIDES.has(picked):
+			size = KitGenerator.board_long(image, KitGenerator.LONG_SIDES[picked])
 		kit_options.merge({"size": size, "direct": true, "dither": PHOTO_DITHER, "cleanup": false}, true)
 		var own: int = opts.get("kit_colors", 0)
 		if own > 0:
@@ -143,17 +153,11 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 	var kit := KitGenerator.generate(image, kit_options)
 	var w: int = kit["width"]
 	var h: int = kit["height"]
-	var cells: PackedByteArray = kit["cells"]
-	var palette: Array = kit["palette"]
 	var d := KIT_CELL * KIT_DRILL
-	var slots := []
-	for y in h:
-		for x in w:
-			var entry: Dictionary = palette[cells[y * w + x]]
-			slots.append({"id": slots.size(), "region": 0, "shape": drill, "cut": cut, "x": (x + 0.5) * KIT_CELL,
-					"y": (y + 0.5) * KIT_CELL, "rotation": 0.0, "size": d, "width": d, "tone": 0, "part": 0,
-					"target_color": entry["color"], "target_gem": entry["gem_color_id"]})
-	return {
+	var palette := []
+	for entry: Dictionary in kit["palette"]:
+		palette.append({"color": entry["color"], "gem": entry["gem_color_id"]})
+	var picture := {
 		"version": 2,
 		"type": "collage",
 		"kind": "kit",
@@ -162,10 +166,37 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 		"unit": d / 2.0,
 		"symmetry": "none",
 		"drill": drill,
-		"kit_size": size if size is String else "%dx%d" % [size.x, size.y],
+		"kit_size": picked if picked != "" else (size if size is String else "%dx%d" % [size.x, size.y]),
 		"source": {"kind": "mandala", "seed": seed_value, "theme": opts.get("theme", "")},
 		"lines": PackedByteArray(),
 		"lines_visible": PackedByteArray(),
 		"regions": [],
-		"slots": slots,
+		# The kit as a grid: saved instead of its slots (an X-large kit has tens
+		# of thousands), and turned back into slots on loading (kit_slots).
+		"kit_grid": {"cols": w, "rows": h, "cells": kit["cells"], "palette": palette, "drill": drill, "cut": cut},
 	}
+	picture["slots"] = kit_slots(picture)
+	return picture
+
+
+## A kit's slots from its grid (`kit_grid`): one drill per cell, KIT_CELL
+## px apart.
+static func kit_slots(picture: Dictionary) -> Array:
+	var grid: Dictionary = picture["kit_grid"]
+	var w: int = grid["cols"]
+	var h: int = grid["rows"]
+	var cells: PackedByteArray = grid["cells"]
+	var palette: Array = grid["palette"]
+	var drill: String = grid["drill"]
+	var cut: String = grid["cut"]
+	var d := KIT_CELL * KIT_DRILL
+	var slots := []
+	slots.resize(w * h)
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			var entry: Dictionary = palette[cells[i]]
+			slots[i] = {"id": i, "region": 0, "shape": drill, "cut": cut, "x": (x + 0.5) * KIT_CELL,
+					"y": (y + 0.5) * KIT_CELL, "rotation": 0.0, "size": d, "width": d, "tone": 0, "part": 0,
+					"target_color": entry["color"], "target_gem": entry["gem"]}
+	return slots

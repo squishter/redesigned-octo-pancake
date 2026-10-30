@@ -1079,6 +1079,36 @@ func test_kit_puzzles() -> void:
 			with_gem += 1
 	check(hexes.size() <= 12 and hexes.size() >= 6 and with_gem == 0, "own-color kit: %d colors, %d with gems" % [
 			hexes.size(), with_gem])
+	# Kit sizes: the longer side is the size's drills, the other follows the picture.
+	var wide := Image.create(300, 200, false, Image.FORMAT_RGB8)
+	check(KitGenerator.board_long(wide, 250) == Vector2i(250, 167), "x-large board %s" % KitGenerator.board_long(wide, 250))
+	var tall := Image.create(200, 300, false, Image.FORMAT_RGB8)
+	check(KitGenerator.board_long(tall, 90) == Vector2i(60, 90), "medium tall board %s" % KitGenerator.board_long(tall, 90))
+	var xl := PuzzleMaker.new_request("photo_kit", "")
+	xl["photo"] = photo
+	xl["kit_size"] = "xlarge"
+	var big := PuzzleMaker.make(xl, GemCatalog.default_unlocks())
+	var grid: Dictionary = big["kit_grid"]
+	check(grid["cols"] == 250 and grid["rows"] == 188 and big["slots"].size() == 250 * 188, "x-large photo kit %dx%d" % [
+			grid["cols"], grid["rows"]])
+	# Kits save as their grid and come back slot for slot.
+	var compact := big.duplicate()
+	compact.erase("slots")
+	var text := PatternIO.to_json(compact)
+	check(text.length() < 200000, "x-large kit saves as %d KB" % (text.length() / 1024))
+	var again := PatternIO.from_json(text)
+	again["slots"] = PuzzleMaker.kit_slots(again)
+	var same: bool = again["slots"].size() == big["slots"].size()
+	for k in [0, 1234, big["slots"].size() - 1]:
+		var a: Dictionary = again["slots"][k]
+		var b: Dictionary = big["slots"][k]
+		same = same and a["x"] == b["x"] and a["y"] == b["y"] and a["target_gem"] == b["target_gem"] and \
+				(a["target_color"] as Color).to_html() == (b["target_color"] as Color).to_html()
+	check(same, "kit grid didn't come back as the same slots")
+	var mk := PuzzleMaker.make({"type": "kit", "seed": 9, "pattern_seed": 2, "theme": "rainbow", "kit_size": "small"},
+			GemCatalog.default_unlocks())
+	check(mk["kit_grid"]["cols"] == 50 and mk["kit_grid"]["rows"] == 50, "small diamond kit %dx%d" % [
+			mk["kit_grid"]["cols"], mk["kit_grid"]["rows"]])
 	var back := PatternIO.from_json(PatternIO.to_json(kit_own))
 	check(back["slots"][0]["target_gem"] == null and back["slots"][0]["target_color"] is Color, "own-color kit didn't save")
 
