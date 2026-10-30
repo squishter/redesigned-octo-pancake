@@ -36,7 +36,8 @@ the production flight paths, size/rotation easing, timing and landing event:
 
 The fixture uses the real `GemBoard3D`, gem icon renderer and `SlotOverlay`.
 Baseline columns instantiate unmodified `GemFlights`; proposed columns use
-the subclass in this directory. Seeds match between columns. Native capture
+the subclass in this directory. Each panel has its own viewport (so Comet's
+off-screen start uses the panel's dimensions). Seeds match between columns. Native capture
 checks that every single/stroke placement lands exactly once. These are visual
 studies, not a mobile performance measurement or a production integration.
 

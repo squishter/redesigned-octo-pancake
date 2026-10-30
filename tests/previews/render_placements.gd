@@ -97,11 +97,20 @@ func _build_panels(count: int, close: bool) -> void:
 				about = "Clearer trail / precise landing"
 		_label(panel, title, Rect2(20, 18, width - 40, 46), 28, GOLD)
 		_label(panel, about, Rect2(20, 65, width - 40, 44), 19)
+		# Production Comet reads its viewport size. Give every comparison its
+		# own viewport so "off screen" is relative to that panel, not the sheet.
+		var display := SubViewportContainer.new()
+		display.position = Vector2(12, 122)
+		display.size = Vector2(width - 24, 620)
+		display.stretch = true
+		panel.add_child(display)
+		var viewport := SubViewport.new()
+		viewport.size = Vector2i(display.size)
+		viewport.handle_input_locally = false
+		display.add_child(viewport)
 		var world := Control.new()
-		world.position = Vector2(12, 122)
-		world.size = Vector2(width - 24, 620)
-		world.clip_contents = true
-		panel.add_child(world)
+		world.size = display.size
+		viewport.add_child(world)
 		var board := GemBoard3D.new()
 		board.size = world.size
 		board.animate = false

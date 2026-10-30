@@ -56,7 +56,7 @@ def filmstrip():
             strip.paste(crop.crop((0, 0, 1200, 425)), (220, 90 + row * 445))
         elapsed = (index - 7 + 1) / 30
         draw.text((28, 130 + row * 445), f"{elapsed:.2f} s", fill="#f3d286", font=title)
-        draw.text((28, 178 + row * 445), "of 0.42 s", fill="#bdc7d8", font=small)
+        draw.text((28, 178 + row * 445), "land at 0.42 s", fill="#bdc7d8", font=small)
     strip.save(ROOT / "beam-filmstrip.png")
 
 
