@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_reward_kinds()
 	await _test_transitions()
 	await _test_completion_rewards()
+	await _test_unlock_all()
 	_test_camera_helper()
 	print("Menu UI: %d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures else 0)
@@ -77,6 +78,43 @@ func _test_menu_layout() -> void:
 	_check_button_widths(menu, menu.size.x)
 	menu.go_back()
 	_check(not menu._new_panel.visible, "Back closes the new-puzzle form")
+	menu.queue_free()
+	await process_frame
+
+
+func _test_unlock_all() -> void:
+	print("Debug unlock-all setting")
+	var profile := SaveStore.upgrade({})
+	SaveStore.save_profile(profile)
+	var own := (profile["unlocks"] as Dictionary).duplicate(true)
+	var menu := MainMenu.new()
+	menu.profile = profile
+	root.add_child(menu)
+	await _layout_frames()
+	var toggle: Button = menu._settings_panel.body.find_child("UnlockAll", true, false)
+	_check(toggle != null and toggle.text.ends_with("Off"), "Debug builds offer unlock-all in settings, off")
+	var reloads := [0]
+	menu.reload_requested.connect(func() -> void: reloads[0] += 1)
+	toggle.pressed.emit()
+	_check(reloads[0] == 1, "Turning it on shows the menu afresh")
+	var all := Unlockables.all_unlocks()
+	_check(profile["unlocks"] == all, "Everything is unlocked while it's on")
+	_check(GemCatalog.unlocked_themes(profile["unlocks"]).size() == GemCatalog.THEMES.size(), "Every theme is unlocked")
+	var missing := []
+	for kind: String in Unlockables.KINDS:
+		for item: Dictionary in Unlockables.items(kind):
+			if kind != "power" and not Unlockables.has(profile["unlocks"], item):
+				missing.append(item["id"])
+	_check(missing.is_empty(), "Every item but power-up charges is had: missing %s" % [missing])
+	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SaveStore.DIR + "/profile.json"))
+	_check(raw["unlocks"] == own and not raw.has(SaveStore.REAL_UNLOCKS), "Her own unlocks are what's saved")
+	var loaded := SaveStore.load_profile()
+	_check(SaveStore.is_unlock_all(loaded) and loaded["unlocks"] == all, "The setting stays on after reloading")
+	SaveStore.set_unlock_all(loaded, false)
+	_check(loaded["unlocks"] == own and not loaded["settings"].has(SaveStore.UNLOCK_ALL),
+		"Turning it off gives back exactly her own unlocks")
+	SaveStore.save_profile(loaded)
+	_check(not SaveStore.is_unlock_all(SaveStore.load_profile()), "Off stays off after reloading")
 	menu.queue_free()
 	await process_frame
 

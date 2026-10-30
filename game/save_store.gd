@@ -21,6 +21,12 @@ const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
 ## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES).
 const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
+## Debug builds only: the setting that lends her everything for testing.
+## While it's on, the profile's `unlocks` hold every item and her own are
+## kept aside under REAL_UNLOCKS, which is what save_profile writes. Turned
+## off (or in a release build) she has exactly what she had.
+const UNLOCK_ALL := "debug_unlock_all"
+const REAL_UNLOCKS := "_real_unlocks"
 
 
 static func load_profile() -> Dictionary:
@@ -30,7 +36,29 @@ static func load_profile() -> Dictionary:
 		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if data is Dictionary:
 			profile = data
-	return upgrade(profile)
+	upgrade(profile)
+	set_unlock_all(profile, bool(profile["settings"].get(UNLOCK_ALL, false)))
+	return profile
+
+
+## Turns UNLOCK_ALL on or off in memory (save_profile keeps it). Never on
+## outside debug builds.
+static func set_unlock_all(profile: Dictionary, on: bool) -> void:
+	on = on and OS.is_debug_build()
+	if on and not profile.has(REAL_UNLOCKS):
+		profile[REAL_UNLOCKS] = profile["unlocks"]
+		profile["unlocks"] = Unlockables.all_unlocks()
+	elif not on and profile.has(REAL_UNLOCKS):
+		profile["unlocks"] = profile[REAL_UNLOCKS]
+		profile.erase(REAL_UNLOCKS)
+	if on:
+		profile["settings"][UNLOCK_ALL] = true
+	else:
+		profile["settings"].erase(UNLOCK_ALL)
+
+
+static func is_unlock_all(profile: Dictionary) -> bool:
+	return profile.has(REAL_UNLOCKS)
 
 
 ## A profile as loaded from JSON (any version, or {} for a new player),
@@ -70,7 +98,12 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 
 
 static func save_profile(profile: Dictionary) -> Error:
-	return _write(DIR + "/profile.json", JSON.stringify(profile, "\t").to_utf8_buffer())
+	var saved := profile
+	if profile.has(REAL_UNLOCKS):
+		saved = profile.duplicate()
+		saved["unlocks"] = saved[REAL_UNLOCKS]
+		saved.erase(REAL_UNLOCKS)
+	return _write(DIR + "/profile.json", JSON.stringify(saved, "\t").to_utf8_buffer())
 
 
 ## Adds a new puzzle (its picture made by PuzzleMaker) to the profile, newest

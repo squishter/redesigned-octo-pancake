@@ -159,6 +159,12 @@ mode for trying out new pattern generation.
   saved as a new puzzle beside the original) or deleted. *Generator lab
   (debug)* at the bottom opens the lab in editor builds only; exported apps
   omit that launcher. The generator and its camera retain their developer UI.
+  Debug builds (the editor and `tools/build_apk.sh` APKs, not release
+  exports) add *Unlock everything* to Settings, for testing: while it's on,
+  every color, shape, cut, theme, picture type, flourish, placement style
+  and finale is hers. Her own unlocks are what's saved and come back when
+  it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
+  and power-up charges are real.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
   the most used first. Open slots show as thin outlines of their shape with
   the number inside, drawn at screen size so it grows as you zoom, and
