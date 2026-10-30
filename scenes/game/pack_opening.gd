@@ -118,8 +118,9 @@ func _build_card() -> void:
 	_front.visible = false
 	_front_scroll.add_child(_front)
 	var kind := Label.new()
-	kind.text = "BONUS COLOR STORY" if item.get("bonus", false) else (
-		Unlockables.KINDS.get(item.get("kind", ""), {}).get("found", "A new discovery!").to_upper())
+	kind.text = Unlockables.KINDS.get(item.get("kind", ""), {}).get("found", "A new discovery!").to_upper()
+	if item.get("bonus", false):
+		kind.text = "BONUS POWER-UP" if item.get("kind") == "power" else "BONUS COLOR STORY"
 	kind.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kind.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	kind.add_theme_font_size_override("font_size", 28)

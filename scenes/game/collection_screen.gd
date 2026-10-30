@@ -192,16 +192,19 @@ func _fill_packs() -> void:
 func _update_pack(pack: String) -> void:
 	var info: Dictionary = Packs.PACKS[pack]
 	_pack_title.text = info["name"]
-	_pack_about.text = info["about"]
-	var count := Packs.reward_count(pack)
-	if count > 1:
-		_pack_about.text += "\nUp to %d distinct discoveries, plus any completed themes." % count
+	_pack_about.text = info["about"] + "\n1 in 5 packs also includes a bonus power-up."
 	var left := Packs.pool(pack, profile).size()
-	_pack_stock.text = "Collection complete — you found them all!" if left == 0 else (
-		"Always a little more magic" if pack in ["powers", "all"] else "%d discoveries still to find" % left)
+	var sold_out := Packs.sold_out(pack, profile)
+	if sold_out:
+		_pack_stock.text = ("Collection complete — you found them all!" if left == 0
+				else "Not enough discoveries left for this pack.")
+	else:
+		_pack_stock.text = "Always a little more magic" if pack == "powers" else "%d discoveries still to find" % left
 	_pack_index.text = "SWIPE TO SPIN   ·   %02d / %02d" % [Packs.PACKS.keys().find(pack) + 1, Packs.PACKS.size()]
-	_free.disabled = left == 0 or Packs.picks(profile) <= 0
-	_buy.disabled = left == 0 or Packs.coins(profile) < Packs.price(pack)
+	_free.visible = Packs.can_use_pick(pack)
+	_free.disabled = sold_out or not Packs.can_use_pick(pack) or Packs.picks(profile) <= 0
+	_buy.disabled = sold_out or Packs.coins(profile) < Packs.price(pack)
+	_buy.theme_type_variation = "" if Packs.can_use_pick(pack) else "PrimaryButton"
 	_buy.text = "%d coins" % Packs.price(pack)
 
 

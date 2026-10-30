@@ -19,6 +19,9 @@ func _run() -> void:
 	_test_stock()
 	_test_mixed_bundle()
 	_test_newly_eligible_cuts()
+	_test_pack_rewards()
+	_test_everything_stock()
+	await _test_everything_purchase()
 	await _test_theme_bonus_flow()
 	await _test_card_sequence()
 	await _test_long_summary()
@@ -67,7 +70,7 @@ func _check_receipt(profile: Dictionary, rewards: Array) -> void:
 
 
 func _test_payments() -> void:
-	print("One payment for all rewards; unchanged one-item packs")
+	print("One payment for all rewards")
 	var profile := _profile()
 	var before: int = profile["unlocks"]["colors"].size()
 	var rewards := Packs.open(profile, "colors", false, _rng(), _catalog("colors", 3))
@@ -91,6 +94,14 @@ func _test_payments() -> void:
 	_check(Packs.open(profile, "colors", true, _rng()).is_empty(), "A missing pick cannot buy a bundle")
 	_check(Packs.open(profile, "unknown", false, _rng()).is_empty(), "Unknown pack is rejected")
 	_check(JSON.stringify(profile) == snapshot, "Failed purchases never change the wallet or unlocks")
+	profile = _profile()
+	snapshot = JSON.stringify(profile)
+	_check(Packs.open(profile, "all", true, _rng()).is_empty(), "Free picks cannot buy Everything packs")
+	_check(JSON.stringify(profile) == snapshot, "Rejected Everything free pick changes nothing")
+	profile["wallet"]["coins"] = 49
+	snapshot = JSON.stringify(profile)
+	_check(Packs.open(profile, "all", false, _rng()).is_empty(), "49 coins cannot buy an Everything pack")
+	_check(JSON.stringify(profile) == snapshot, "Unaffordable Everything pack changes nothing")
 
 
 func _test_stock() -> void:
@@ -152,7 +163,8 @@ func _test_newly_eligible_cuts() -> void:
 			if (kind == "shape" and entry["id"] == shape) or (kind == "cut" and entry["shape"] == shape):
 				continue
 			Unlockables.grant(profile, entry)
-	var rewards := Packs.open(profile, "all", true, _rng(), _catalog("all", 100))
+	_check(not Packs.sold_out("all", profile), "A remaining shape can supply its newly eligible cut")
+	var rewards := Packs.open(profile, "all", false, _rng(), _catalog("all", 100))
 	var shape_index := -1
 	var cut_count := 0
 	for i in rewards.size():
@@ -163,8 +175,121 @@ func _test_newly_eligible_cuts() -> void:
 			cut_count += 1
 			_check(shape_index >= 0 and shape_index < i, "A cut follows its required shape")
 	_check(shape_index >= 0 and cut_count > 0, "The same bundle finds a shape and its newly eligible cuts")
-	_check(Packs.picks(profile) == 1, "Dependent rewards still cost a single pick")
+	_check(Packs.coins(profile) == 70 and Packs.picks(profile) == 2, "Dependent rewards cost 50 coins and no picks")
 	_check_receipt(profile, rewards)
+
+
+func _test_pack_rewards() -> void:
+	print("Production reward counts, independent rare rolls and power-up quantities")
+	_check(Packs.price("all") == 50 and not Packs.can_use_pick("all"), "Everything is 50 coins, coins only")
+	var template := _profile()
+	var outcomes := {}
+	var rare_count := 0
+	var bonus_count := 0
+	for value in 450:
+		var profile: Dictionary = template.duplicate(true)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = value
+		var rewards := Packs.open(profile, "all", false, rng)
+		var unlocks := _base(rewards)
+		var powers := rewards.filter(func(item: Dictionary) -> bool: return item["kind"] == "power")
+		_check(unlocks.size() in [2, 3] and unlocks.all(func(item: Dictionary) -> bool: return item["kind"] != "power"),
+			"Everything guarantees two or three distinct unlockables")
+		_check(powers.size() in [0, 1] and powers.all(func(item: Dictionary) -> bool: return item.get("bonus", false)),
+			"Everything's optional power-up is an extra reward")
+		_check(Packs.coins(profile) == 70 and Packs.picks(profile) == 2, "Every Everything outcome costs exactly 50 coins")
+		var key := "%d/%d" % [unlocks.size(), powers.size()]
+		if not outcomes.has(key):
+			_check_receipt(profile, rewards)
+		outcomes[key] = true
+		rare_count += int(unlocks.size() == 3)
+		bonus_count += powers.size()
+	_check(outcomes.size() == 4, "Independent rolls produce 2, 2+power, 3, and 3+power outcomes")
+	_check(rare_count >= 15 and rare_count <= 50, "Third unlockable occurs about 1 in 15 times: %d/450" % rare_count)
+	_check(bonus_count >= 60 and bonus_count <= 120, "Power bonus occurs about 1 in 5 times: %d/450" % bonus_count)
+	for pack: String in Packs.PACKS:
+		if pack == "all":
+			continue
+		var bonuses := 0
+		for value in 50:
+			var profile: Dictionary = template.duplicate(true)
+			var before: Dictionary = profile["powers"].duplicate()
+			var rng := RandomNumberGenerator.new()
+			rng.seed = value
+			var rewards := Packs.open(profile, pack, true, rng)
+			var base := _base(rewards)
+			var extra := rewards.filter(func(item: Dictionary) -> bool:
+				return item["kind"] == "power" and item.get("bonus", false))
+			_check(base.size() == (2 if pack == "powers" else 1), "Guaranteed base reward count: " + pack)
+			_check(extra.size() in [0, 1], "At most one extra power-up per pack: " + pack)
+			bonuses += extra.size()
+			for item: Dictionary in rewards:
+				if item["kind"] == "power":
+					_check(Packs.charges(profile, item["id"]) - int(before.get(item["id"], 0)) == int(item["charges"]),
+						"Every base or bonus power-up grants its usual charges once")
+			_check(Packs.picks(profile) == 1 and Packs.coins(profile) == 120, "A free pick pays once, including bonuses")
+		_check(bonuses > 0 and bonuses < 50, "Every pack can roll a bonus power-up: " + pack)
+
+
+func _test_everything_stock() -> void:
+	print("Everything guarantees two unlockables even near collection completion")
+	var profile := _profile()
+	var missing := Packs.pool("colors", profile).slice(0, 2)
+	profile["unlocks"] = Unlockables.all_unlocks()
+	for item: Dictionary in missing:
+		profile["unlocks"]["colors"].erase(item["id"])
+	_check(not Packs.sold_out("all", profile), "Two remaining unlockables allow an Everything purchase")
+	var rewards := Packs.open(profile, "all", false, _rng())
+	_check(_base(rewards).size() == 2, "Everything grants both remaining unlockables")
+	_check(Packs.sold_out("all", profile), "A complete collection sells out Everything packs")
+	profile["unlocks"]["colors"].erase(missing[0]["id"])
+	var snapshot := JSON.stringify(profile)
+	_check(Packs.sold_out("all", profile), "One remaining unlockable cannot fill an Everything pack")
+	_check(Packs.open(profile, "all", false, _rng()).is_empty(), "Everything never sells a short bundle")
+	_check(JSON.stringify(profile) == snapshot, "A short bundle charges nothing and grants no power bonus")
+	_check(not Packs.sold_out("powers", profile), "Power-up packs remain available after collection completion")
+
+
+func _test_everything_purchase() -> void:
+	print("Everything payment UI, atomic save, and bonus reveal")
+	var screen := CollectionScreen.new()
+	screen.profile = _profile()
+	root.add_child(screen)
+	screen._update_pack("all")
+	await _frames()
+	_check(not screen._free.visible and screen._free.disabled, "Everything hides and disables free-pick payment")
+	_check(screen._buy.text == "50 coins" and not screen._buy.disabled, "Everything shows its 50-coin price")
+	_check("1 in 15" in screen._pack_about.text and "1 in 5" in screen._pack_about.text, "Pack details disclose both odds")
+	screen._open("all", true)
+	_check(not is_instance_valid(screen._opening), "Calling the UI's free-pick path cannot buy Everything")
+	screen._update_pack("powers")
+	_check(screen._free.visible and not screen._free.disabled, "Switching packs restores eligible free-pick payment")
+	screen._update_pack("all")
+	# Find a deterministic seed with both extras to exercise the complete saved receipt.
+	for value in 450:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = value
+		if rng.randi_range(1, 5) == 1 and rng.randi_range(1, 15) == 1:
+			screen._rng.seed = value
+			break
+	screen._open("all", false)
+	screen._open("all", false)
+	var saved := SaveStore.load_profile()
+	_check(Packs.coins(saved) == 70 and Packs.picks(saved) == 2, "Purchase and all rewards save before reveal; repeat press is ignored")
+	_check(_base(screen._opening.rewards).size() == 3, "The lucky paid bundle includes three unlockables")
+	_check_receipt(saved, screen._opening.rewards)
+	screen._opening.show_reward()
+	await _frames()
+	_check_summary(screen._opening)
+	var bonus: Dictionary = screen._opening.rewards.filter(func(item: Dictionary) -> bool: return item["kind"] == "power")[0]
+	var card := PackOpening.new()
+	card.item = bonus
+	root.add_child(card)
+	_check(card.find_children("*", "Label", true, false).any(func(label: Label) -> bool: return label.text == "BONUS POWER-UP"),
+		"A bonus power-up is labeled separately from a bonus color story")
+	card.queue_free()
+	screen.queue_free()
+	await process_frame
 
 
 func _frames() -> void:
@@ -194,7 +319,8 @@ func _test_theme_bonus_flow() -> void:
 	screen._open("colors", true)
 	var opening: PackOpening = screen._opening
 	var earned := Unlockables.themes_gained(before, screen.profile["unlocks"])
-	_check(opening.rewards.size() == 1 + earned.size() and earned.size() > 0, "Every completed theme is a bonus card")
+	var powers := opening.rewards.filter(func(item: Dictionary) -> bool: return item["kind"] == "power")
+	_check(opening.rewards.size() == 1 + earned.size() + powers.size() and earned.size() > 0, "Every completed theme is a bonus card")
 	_check(Packs.picks(screen.profile) == 1, "Repeated purchase press spends one pick")
 	var saved := SaveStore.load_profile()
 	_check(Packs.picks(saved) == 1, "The entire purchase is saved before the foil opens")
@@ -260,7 +386,7 @@ func _test_long_summary() -> void:
 	print("Large bundle summary scrolls and preserves quantities")
 	var screen := CollectionScreen.new()
 	screen.profile = _profile()
-	var rewards := Packs.open(screen.profile, "all", true, _rng(), _catalog("all", 30))
+	var rewards := Packs.open(screen.profile, "all", false, _rng(), _catalog("all", 30))
 	root.add_child(screen)
 	screen._reveal("all", rewards)
 	screen._opening.show_reward()

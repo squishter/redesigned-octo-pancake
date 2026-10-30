@@ -824,10 +824,12 @@ func test_packs() -> void:
 	check(unlocks["shapes"].size() == GemCatalog.ALL_SHAPES.size(), "not every shape unlocked")
 	for pair: Array in GemCatalog.all_cuts():
 		check(GemCatalog.has_cut(unlocks, pair[0], pair[1]), "cut %s not unlocked" % [pair])
-	# With everything else out, the Everything and power-up packs still give charges.
+	# Everything needs two unlockables; only power-up packs stay available when complete.
 	profile["wallet"]["coins"] = 1000
-	var power: Dictionary = Packs.open(profile, "all", false, rng)[0]
-	check(power.get("kind") == "power" and Packs.charges(profile, power["id"]) > 0, "everything pack gave %s" % power)
+	check(Packs.sold_out("all", profile) and Packs.open(profile, "all", false, rng).is_empty(),
+		"Everything sold a pack without two unlockables")
+	var power: Dictionary = Packs.open(profile, "powers", false, rng)[0]
+	check(power.get("kind") == "power" and Packs.charges(profile, power["id"]) > 0, "power-up pack gave %s" % power)
 	check(Packs.spend(profile, power["id"]), "couldn't spend a power-up charge")
 
 

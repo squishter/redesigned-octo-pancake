@@ -95,9 +95,16 @@ mode for trying out new pattern generation.
 - **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,
   Shape, Facet, Picture, Flourish, Sparkle) gives one thing she
   doesn't have yet from its category, never a repeat, and is sold out once
-  she has it all; the Everything pack picks a category with something left
-  (each as likely) and gives something from it; the Power-up pack gives
-  charges. Every pack costs 30 coins (power-ups 10) or a free pick. She gets
+  she has it all. The Everything pack costs **50 coins**, cannot use a free
+  pick, and gives **two new unlockables**, with a **1-in-15 chance of three**.
+  Each draw picks a category with something left (each as likely), then an
+  item from it; power-ups never replace these unlockables. It is unavailable
+  when fewer than two unlockables remain reachable. Power-up packs give
+  **two power-ups**, each with its usual charges. **Every pack** independently
+  has a **1-in-5 chance of an extra power-up**, including Everything and
+  Power-up packs. A lucky Everything pack can therefore give three
+  unlockables plus a power-up. Other packs cost 30 coins (power-ups 10) or
+  a free pick. She gets
   a free pick the first time she opens the game each day and another for
   her first finished puzzle each day; every finished puzzle pays 10 coins
   (once per puzzle, so restarting one doesn't pay again), so every 3
@@ -242,12 +249,16 @@ table, so additions never touch old puzzles or what she has:
   pack), its items to `Unlockables.items()`, and the pack to `Packs.PACKS`.
 - **A reward bundle:** set `"rewards": N` on a `Packs.PACKS` definition
   (default 1). Optional `source` selects an existing category or `all`;
-  `price` overrides the coin cost. Existing definitions retain their prices
-  and one base draw. `Packs.open()` returns an `Array[Dictionary]` receipt,
+  `price` overrides the coin cost. Power-up and Everything packs have two
+  base draws; other categories have one. An `all` source draws only
+  unlockables, cannot use a free pick, and rolls for one extra unlockable
+  1 in 15 times. All purchases independently roll for a bonus power-up
+  1 in 5 times, marked `bonus` in the receipt. `Packs.open()` returns an `Array[Dictionary]` receipt,
   grants all entries and charges once. Draws are distinct within a bundle;
   newly unlocked shapes make their cuts eligible for later draws. If stock
   is short, the pack gives up to its configured count at the displayed pack
-  price. Newly completed themes are additional bonus entries. Save the
+  price; Everything requires at least two unlockables before it can be sold.
+  Newly completed themes are additional bonus entries. Save the
   profile once before passing the receipt to `PackOpening.rewards`; reveal,
   skip and dismissal only present that receipt. The optional `catalog`
   argument to the pack APIs supports isolated definitions in tests.

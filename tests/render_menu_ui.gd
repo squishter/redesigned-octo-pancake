@@ -45,6 +45,14 @@ func _capture() -> void:
 	root.add_child(collection)
 	await create_timer(1.2).timeout
 	await _snapshot("02-pack-picker.png")
+	collection._carousel.rotate_by(-1)
+	await create_timer(1.5).timeout
+	await _snapshot("16-everything-pack.png")
+	collection._carousel.rotate_by(-1)
+	await create_timer(1.5).timeout
+	await _snapshot("17-power-up-pack.png")
+	collection._carousel.rotate_by(2)
+	await create_timer(1.5).timeout
 	collection._rng.seed = 20261030
 	collection._open("colors", true)
 	var opening: PackOpening = collection._opening
@@ -72,12 +80,12 @@ func _capture() -> void:
 
 func _capture_bundle(collection: Control) -> void:
 	# Use the real purchase API with an example five-reward pack definition.
-	# Production pack counts and prices remain unchanged.
+	# A larger test-only bundle also exercises scrolling through many rewards.
 	var catalog: Dictionary = Packs.PACKS.duplicate(true)
 	catalog["all"]["rewards"] = 5
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 8421
-	var rewards := Packs.open(collection.profile, "all", true, rng, catalog)
+	var rewards := Packs.open(collection.profile, "all", false, rng, catalog)
 	SaveStore.save_profile(collection.profile)
 	collection._refresh()
 	collection._reveal("all", rewards)

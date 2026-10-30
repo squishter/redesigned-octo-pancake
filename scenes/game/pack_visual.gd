@@ -42,7 +42,12 @@ func _ready() -> void:
 	add_child(emblem)
 	var title: String = Packs.PACKS.get(pack, {}).get("name", "Gem pack")
 	_label(title.trim_suffix(" pack").to_upper(), Rect2(26, 393, 308, 42), 30)
-	_label("ONE LITTLE DISCOVERY", Rect2(25, 441, 310, 25), 16)
+	var contents := "A DISCOVERY + BONUS CHANCE"
+	if pack == "powers":
+		contents = "%d POWER-UPS + BONUS CHANCE" % Packs.reward_count(pack)
+	elif pack == "all":
+		contents = "%d UNLOCKABLES + BONUS CHANCE" % Packs.reward_count(pack)
+	_label(contents, Rect2(25, 441, 310, 25), 16)
 
 
 func unseal() -> void:
