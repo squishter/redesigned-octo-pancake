@@ -1066,6 +1066,21 @@ func test_kit_puzzles() -> void:
 		check(p["slots"].size() >= 300 and off == 0, "%s: %d slots, %d in locked colors" % [kind, p["slots"].size(), off])
 		check(not p["puzzle"].has("photo"), "%s keeps the photo in its request" % kind)
 		check(PatternIO.from_json(PatternIO.to_json(p))["slots"].size() == p["slots"].size(), "%s didn't save" % kind)
+	# A photo kit in the photo's own colors: that many at most, exact, no gem ids.
+	var own := PuzzleMaker.new_request("photo_kit", "")
+	own["photo"] = photo
+	own["kit_colors"] = 12
+	var kit_own := PuzzleMaker.make(own, GemCatalog.default_unlocks())
+	var hexes := {}
+	var with_gem := 0
+	for s in kit_own["slots"]:
+		hexes[(s["target_color"] as Color).to_html(false)] = true
+		if s["target_gem"] != null:
+			with_gem += 1
+	check(hexes.size() <= 12 and hexes.size() >= 6 and with_gem == 0, "own-color kit: %d colors, %d with gems" % [
+			hexes.size(), with_gem])
+	var back := PatternIO.from_json(PatternIO.to_json(kit_own))
+	check(back["slots"][0]["target_gem"] == null and back["slots"][0]["target_color"] is Color, "own-color kit didn't save")
 
 
 ## Progress saves bit by bit and comes back the same.

@@ -31,6 +31,8 @@ const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 ##   seed: int                                                         (default 1)
 ##   direct: map each cell straight to its nearest gem (no k-means
 ##           first, so no colors averaged away), for photos     (default false)
+##   exact: with direct, the palette is the picture's own `colors` colors
+##          (k-means in Lab), not gem colors: entries have no gem id (default false)
 ##   dither: 0..1, with direct: how much of each cell's leftover color
 ##           carries on to its neighbors (Floyd-Steinberg in Lab, back and
 ##           forth), so two gems side by side read as the color between
@@ -54,7 +56,10 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 		for x in board.x:
 			pixels[y * board.x + x] = img.get_pixel(x, y)
 	if options.get("direct", false):
-		var direct := map_direct(pixels, board.x, board.y, gems, options.get("dither", 0.0))
+		var palette := gems
+		if options.get("exact", false):
+			palette = own_colors(pixels, n_colors, options.get("seed", 1))
+		var direct := map_direct(pixels, board.x, board.y, palette, options.get("dither", 0.0))
 		return _build_pattern(direct["cells"], direct["entries"], board, options.get("drill", "round"))
 	var q := ColorQuantizer.quantize(pixels, n_colors, options.get("seed", 1))
 	var centers: PackedVector3Array = q["centers"]
@@ -142,6 +147,16 @@ static func map_direct(pixels: PackedColorArray, w: int, h: int, gems: Array, di
 static func _carry(lab: PackedVector3Array, w: int, h: int, x: int, y: int, err: Vector3) -> void:
 	if x >= 0 and x < w and y < h:
 		lab[y * w + x] += err
+
+
+## The picture's own `n` colors (k-means in Lab), as a palette of
+## {id: null, color}.
+static func own_colors(pixels: PackedColorArray, n: int, seed_value: int) -> Array:
+	var centers: PackedVector3Array = ColorQuantizer.quantize(pixels, n, seed_value)["centers"]
+	var out := []
+	for c in centers:
+		out.append({"id": null, "color": LabColor.to_color(c)})
+	return out
 
 
 ## A board about `cells` cells big in the photo's own shape, so nothing is

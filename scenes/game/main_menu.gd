@@ -29,6 +29,7 @@ var _start: Button
 var _new_title: Label
 var _photo_row: Control
 var _subject: OptionButton
+var _kit_colors: OptionButton
 var _photo_dialog: FileDialog
 ## Which photo puzzle the picker is choosing a photo for.
 var _photo_kind := ""
@@ -102,6 +103,12 @@ func _ready() -> void:
 	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
 		_subject.add_item(pair[1])
 		_subject.set_item_metadata(_subject.item_count - 1, pair[0])
+	# Photo kits: her gems, or the photo's own colors in that many.
+	_kit_colors = _options(photo_grid, "Photo kit colors")
+	for pair: Array in [[0, "My gems"], [12, "Photo's own 12 colors"], [20, "Photo's own 20 colors"],
+			[30, "Photo's own 30 colors"]]:
+		_kit_colors.add_item(pair[1])
+		_kit_colors.set_item_metadata(_kit_colors.item_count - 1, pair[0])
 	var photo_buttons := HBoxContainer.new()
 	_photo_row.add_child(photo_buttons)
 	for kind: String in GemCatalog.PHOTO_MODES:
@@ -238,6 +245,7 @@ func _start_photo(photo: Image, kind: String) -> void:
 	_request = PuzzleMaker.new_request(kind, "")
 	_request["photo"] = photo
 	_request["subject"] = _subject.get_item_metadata(maxi(_subject.selected, 0))
+	_request["kit_colors"] = _kit_colors.get_item_metadata(maxi(_kit_colors.selected, 0))
 	_new_panel.visible = false
 	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(kind).to_lower()
 	_busy.visible = true

@@ -54,7 +54,10 @@ mode for trying out new pattern generation.
     back and forth, capped), so neighboring gems blend into the colors in
     between. Against the photo, seen from a little way off, that cut the
     average color error by a half to two thirds (with the 10 starting colors
-    on sample photos, 18-30 ΔE down to 8-21).
+    on sample photos, 18-30 ΔE down to 8-21). The panel's *Photo kit colors*
+    can instead use the photo's own 12, 20 or 30 colors (k-means in Lab,
+    exact colors that aren't her gems, 50% carried on): 2-4 ΔE on the same
+    photos with 12.
 - **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,
   Shape, Facet, Picture, Flourish, Sparkle) gives one thing she
   doesn't have yet from its category, never a repeat, and is sold out once
