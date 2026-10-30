@@ -165,7 +165,10 @@ func _ready() -> void:
 	_perf_press = Timer.new()
 	_perf_press.one_shot = true
 	_perf_press.wait_time = READOUT_PRESS
-	_perf_press.timeout.connect(func() -> void: _perf.toggle())
+	_perf_press.timeout.connect(func() -> void:
+		_perf.toggle()
+		profile["settings"][PerfReadout.SHOWN_KEY] = PerfReadout.shown
+		SaveStore.save_profile(profile))
 	add_child(_perf_press)
 	_progress.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:

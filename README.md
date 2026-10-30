@@ -343,9 +343,11 @@ and the Collection cut their icons from render 10 times a second
 (`set_always_render(GemIcons.FPS)`). `render_count` counts a board's renders.
 
 For judging speed on a phone there is a performance readout
-(`scenes/game/perf_readout.gd`, off by default): hold the progress line
-("12 / 340 gems") on the play screen for a moment, or tick *Readout* in
-the generator lab's Options. It stays on for the session and shows frames
+(`scenes/game/perf_readout.gd`, off by default). In debug builds, Settings →
+*Testing* has *Performance readout* (On/Off) and *Frame cap* (45, 60, 30 or
+none, overriding `max_fps`), both saved. Holding the progress line
+("12 / 340 gems") on the play screen for a moment also turns the readout on
+or off, as does *Readout* in the generator lab's Options. It shows frames
 a second, frame time and the last frame's process time; the board's renders
 a second and GPU time per render (and the whole screen's); and the
 triangles and draw calls of the board's last render and of the whole last

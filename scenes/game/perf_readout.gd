@@ -4,12 +4,18 @@ extends Label
 ## runs on a phone: frames a second, frame time (real time) and the last
 ## frame's process time; how often the board renders and its GPU time per
 ## render (and the whole screen's); and the triangles and draw calls of the
-## board's last render and of the whole last frame. Off by default; the
+## board's last render and of the whole last frame. Off by default; debug
+## builds' Settings turn it on (with the frame cap, see apply_settings), the
 ## play screen toggles it with a long press on its progress line, the
 ## generator lab with a box in its Options.
 
 ## Seconds between updates.
 const EVERY := 0.5
+## Debug builds: her settings for the readout and the frame cap, and the
+## caps Settings offers (0: none; unset, application/run/max_fps holds).
+const SHOWN_KEY := "debug_perf_readout"
+const CAP_KEY := "debug_max_fps"
+const CAPS := [45, 60, 30, 0]
 
 ## Shown on every screen that has one, for the rest of the session.
 static var shown := false
@@ -48,6 +54,15 @@ func _ready() -> void:
 func toggle() -> void:
 	shown = not shown
 	visible = shown
+
+
+## Applies her saved readout and frame cap (debug builds only).
+static func apply_settings(settings: Dictionary) -> void:
+	if not OS.is_debug_build():
+		return
+	shown = bool(settings.get(SHOWN_KEY, false))
+	if settings.has(CAP_KEY):
+		Engine.max_fps = int(settings[CAP_KEY])
 
 
 func _restart() -> void:

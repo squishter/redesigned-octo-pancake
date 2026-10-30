@@ -206,13 +206,14 @@ func _ready() -> void:
 	scroll.add_child(_list)
 
 	_settings_panel = GameDialog.new("Your finishing touches", "Make the sparkle feel like you.", "settings")
-	_settings_panel.preferred_height = 1120
+	_settings_panel.preferred_height = 1120 if not show_debug_settings else 1700
 	_settings_panel.hide()
 	add_child(_settings_panel)
 	_setting(_settings_panel.body, "Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
 	_setting(_settings_panel.body, "Grand finale", "finale", GemCatalog.FINALES, "finales")
 	if show_debug_settings:
 		_unlock_all_setting(_settings_panel.body)
+		_performance_settings(_settings_panel.body)
 	_button(_settings_panel.actions, "Lovely, let's create", _settings_panel.close).theme_type_variation = "PrimaryButton"
 	var footer := HBoxContainer.new()
 	root.add_child(footer)
@@ -573,6 +574,33 @@ func _unlock_all_setting(parent: Control) -> void:
 	b.name = "UnlockAll"
 	parent.add_child(UI.label("Every color, shape, cut, theme, picture type, flourish and animation, for "
 			+ "testing. Your own collection is kept and comes back when this is off.", 29, GameTheme.TEXT_DIM))
+
+
+## Debug builds: the performance readout and the game's frame cap, for
+## judging speed on a phone (see PerfReadout).
+func _performance_settings(parent: Control) -> void:
+	var settings: Dictionary = profile["settings"]
+	var readout := _button(parent, "", func() -> void:
+		PerfReadout.shown = not PerfReadout.shown
+		settings[PerfReadout.SHOWN_KEY] = PerfReadout.shown
+		SaveStore.save_profile(profile))
+	readout.theme_type_variation = "QuietButton"
+	readout.name = "PerfReadout"
+	var cap := _button(parent, "", func() -> void:
+		var i := PerfReadout.CAPS.find(Engine.max_fps)
+		Engine.max_fps = PerfReadout.CAPS[(i + 1) % PerfReadout.CAPS.size()]
+		settings[PerfReadout.CAP_KEY] = Engine.max_fps
+		SaveStore.save_profile(profile))
+	cap.theme_type_variation = "QuietButton"
+	cap.name = "FrameCap"
+	var relabel := func() -> void:
+		readout.text = "Performance readout: %s" % ("On" if PerfReadout.shown else "Off")
+		cap.text = "Frame cap: %s" % ("%d fps" % Engine.max_fps if Engine.max_fps > 0 else "None")
+	relabel.call()
+	readout.pressed.connect(relabel)
+	cap.pressed.connect(relabel)
+	parent.add_child(UI.label("The readout sits over the board while playing (holding the progress line "
+			+ "also turns it on or off). Tap the frame cap to try 45, 60, 30 or none.", 29, GameTheme.TEXT_DIM))
 
 
 ## Runs `action` on a second tap within CONFIRM_MS; the first asks "Sure?".
