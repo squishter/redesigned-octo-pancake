@@ -153,10 +153,10 @@ func _build_panels(count: int, close: bool) -> void:
 		source.add_theme_stylebox_override("panel", _source_style())
 		world.add_child(source)
 		var icon := TextureRect.new()
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.texture = _icon
 		icon.position = Vector2(6, 6)
 		icon.size = Vector2(64, 64)
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		source.add_child(icon)
 		_label(panel, "REAL GEM BOARD / ORIGINAL TIMING", Rect2(16, 765, width - 32, 48), 17)

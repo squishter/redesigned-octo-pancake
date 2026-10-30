@@ -95,7 +95,13 @@ func _beam(fx: Node2D, to: Vector2, u: float, slot_px: float, color: Color) -> v
 		var radius := width * (0.57 if prism else 0.48)
 		for i in range(8, 0, -1):
 			_ellipse(fx, to, Vector2(radius * i / 8.0, radius * i / 21.0), Color(color, 0.025 * contact))
-		_glint(fx, to, radius * 0.52 * contact, Color(color.lightened(0.5), contact * 0.8))
+		# A short horizontal flare reads as light meeting the paper; a large
+		# diamond here would look like an arrow pointing at the slot.
+		var flare := radius * 0.9 * contact
+		fx.draw_line(to - Vector2(flare, 0), to + Vector2(flare, 0),
+			Color(color.lightened(0.3), contact * 0.65), 2.5, true)
+		fx.draw_line(to - Vector2(flare * 0.7, 0), to + Vector2(flare * 0.7, 0),
+			Color(1, 1, 1, contact * 0.9), 1.0, true)
 
 
 func _draw() -> void:
