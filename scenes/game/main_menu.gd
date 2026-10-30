@@ -9,11 +9,14 @@ extends Control
 ## shows what she has and opens packs for more (with her coins and free
 ## picks shown beside it). Photo puzzles start from one of her photos or one
 ## she takes right then with the camera. Settings (how placed gems go in, the
-## finale) and the generator lab, a debug mode, are at the bottom.
+## finale) and the generator lab, a debug mode, are at the bottom. Debug
+## builds also offer a setting that lends her everything, for testing.
 
 signal play_requested(id: String)
 signal lab_requested
 signal collection_requested
+## Her unlocks changed under the menu (the debug unlock-all setting): show it afresh.
+signal reload_requested
 
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const UI := preload("res://scenes/game/ui_widgets.gd")
@@ -24,6 +27,7 @@ const CONFIRM_MS := 3000
 ## The player's profile (SaveStore), shared with the app; set before adding.
 var profile: Dictionary = {}
 var show_developer_tools := OS.has_feature("editor")
+var show_debug_settings := OS.is_debug_build()
 
 var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
@@ -207,6 +211,8 @@ func _ready() -> void:
 	add_child(_settings_panel)
 	_setting(_settings_panel.body, "Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
 	_setting(_settings_panel.body, "Grand finale", "finale", GemCatalog.FINALES, "finales")
+	if show_debug_settings:
+		_unlock_all_setting(_settings_panel.body)
 	_button(_settings_panel.actions, "Lovely, let's create", _settings_panel.close).theme_type_variation = "PrimaryButton"
 	var footer := HBoxContainer.new()
 	root.add_child(footer)
@@ -553,6 +559,20 @@ func _setting(parent: Control, label: String, key: String, catalog: Dictionary, 
 		settings[key] = ob.get_item_metadata(i)
 		about.text = catalog[settings[key]].get("about", "")
 		SaveStore.save_profile(profile))
+
+
+## Debug builds: lends her every item while on; her own come back when off.
+func _unlock_all_setting(parent: Control) -> void:
+	parent.add_child(UI.label("Testing (debug builds only)", 32, GameTheme.GOLD))
+	var on := SaveStore.is_unlock_all(profile)
+	var b := _button(parent, "Unlock everything: %s" % ("On" if on else "Off"), func() -> void:
+		SaveStore.set_unlock_all(profile, not SaveStore.is_unlock_all(profile))
+		SaveStore.save_profile(profile)
+		reload_requested.emit())
+	b.theme_type_variation = "QuietButton"
+	b.name = "UnlockAll"
+	parent.add_child(UI.label("Every color, shape, cut, theme, picture type, flourish and animation, for "
+			+ "testing. Your own collection is kept and comes back when this is off.", 29, GameTheme.TEXT_DIM))
 
 
 ## Runs `action` on a second tap within CONFIRM_MS; the first asks "Sure?".

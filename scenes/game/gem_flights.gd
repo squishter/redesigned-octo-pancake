@@ -20,6 +20,8 @@ extends Control
 ## Called with the slot when a gem arrives.
 signal landed(slot: int)
 
+const PlacementFx := preload("res://scenes/game/gem_placement_fx.gd")
+
 ## Flight time: a base plus a little per px travelled, at most MAX_TIME.
 const BASE_TIME := 0.2
 const PER_PX := 1.0 / 6000.0
@@ -37,8 +39,8 @@ const BEAM_TIME := 0.42
 const HALO_TIME := 0.4
 ## Screen-sized effects never get smaller than these (px): a halo's ring at
 ## its start, a beam's width, how high a bounce goes.
-const HALO_START := 130.0
-const BEAM_WIDTH := 44.0
+const HALO_START := PlacementFx.HALO_START
+const BEAM_WIDTH := PlacementFx.BEAM_WIDTH
 const BOUNCE_HEIGHT := 240.0
 ## Styles that bring the gem from elsewhere on screen, rather than growing it
 ## in place, start from a sprite of it; the rest show it only at the end.
@@ -49,9 +51,14 @@ const BOW := 0.22
 const LIFT := 0.25
 ## More flights than this at once and the rest land straight away.
 const MAX_FLYING := 48
+## Bound lingering glints independently: they never delay a gem's landing.
+const MAX_IMPACTS := 96
 const SPARKLE_PX := 32
 ## A spinning gem overshoots its size a little as it settles.
 const OVERSHOOT := 1.70158
+
+static var _sparkle: ImageTexture
+static var _masks := {}
 
 var board: GemBoard3D
 
@@ -59,12 +66,12 @@ var board: GemBoard3D
 ## length (its duration), bow, rot_to, size_from, stone_share, slot_length,
 ## color}.
 var _flights: Array[Dictionary] = []
-static var _sparkle: ImageTexture
-static var _masks := {}
+var _impacts: Array[Dictionary] = []
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	PlacementFx.prepare()
 	if _sparkle == null:
 		_sparkle = _make_sparkle(SPARKLE_PX)
 
@@ -121,11 +128,11 @@ func send(style: String, slot: int, icon: Texture2D, stone_share: float, from: V
 		"spin", "beam", "halo":
 			pass
 		"comet", "firework":
-			trail = _particles(color, 40, 0.5, false)
+			trail = _particles(color, 12, 0.5)
 			trail.scale_amount_min = 0.6
 			trail.scale_amount_max = 1.4
 		_:
-			trail = _particles(color, 16, 0.25, false)
+			trail = _particles(color, 12, 0.25)
 	if trail != null:
 		trail.position = sprite.position
 		add_child(trail)
@@ -140,6 +147,10 @@ func send(style: String, slot: int, icon: Texture2D, stone_share: float, from: V
 		add_child(fx)
 		fx.draw.connect(func() -> void: _draw_fx(fx, f))
 		f["fx"] = fx
+		if style == "beam":
+			var shaft := PlacementFx.make_beam(color)
+			fx.add_child(shaft)
+			f["shaft"] = shaft
 	_flights.append(f)
 	_process(0.0)
 	return true
@@ -148,25 +159,24 @@ func send(style: String, slot: int, icon: Texture2D, stone_share: float, from: V
 ## A burst of tiny sparkles at slot board point `at`, for a stone `length`
 ## board units long, in `color`; `big` for a firework's, screen-sized.
 func burst(at: Vector2, length: float, color: Color, big := false) -> void:
-	var slot_px := length * board.scale_px()
-	var b := _particles(color, 28 if big else 12, 0.6 if big else 0.4, true)
-	b.position = _screen_at(at)
-	b.initial_velocity_min = 160.0 if big else clampf(slot_px * 1.5, 30.0, 90.0)
-	b.initial_velocity_max = 460.0 if big else clampf(slot_px * 4.0, 70.0, 220.0)
-	if big:
-		b.scale_amount_min = 0.6
-		b.scale_amount_max = 1.3
-	add_child(b)
-	b.emitting = true
-	_free_later(b, 0.5)
+	if _impacts.size() >= MAX_IMPACTS:
+		_impacts.pop_front()
+	_impacts.append({"at": at, "length": length, "color": color, "big": big, "age": 0.0})
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
+	var had_effects := not _flights.is_empty() or not _impacts.is_empty()
+	for i in range(_impacts.size() - 1, -1, -1):
+		_impacts[i]["age"] += delta
+		if _impacts[i]["age"] >= PlacementFx.IMPACT_TIME:
+			_impacts.remove_at(i)
 	var done := []
 	for f in _flights:
 		f["time"] += delta
 		var u := clampf(f["time"] / f["length"], 0.0, 1.0)
 		var to := _screen_at(f["at"])
+		f["to"] = to
 		var sprite: Sprite2D = f["sprite"]
 		# The sprite's whole cell, sized so the stone in it matches the slot on screen.
 		var size_to: float = f["slot_length"] * board.scale_px() / f["stone_share"] / sprite.texture.get_width()
@@ -213,13 +223,22 @@ func _process(delta: float) -> void:
 			(f["trail"] as CPUParticles2D).position = p
 		if f["fx"] != null:
 			f["u"] = u
-			f["to"] = to
+			if f.has("shaft"):
+				PlacementFx.update_beam(f["shaft"], to, u, f["slot_length"] * board.scale_px())
 			(f["fx"] as Node2D).queue_redraw()
 		if u >= 1.0:
 			done.append(f)
 	for f in done:
 		_flights.erase(f)
 		_land(f)
+	if had_effects or not _impacts.is_empty():
+		queue_redraw()
+
+
+func _draw() -> void:
+	PlacementFx.draw_flights(self, _flights)
+	for impact in _impacts:
+		PlacementFx.draw_impact(self, impact, _screen_at(impact["at"]), impact["length"] * board.scale_px())
 
 
 func _land(f: Dictionary) -> void:
@@ -237,30 +256,7 @@ func _land(f: Dictionary) -> void:
 ## The screen-sized parts of a firework, beam or halo, as they stand at
 ## the flight's `u` (0..1).
 func _draw_fx(fx: Node2D, f: Dictionary) -> void:
-	var u: float = f.get("u", 0.0)
-	var to: Vector2 = f.get("to", Vector2.ZERO)
-	var color: Color = f["color"]
-	var glow := color.lightened(0.55)
-	var slot_px: float = f["slot_length"] * board.scale_px()
-	match f["style"]:
-		"firework":
-			var p: Vector2 = f.get("spark", f["from"])
-			fx.draw_texture_rect(_sparkle, Rect2(p - Vector2(28, 28), Vector2(56, 56)), false, glow)
-			fx.draw_circle(p, 6.0, Color(1, 1, 1, 0.95))
-		"beam":
-			var a := sin(PI * u)
-			var w := maxf(BEAM_WIDTH, slot_px * 1.3) * (0.6 + 0.4 * a)
-			var top := Vector2(to.x, 0.0)
-			fx.draw_rect(Rect2(top.x - w / 2.0, 0.0, w, to.y), Color(glow, 0.45 * a))
-			fx.draw_rect(Rect2(top.x - w / 4.0, 0.0, w / 2.0, to.y), Color(color.lightened(0.3), 0.5 * a))
-			fx.draw_rect(Rect2(top.x - w / 10.0, 0.0, w / 5.0, to.y), Color(1, 1, 1, 0.85 * a))
-			fx.draw_circle(to, w * 0.6, Color(glow, 0.5 * a))
-		"halo":
-			var e := u * u * (3.0 - 2.0 * u)
-			var r := lerpf(maxf(HALO_START, slot_px * 4.0), slot_px * 0.55, e)
-			var a := 0.35 + 0.65 * sin(PI * minf(u * 1.2, 1.0))
-			fx.draw_arc(to, r, 0.0, TAU, 64, Color(glow, a), 9.0, true)
-			fx.draw_arc(to, r * 0.8, 0.0, TAU, 64, Color(color, a * 0.7), 4.0, true)
+	PlacementFx.draw_fx(fx, f, board.scale_px(), _sparkle)
 
 
 ## Lands everything still flying (leaving the screen, or finishing).
@@ -276,16 +272,13 @@ func _screen_at(board_at: Vector2) -> Vector2:
 	return get_global_transform_with_canvas().affine_inverse() * on_board
 
 
-## Tiny sparkles in the gem's color (strong enough to read on the pale
-## paper), lightening as they fade out: a burst all at once, or a trail that
-## keeps emitting where it's moved.
-func _particles(color: Color, amount: int, life: float, burst: bool) -> CPUParticles2D:
+## A light sparkle trail behind a moving gem. Landing glints are drawn
+## analytically, so a rapid stroke doesn't create another particle emitter.
+func _particles(color: Color, amount: int, life: float) -> CPUParticles2D:
 	var p := CPUParticles2D.new()
 	p.texture = _sparkle
 	p.amount = amount
 	p.lifetime = life
-	p.one_shot = burst
-	p.explosiveness = 1.0 if burst else 0.0
 	p.local_coords = false
 	p.direction = Vector2.UP
 	p.spread = 180.0
@@ -294,8 +287,8 @@ func _particles(color: Color, amount: int, life: float, burst: bool) -> CPUParti
 	p.initial_velocity_max = 40.0
 	p.damping_min = 60.0
 	p.damping_max = 120.0
-	p.scale_amount_min = 0.45 if burst else 0.35
-	p.scale_amount_max = 0.95 if burst else 0.8
+	p.scale_amount_min = 0.35
+	p.scale_amount_max = 0.8
 	var shrink := Curve.new()
 	shrink.add_point(Vector2(0.0, 1.0))
 	shrink.add_point(Vector2(1.0, 0.2))
@@ -305,14 +298,13 @@ func _particles(color: Color, amount: int, life: float, burst: bool) -> CPUParti
 	ramp.add_point(0.45, Color(color.lightened(0.45), 0.85))
 	ramp.set_color(ramp.get_point_count() - 1, Color(color.lightened(0.8), 0.0))
 	p.color_ramp = ramp
-	p.emitting = not burst
+	p.emitting = true
 	return p
 
 
 func _free_later(node: Node, seconds: float) -> void:
-	get_tree().create_timer(seconds).timeout.connect(func() -> void:
-		if is_instance_valid(node):
-			node.queue_free())
+	# Bound methods disconnect automatically if the play screen frees the node.
+	get_tree().create_timer(seconds).timeout.connect(node.queue_free)
 
 
 ## Shows only the round middle of a moving gem's icon cell (`px` across), so

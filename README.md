@@ -33,8 +33,9 @@ mode for trying out new pattern generation.
   uses illustrated mode cards and a color-story preview. Dialogs scroll on
   smaller screens, keep their actions visible and contain keyboard focus;
   the board ignores touches while a power-up or reward dialog is open.
-- **Completion rewards.** The finale's waves repeat until she taps (or
-  presses back); then a framed dialog shows the
+- **Completion rewards.** The finale's waves repeat, while she pinches and
+  pans around the picture, until she taps *End finale* (or presses back);
+  then a framed dialog shows the
   finished picture, exact coins (including a Double coins bonus), the day's
   free pick when earned, and the resulting wallet. Rewards are saved before
   the dialog appears. She can admire the picture, visit Collection & packs,
@@ -159,6 +160,15 @@ mode for trying out new pattern generation.
   saved as a new puzzle beside the original) or deleted. *Generator lab
   (debug)* at the bottom opens the lab in editor builds only; exported apps
   omit that launcher. The generator and its camera retain their developer UI.
+  Debug builds (the editor and `tools/build_apk.sh` APKs, not release
+  exports) add *Unlock everything* to Settings, for testing: while it's on,
+  every color, shape, cut, theme, picture type, flourish, placement style
+  and finale is hers. Her own unlocks are what's saved and come back when
+  it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
+  and power-up charges are real.
+  The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
+  which places every open stone at once, fits the whole picture in view
+  and plays the finale, for testing finales.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
   the most used first. Open slots show as thin outlines of their shape with
   the number inside, drawn at screen size so it grows as you zoom, and
@@ -399,7 +409,34 @@ hold still when it does.
   skipping mid-flip and long summaries. The render workflow captures the
   actual multi-card reveal and full reward summary as well as single packs.
 
+- Placement animation regressions compare movement, size/rotation easing and
+  landing times against main at `7f17c8c`, including panning during a flight.
+  They also cover rapid strokes, effect cleanup, leaving mid-flight, saved
+  progress and completion rewards. The CI job runs them with real Vulkan
+  shader compilation as well as the menu and pack checks.
+
+  ```sh
+  python3 tests/prepare_placement_baseline.py
+  XDG_DATA_HOME=/tmp/paint-with-gems-placement-tests godot --headless -s res://tests/run_placements.gd
+  ```
+
 Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen game scenes tests`.
+
+### Placement effects
+
+Beam uses the Soft column treatment: feathered light advances down from above,
+with a bright core and a small contact flare. Halo closes with a fine rim and
+orbiting glints; Comet keeps its skyward origin and gains a continuous tapered
+trail; Firework keeps its rising spark and finishes with a coherent radial
+burst. Pop, Fly, Drop, Spin, Twinkle and Bounce retain their original motion
+with lighter trails and precise landing glints. All existing style ids,
+placement durations, trajectories and size/rotation easing are preserved.
+
+`GemFlights` owns timing and emits one landing event per gem. The visual helper
+`scenes/game/gem_placement_fx.gd` draws the effects; Beam's feathered shaft uses
+one shader quad. Landing glints last 0.4 s, follow the board during pans and are
+capped at 96 independently of the existing 48-flight limit. They never delay
+puzzle completion. Particle cleanup disconnects safely when leaving a board.
 
 ## Building an APK
 

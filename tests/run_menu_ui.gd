@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_reward_kinds()
 	await _test_transitions()
 	await _test_completion_rewards()
+	await _test_unlock_all()
 	_test_camera_helper()
 	print("Menu UI: %d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures else 0)
@@ -77,6 +78,43 @@ func _test_menu_layout() -> void:
 	_check_button_widths(menu, menu.size.x)
 	menu.go_back()
 	_check(not menu._new_panel.visible, "Back closes the new-puzzle form")
+	menu.queue_free()
+	await process_frame
+
+
+func _test_unlock_all() -> void:
+	print("Debug unlock-all setting")
+	var profile := SaveStore.upgrade({})
+	SaveStore.save_profile(profile)
+	var own := (profile["unlocks"] as Dictionary).duplicate(true)
+	var menu := MainMenu.new()
+	menu.profile = profile
+	root.add_child(menu)
+	await _layout_frames()
+	var toggle: Button = menu._settings_panel.body.find_child("UnlockAll", true, false)
+	_check(toggle != null and toggle.text.ends_with("Off"), "Debug builds offer unlock-all in settings, off")
+	var reloads := [0]
+	menu.reload_requested.connect(func() -> void: reloads[0] += 1)
+	toggle.pressed.emit()
+	_check(reloads[0] == 1, "Turning it on shows the menu afresh")
+	var all := Unlockables.all_unlocks()
+	_check(profile["unlocks"] == all, "Everything is unlocked while it's on")
+	_check(GemCatalog.unlocked_themes(profile["unlocks"]).size() == GemCatalog.THEMES.size(), "Every theme is unlocked")
+	var missing := []
+	for kind: String in Unlockables.KINDS:
+		for item: Dictionary in Unlockables.items(kind):
+			if kind != "power" and not Unlockables.has(profile["unlocks"], item):
+				missing.append(item["id"])
+	_check(missing.is_empty(), "Every item but power-up charges is had: missing %s" % [missing])
+	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SaveStore.DIR + "/profile.json"))
+	_check(raw["unlocks"] == own and not raw.has(SaveStore.REAL_UNLOCKS), "Her own unlocks are what's saved")
+	var loaded := SaveStore.load_profile()
+	_check(SaveStore.is_unlock_all(loaded) and loaded["unlocks"] == all, "The setting stays on after reloading")
+	SaveStore.set_unlock_all(loaded, false)
+	_check(loaded["unlocks"] == own and not loaded["settings"].has(SaveStore.UNLOCK_ALL),
+		"Turning it off gives back exactly her own unlocks")
+	SaveStore.save_profile(loaded)
+	_check(not SaveStore.is_unlock_all(SaveStore.load_profile()), "Off stays off after reloading")
 	menu.queue_free()
 	await process_frame
 
@@ -308,25 +346,32 @@ func _test_completion_rewards() -> void:
 	_check_button_widths(play, play.size.x)
 	play.go_back()
 	_check(not play._powers_panel.visible and play._board.input_enabled, "Back closes power-ups and restores the board")
-	play._overlay.placed[0] = 1
-	play._filled = 1
 	play._powers_on.append("double_coins")
-	play._finish(true)
+	_check(play._filled == 0 and play._overlay.placed[0] == 0, "The puzzle starts open")
+	var complete: Button = null
+	for b: Button in play._powers_panel.actions.find_children("*", "Button", true, false):
+		if b.text == "Complete puzzle (debug)":
+			complete = b
+	_check(complete != null, "Debug builds offer to complete the puzzle in Power-ups")
+	complete.pressed.emit()
+	_check(play._done and play._filled == play._type_of.size() and not 0 in play._overlay.placed,
+		"Debug complete fills every slot and finishes the puzzle")
 	await create_timer(3.5).timeout
 	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
-		"The finale keeps playing until she taps")
-	_check(not play._board.input_enabled, "The board ignores gestures during the finale")
-	var tap := InputEventScreenTouch.new()
-	tap.position = play.size / 2.0
-	tap.pressed = true
-	Input.parse_input_event(tap)
-	await process_frame
-	_check(play._board.is_celebrating(), "Pressing alone doesn't end the finale")
-	tap = tap.duplicate()
-	tap.pressed = false
-	Input.parse_input_event(tap)
-	await process_frame
-	_check(not play._board.is_celebrating(), "Letting go of a tap ends the finale")
+		"The finale keeps playing until she ends it")
+	_check(play._board.input_enabled, "She can pinch and pan during the finale")
+	_check(play._rewards_button.text == "End finale", "The finished bar offers to end the finale")
+	for pressed: bool in [true, false]:
+		var tap := InputEventScreenTouch.new()
+		tap.position = play._board.get_global_rect().get_center()
+		tap.pressed = pressed
+		Input.parse_input_event(tap)
+		await process_frame
+	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
+		"Tapping the board doesn't end the finale")
+	play._rewards_button.pressed.emit()
+	_check(not play._board.is_celebrating() and play._rewards_button.text == "Rewards",
+		"End finale ends it and the button goes back to Rewards")
 	await _layout_frames()
 	var saved := SaveStore.load_profile()
 	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Double coins and the daily pick are saved before the dialog")

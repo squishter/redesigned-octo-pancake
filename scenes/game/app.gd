@@ -43,6 +43,7 @@ func _show_menu() -> void:
 	menu.play_requested.connect(_play)
 	menu.lab_requested.connect(_show_lab)
 	menu.collection_requested.connect(_show_collection)
+	menu.reload_requested.connect(_show_menu)
 	_swap(menu)
 
 

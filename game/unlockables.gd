@@ -115,6 +115,16 @@ static func default_unlocks() -> Dictionary:
 	return profile["unlocks"]
 
 
+## Every item of every kind unlocked (for testing; see SaveStore.UNLOCK_ALL).
+static func all_unlocks() -> Dictionary:
+	var profile := {"unlocks": default_unlocks(), "powers": {}}
+	for kind: String in KINDS:
+		if KINDS[kind]["key"] != "":
+			for item: Dictionary in items(kind):
+				grant(profile, item)
+	return profile["unlocks"]
+
+
 ## Whether she has an item (power-ups are charges, never "had").
 static func has(unlocks: Dictionary, item: Dictionary) -> bool:
 	match item["kind"]:
