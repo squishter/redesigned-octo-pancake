@@ -19,6 +19,9 @@ extends Control
 ## Hint (see Hints) glides the board to the selected gem's open slot nearest
 ## the middle of the view and rings it; the button fills quietly as the next
 ## hint comes closer.
+##
+## The stones button up top sets how many stones one tap or drag can place:
+## 1, 3, 5 or any number (see STROKE_LIMITS); it's kept in the settings.
 
 signal back_requested
 signal collection_requested
@@ -60,6 +63,9 @@ const FLING_DECAY := 4.0
 const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle", "bounce", "comet", "firework", "beam", "halo"]
 const POWER_EFFECTS := ["big_brush", "auto_finish", "free_hand", "double_coins", "finish_gem", "sweep", "finder",
 		"sprinkle"]
+## How many stones one gesture may place, in the order the stones button
+## steps through them; 0 is no limit.
+const STROKE_LIMITS := [1, 3, 5, 0]
 ## The finished bar's words once the finale is over.
 const DONE_TEXT := "Beautifully finished. Pinch and pan to admire your work."
 ## Holding the progress line this long (seconds) shows or hides the
@@ -122,6 +128,10 @@ var _area: Control
 var _selected := -1
 ## The gem type the current stroke fills.
 var _stroke_type := -1
+## Stones the current stroke may place (0: any number), and has placed.
+var _stroke_limit := 0
+var _stroke_placed := 0
+var _stroke_button: Button
 var _done := false
 var _dirty := false
 var _since_save := 0.0
@@ -150,6 +160,13 @@ func _ready() -> void:
 	var heading := UI.label("YOUR CREATIVE STUDIO", 28, GameTheme.MINT, true)
 	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	top.add_child(heading)
+	_stroke_limit = int(profile.get("settings", {}).get("stroke_limit", 0))
+	if not _stroke_limit in STROKE_LIMITS:
+		_stroke_limit = 0
+	_stroke_button = _button(top, "", _next_stroke_limit)
+	_stroke_button.theme_type_variation = "QuietButton"
+	_stroke_button.icon = GameTheme.icon("gem")
+	_show_stroke_limit()
 	_button(top, "Fit", func() -> void: _board.reset_view()).theme_type_variation = "QuietButton"
 	var toolbar := UI.panel(false, 20)
 	root.add_child(toolbar)
@@ -526,6 +543,7 @@ func _can_stroke(at: Vector2) -> bool:
 
 func _on_stroke_started(at: Vector2) -> void:
 	_stroke_type = _stroke_gem(at)
+	_stroke_placed = 0
 	_fill_at(at, TAP_SLOP)
 
 
@@ -544,11 +562,32 @@ func _fill_at(at: Vector2, slop: float) -> void:
 		return
 	if _has_power("big_brush"):
 		for i: int in _overlay.slots_near(at, _stroke_type, BRUSH_PX / _board.scale_px()):
-			_fill(i)
+			_stroke_fill(i)
 		return
 	var i := _overlay.slot_at(at, _stroke_type, slop / _board.scale_px())
 	if i >= 0:
-		_fill(i)
+		_stroke_fill(i)
+
+
+## Fills slot i for the current stroke, unless it has placed all it may.
+func _stroke_fill(i: int) -> void:
+	if _overlay.placed[i] != 0 or (_stroke_limit > 0 and _stroke_placed >= _stroke_limit):
+		return
+	_stroke_placed += 1
+	_fill(i)
+
+
+## The stones button: steps to the next limit and keeps it.
+func _next_stroke_limit() -> void:
+	_stroke_limit = STROKE_LIMITS[(STROKE_LIMITS.find(_stroke_limit) + 1) % STROKE_LIMITS.size()]
+	_show_stroke_limit()
+	profile["settings"]["stroke_limit"] = _stroke_limit
+	SaveStore.save_profile(profile)
+
+
+func _show_stroke_limit() -> void:
+	_stroke_button.text = "%s×" % _stroke_limit if _stroke_limit > 0 else "∞"
+	_stroke_button.tooltip_text = "Stones per tap or drag"
 
 
 func _fill(i: int) -> void:

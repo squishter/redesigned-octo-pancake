@@ -33,6 +33,9 @@ mode for trying out new pattern generation.
   uses illustrated mode cards and a color-story preview. Dialogs scroll on
   smaller screens, keep their actions visible and contain keyboard focus;
   the board ignores touches while a power-up or reward dialog is open.
+- **Stones per gesture.** A button at the top of the play screen steps
+  through 1×, 3×, 5× and ∞: how many stones one tap or drag may place
+  (Big brush included). It starts at ∞ and is kept in the settings.
 - **Completion rewards.** The finale's waves repeat, while she pinches and
   pans around the picture, until she taps *End finale* (or presses back);
   then a framed dialog shows the
