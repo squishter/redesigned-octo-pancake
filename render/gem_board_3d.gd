@@ -53,6 +53,11 @@ const OPAQUE_GEMS := ["snow", "pearl", "ivory", "cream", "jade", "turquoise"]
 ## A stone's girdle stands this high above the paper, and its crown rises
 ## about this much above that, in its half-widths.
 const GIRDLE_HEIGHT := 0.45
+## Stones sit a little tilted on the glue: each leans up to this many degrees
+## in its own direction. Only its sparkles and the light it focuses on the
+## paper see the tilt (see as_tilted in gem_light.gdshaderinc); the stone
+## itself is drawn flat. It keeps a board of stones from all flashing alike.
+const TILT_MAX_DEG := 7.0
 const CROWN_HEIGHT := 0.3
 ## Shadow and sparkle planes, in stone half-sizes (shadows must cover the
 ## farthest the light can push them).
@@ -522,6 +527,7 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 		var at := Vector3(s["x"], 0.0, s["y"])
 		var color: Color = s["target_color"]
 		var random := fposmod(sin(i * 12.9898 + 78.233) * 43758.5453, 1.0)
+		var tilt := _tilt(i)
 		var xf: Transform3D
 		match kind:
 			"gem":
@@ -535,12 +541,12 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 			"shadow":
 				at.y = 0.02
 				xf = Transform3D(turn * Basis.from_scale(Vector3(half_len, 1.0, half_wid)), at)
-				mm.set_instance_custom_data(k, Color(random, (GIRDLE_HEIGHT + CROWN_HEIGHT) * small, 0.0, 0.0))
+				mm.set_instance_custom_data(k, Color(random, (GIRDLE_HEIGHT + CROWN_HEIGHT) * small, tilt.x, tilt.y))
 			_:
 				at.y = (GIRDLE_HEIGHT + CROWN_HEIGHT) * small + 0.1
 				var reach := maxf(half_len, half_wid) * SPARKLE_SPAN
 				xf = Transform3D(Basis.from_scale(Vector3(reach, 1.0, reach)), at)
-				mm.set_instance_custom_data(k, Color(random, 0.0, 0.0, 0.0))
+				mm.set_instance_custom_data(k, Color(random, tilt.x, tilt.y, 0.0))
 		mm.set_instance_transform(k, xf)
 		mm.set_instance_color(k, color)
 		if i < _refs.size():
@@ -554,6 +560,14 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 
 ## Refractive index and dispersion for a gem color: pale, unsaturated
 ## stones read as diamonds (bright, with fire), the rest as colored gems.
+## Stone i's tilt: the xz (board space) of its top's normal, leaning up to
+## TILT_MAX_DEG in a direction of its own, the same every time it's built.
+static func _tilt(i: int) -> Vector2:
+	var a := fposmod(sin(i * 78.233 + 12.9898) * 43758.5453, 1.0)
+	var b := fposmod(sin(i * 39.346 + 11.135) * 24634.6345, 1.0)
+	return Vector2.from_angle(a * TAU) * sin(deg_to_rad(TILT_MAX_DEG) * b)
+
+
 static func _optics(color: Color) -> Vector2:
 	if color.s < 0.18 and color.v > 0.7:
 		return Vector2(2.42, 0.035)

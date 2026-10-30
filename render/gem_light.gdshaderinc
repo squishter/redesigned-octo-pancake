@@ -40,12 +40,36 @@ vec3 studio(vec3 d) {
 
 // How far the key light has moved the caustics: their offset and their
 // phase (smooth in the light's direction, so they shift as it moves).
+vec2 light_shift_of(vec3 k) {
+	return k.xz / max(k.y, 0.3);
+}
+
+float light_phase_of(vec3 k) {
+	return k.x * 2.1 + k.z * 1.7 + k.y * 2.6;
+}
+
 vec2 light_shift() {
-	return key_dir.xz / max(key_dir.y, 0.3);
+	return light_shift_of(key_dir);
 }
 
 float light_phase() {
-	return key_dir.x * 2.1 + key_dir.z * 1.7 + key_dir.y * 2.6;
+	return light_phase_of(key_dir);
+}
+
+// Stones sit a little tilted on the glue (GemBoard3D gives each one up to
+// TILT_MAX_DEG in a random direction); `tilt` is the xz of its top's normal
+// in board space. Direction d (toward a light, or the viewer) as that stone
+// sees it: turned by the rotation that stands its normal upright.
+vec3 as_tilted(vec3 d, vec2 tilt) {
+	vec3 n = vec3(tilt.x, sqrt(max(1.0 - dot(tilt, tilt), 0.0)), tilt.y);
+	vec3 axis = vec3(-n.z, 0.0, n.x);  // cross(n, up)
+	float s = length(axis);
+	if (s < 1e-5) {
+		return d;
+	}
+	axis /= s;
+	float c = n.y;
+	return d * c + cross(axis, d) * s + axis * dot(axis, d) * (1.0 - c);
 }
 
 // Caustic light (bright webs) for phase t, about 0..1.

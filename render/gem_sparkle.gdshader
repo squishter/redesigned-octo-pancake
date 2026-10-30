@@ -8,21 +8,27 @@ render_mode unshaded, blend_add, depth_draw_never, depth_test_disabled, cull_dis
 
 #include "res://render/gem_light.gdshaderinc"
 
-// Per stone (INSTANCE_CUSTOM): x random 0..1. COLOR is the gem color.
+// Per stone (INSTANCE_CUSTOM): x random 0..1, yz the xz of its tilted top's
+// normal (see as_tilted). COLOR is the gem color.
 varying float glint;
 varying vec2 lp;
 
-float flare(float r, float k) {
+// Facet k's flare, with the lights and viewer as the tilted stone sees them.
+float flare(float r, float k, vec3 key, vec3 fill, vec3 eye) {
 	float turn = r * 6.2831853 + k * 2.4;
 	float tilt = radians(14.0 + 28.0 * fract(r * 7.13 + k * 0.37));
 	vec3 n = vec3(cos(turn) * sin(tilt), cos(tilt), sin(turn) * sin(tilt));
-	vec3 up = reflect(vec3(0.0, -1.0, 0.0), n);
-	return pow(max(dot(up, key_dir), 0.0), 700.0) + 0.6 * pow(max(dot(up, fill_dir), 0.0), 700.0);
+	vec3 up = reflect(-eye, n);
+	return pow(max(dot(up, key), 0.0), 700.0) + 0.6 * pow(max(dot(up, fill), 0.0), 700.0);
 }
 
 void vertex() {
 	float r = INSTANCE_CUSTOM.x;
-	glint = max(flare(r, 0.0), flare(r, 1.0)) * light_strength;
+	vec2 tilt = INSTANCE_CUSTOM.yz;
+	vec3 key = as_tilted(key_dir, tilt);
+	vec3 fill = as_tilted(fill_dir, tilt);
+	vec3 eye = as_tilted(vec3(0.0, 1.0, 0.0), tilt);
+	glint = max(flare(r, 0.0, key, fill, eye), flare(r, 1.0, key, fill, eye)) * light_strength;
 	lp = VERTEX.xz;
 	// On a facet, not dead center.
 	VERTEX.xz += vec2(cos(r * 91.0), sin(r * 91.0)) * 0.22;
