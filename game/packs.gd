@@ -2,10 +2,10 @@ class_name Packs
 extends RefCounted
 ## Gem packs and what pays for them.
 ##
-## Each unlock pack gives one thing she doesn't have yet from its category
+## Each unlock pack gives new things from its category
 ## (never a repeat), and is sold out once there's nothing left in it. The
 ## Everything pack picks a category that still has something (each as
-## likely), then something from it. The power-up pack always gives charges.
+## likely) for each draw, then something from it. Power-ups give charges.
 ##
 ## Packs are opened with a free pick or with coins. She gets a free pick the
 ## first time she opens the game each day and another for the first puzzle
@@ -34,8 +34,16 @@ const PACKS := {
 ## Unlockables.KINDS names it.
 
 
-static func price(pack: String) -> int:
-	return POWER_PACK_PRICE if pack == "powers" else PACK_PRICE
+## Definitions may set rewards (base draws, default 1), source (default
+## the pack id), and price. Existing definitions keep their current economy.
+static func price(pack: String, catalog: Dictionary = PACKS) -> int:
+	var info: Dictionary = catalog.get(pack, {})
+	var source: String = info.get("source", pack)
+	return maxi(0, int(info.get("price", POWER_PACK_PRICE if source == "powers" else PACK_PRICE)))
+
+
+static func reward_count(pack: String, catalog: Dictionary = PACKS) -> int:
+	return maxi(1, int(catalog.get(pack, {}).get("rewards", 1)))
 
 
 static func coins(profile: Dictionary) -> int:
@@ -49,58 +57,88 @@ static func picks(profile: Dictionary) -> int:
 ## What a pack could still give: every findable item of the kinds it
 ## offers (see Unlockables.KINDS; the Everything pack offers them all),
 ## [{kind, id, name, about, ...}].
-static func pool(pack: String, profile: Dictionary) -> Array:
-	var unlocks: Dictionary = profile["unlocks"]
+static func pool(pack: String, profile: Dictionary, catalog: Dictionary = PACKS) -> Array:
+	var source: String = catalog.get(pack, {}).get("source", pack)
 	var out := []
 	for kind: String in Unlockables.KINDS:
 		var from: String = Unlockables.KINDS[kind]["pack"]
-		if pack != from and not (pack == "all" and PACKS.has(from)):
+		if source != from and not (source == "all" and from != ""):
 			continue
 		for item: Dictionary in Unlockables.items(kind):
-			if kind == "power" or Unlockables.findable(unlocks, item):
+			if kind == "power" or Unlockables.findable(profile["unlocks"], item):
 				out.append(item)
 	return out
 
 
-static func sold_out(pack: String, profile: Dictionary) -> bool:
-	return pool(pack, profile).is_empty()
+static func sold_out(pack: String, profile: Dictionary, catalog: Dictionary = PACKS) -> bool:
+	return not catalog.has(pack) or pool(pack, profile, catalog).is_empty()
 
 
-## Opens a pack, paying with a free pick (`with_pick`) or coins, and gives
-## what's in it. Returns the item (see pool), or {} when it can't be opened
-## (sold out, or nothing to pay with). Doesn't save the profile.
-static func open(profile: Dictionary, pack: String, with_pick: bool, rng: RandomNumberGenerator) -> Dictionary:
-	if sold_out(pack, profile):
-		return {}
+## One payment, one committed bundle. Plan on a copy first: later draws see
+## earlier unlocks (including newly eligible cuts), and no reward repeats
+## inside a bundle. When stock runs low, give the remaining distinct rewards.
+## Returns [] without payment when unavailable. The caller saves the entire
+## profile before presenting the returned rewards, including bonus themes.
+static func open(profile: Dictionary, pack: String, with_pick: bool, rng: RandomNumberGenerator,
+		catalog: Dictionary = PACKS) -> Array[Dictionary]:
+	if sold_out(pack, profile, catalog):
+		return []
+	if (with_pick and picks(profile) <= 0) or (not with_pick and coins(profile) < price(pack, catalog)):
+		return []
+	var staged: Dictionary = profile.duplicate(true)
+	var rewards: Array[Dictionary] = []
+	var seen: Array[String] = []
+	for _i in reward_count(pack, catalog):
+		var item := draw(pack, staged, rng, catalog, seen)
+		if item.is_empty():
+			break
+		seen.append(_reward_key(item))
+		give(staged, item)
+		rewards.append(item)
+	if rewards.is_empty():
+		return []
+	# Completed themes are real bonus rewards, but never consume base draws.
+	var themes := Unlockables.themes_gained(profile["unlocks"], staged["unlocks"])
+	for theme: Dictionary in Unlockables.items("theme"):
+		if theme["id"] in themes:
+			theme["bonus"] = true
+			theme["pack"] = pack
+			rewards.append(theme)
+	# No yields or fallible UI work between granting and the single payment.
+	for item: Dictionary in rewards:
+		give(profile, item)
 	var wallet: Dictionary = profile["wallet"]
 	if with_pick:
-		if picks(profile) <= 0:
-			return {}
 		wallet["picks"] = picks(profile) - 1
 	else:
-		if coins(profile) < price(pack):
-			return {}
-		wallet["coins"] = coins(profile) - price(pack)
-	var item := draw(pack, profile, rng)
-	give(profile, item)
-	return item
+		wallet["coins"] = coins(profile) - price(pack, catalog)
+	return rewards
 
 
-## One thing from a pack: the Everything pack first picks a category with
-## something left (each as likely), so power-ups don't crowd it out.
-static func draw(pack: String, profile: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
-	if pack == "all":
-		var open_packs := []
-		for other: String in PACKS:
-			if other != "all" and not sold_out(other, profile):
-				open_packs.append(other)
-		if open_packs.is_empty():
-			return {}
-		pack = open_packs[rng.randi_range(0, open_packs.size() - 1)]
-	var items := pool(pack, profile)
+## One draw without granting. Everything picks a category uniformly first,
+## then a reward, so abundant colors or power-ups do not crowd others out.
+static func draw(pack: String, profile: Dictionary, rng: RandomNumberGenerator,
+		catalog: Dictionary = PACKS, excluded: Array[String] = []) -> Dictionary:
+	var items := pool(pack, profile, catalog).filter(func(item: Dictionary) -> bool:
+		return not _reward_key(item) in excluded)
+	if items.is_empty():
+		return {}
+	var source: String = catalog.get(pack, {}).get("source", pack)
+	if source == "all":
+		var categories: Array[String] = []
+		for item: Dictionary in items:
+			var category: String = Unlockables.KINDS[item["kind"]]["pack"]
+			if not category in categories:
+				categories.append(category)
+		source = categories[rng.randi_range(0, categories.size() - 1)]
+		items = items.filter(func(item: Dictionary) -> bool: return Unlockables.KINDS[item["kind"]]["pack"] == source)
 	var item: Dictionary = items[rng.randi_range(0, items.size() - 1)]
-	item["pack"] = pack
+	item["pack"] = source
 	return item
+
+
+static func _reward_key(item: Dictionary) -> String:
+	return "%s|%s" % [item["kind"], item["id"]]
 
 
 static func give(profile: Dictionary, item: Dictionary) -> void:

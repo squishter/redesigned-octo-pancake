@@ -21,8 +21,10 @@ extends Control
 ## hint comes closer.
 
 signal back_requested
+signal collection_requested
 
-const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const GameTheme := preload("res://scenes/game/game_theme.gd")
+const UI := preload("res://scenes/game/ui_widgets.gd")
 const HintButton := preload("res://scenes/game/hint_button.gd")
 ## A hint: how long the board takes to get there, how long the ring around
 ## the slot lasts (it pulses twice), and how much around the slot shows.
@@ -96,12 +98,16 @@ var _fill_animation := "fly"
 var _finish_pending := false
 ## Whole-puzzle power-ups on for this puzzle (kept in its meta).
 var _powers_on: Array = []
-var _powers_panel: PanelContainer
+var _powers_panel: GameDialog
 var _powers_list: VBoxContainer
 var _done_label: Label
 ## Tidy up places stones itself; it doesn't start again inside itself.
 var _tidying := false
 var _progress: Label
+var _progress_track: ProgressBar
+var _palette_caption: Control
+var _reward_dialog: CompletionRewards
+var _completion_reward: Dictionary = {}
 var _done_bar: Control
 var _area: Control
 var _selected := -1
@@ -129,23 +135,30 @@ func _ready() -> void:
 
 	var top := HBoxContainer.new()
 	root.add_child(top)
-	_button(top, "‹ Menu", _leave)
-	_progress = Label.new()
-	_progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_progress.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_progress.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-	# Small, and wrapping onto two lines, so the buttons beside it fit.
-	_progress.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	_progress.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_progress.custom_minimum_size.x = 120
-	top.add_child(_progress)
+	_button(top, "Menu", _leave).theme_type_variation = "QuietButton"
+	var heading := UI.label("YOUR CREATIVE STUDIO", 28, GameTheme.MINT, true)
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top.add_child(heading)
+	_button(top, "Fit", func() -> void: _board.reset_view()).theme_type_variation = "QuietButton"
+	var toolbar := UI.panel(false, 20)
+	root.add_child(toolbar)
+	var controls := HBoxContainer.new()
+	toolbar.add_child(controls)
+	var progress_copy := VBoxContainer.new()
+	progress_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	progress_copy.add_theme_constant_override("separation", 14)
+	controls.add_child(progress_copy)
+	_progress = UI.label("", 30, GameTheme.TEXT)
+	progress_copy.add_child(_progress)
+	_progress_track = UI.progress(0)
+	progress_copy.add_child(_progress_track)
 	_hint = HintButton.new()
-	_hint.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	_hint.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	_hint.pressed.connect(_use_hint)
-	top.add_child(_hint)
-	_button(top, "Power-ups", _toggle_powers)
-	_button(top, "Fit", func() -> void: _board.reset_view())
+	controls.add_child(_hint)
+	_button(controls, "Power-ups", _toggle_powers)
+	_palette_caption = UI.label("CHOOSE A GEM   ·   SWIPE TO BROWSE", 24, GameTheme.TEXT_DIM)
+	root.add_child(_palette_caption)
 
 	# The gem row scrolls by hand (see _input): its cards ignore touches, so
 	# a drag that starts on one scrolls rather than getting stuck on it.
@@ -158,38 +171,28 @@ func _ready() -> void:
 	_row.add_theme_constant_override("separation", 14)
 	_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_palette.add_child(_row)
-	_card_style = _card(LabTheme.FIELD, Color.TRANSPARENT)
-	_picked_style = _card(LabTheme.FIELD_PRESSED, LabTheme.GOLD)
+	_card_style = _card(GameTheme.FIELD, Color.TRANSPARENT)
+	_picked_style = _card(GameTheme.FIELD_PRESSED, GameTheme.GOLD)
 	_fill_animation = profile.get("settings", {}).get("fill_animation", "fly")
 	if not _fill_animation in profile["unlocks"].get("animations", ["pop"]):
 		_fill_animation = "pop"
 
-	# Power-ups: hidden until asked for, over the gem row.
-	_powers_panel = PanelContainer.new()
-	_powers_panel.visible = false
-	root.add_child(_powers_panel)
-	var powers_scroll := ScrollContainer.new()
-	powers_scroll.custom_minimum_size.y = 760
-	powers_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_powers_panel.add_child(powers_scroll)
-	DragScroll.attach(powers_scroll)
-	_powers_list = VBoxContainer.new()
-	_powers_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	powers_scroll.add_child(_powers_list)
-
-	_done_bar = HBoxContainer.new()
-	_done_bar.custom_minimum_size.y = _palette.custom_minimum_size.y
+	_powers_panel = GameDialog.new("A little helping hand", "Choose a boost. Keep your creative flow.", "power")
+	_powers_panel.preferred_height = 1660
+	_powers_panel.hide()
+	add_child(_powers_panel)
+	_powers_panel.closed.connect(_update_board_input)
+	_powers_list = _powers_panel.body
+	_button(_powers_panel.actions, "Back to my picture", _powers_panel.close).theme_type_variation = "PrimaryButton"
+	_done_bar = UI.panel(true, 24)
 	_done_bar.visible = false
 	root.add_child(_done_bar)
-	var done_label := Label.new()
-	_done_label = done_label
-	done_label.text = "Finished! Pinch and drag to admire it."
-	done_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	done_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	done_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	done_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	done_label.add_theme_color_override("font_color", LabTheme.GOLD)
-	_done_bar.add_child(done_label)
+	var done_row := HBoxContainer.new()
+	_done_bar.add_child(done_row)
+	done_row.add_child(UI.icon("trophy", 80))
+	_done_label = UI.label("Beautifully finished. Pinch and pan to admire your work.", 34, GameTheme.GOLD)
+	done_row.add_child(_done_label)
+	_button(done_row, "Rewards", _show_rewards)
 
 	_area = Control.new()
 	_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -351,8 +354,8 @@ func _make_item(t: int) -> PanelContainer:
 	var left := Label.new()
 	left.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE - 4)
-	left.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	left.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE - 4)
+	left.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	box.add_child(left)
 	_items[t] = b
 	_item_icons[t] = icon
@@ -364,8 +367,10 @@ func _make_item(t: int) -> PanelContainer:
 static func _card(color: Color, border: Color) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = color
-	box.set_corner_radius_all(18)
+	box.set_corner_radius_all(24)
 	box.set_content_margin_all(12)
+	box.border_color = Color("#53647d")
+	box.set_border_width_all(2)
 	if border.a > 0.0:
 		box.border_color = border
 		box.set_border_width_all(5)
@@ -396,6 +401,8 @@ func _apply_scroll() -> void:
 ## The gem row's touches: a drag scrolls it (and flings on letting go), a
 ## tap picks the gem under the finger (or lets go of the picked one).
 func _input(event: InputEvent) -> void:
+	if _powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible):
+		return
 	if not _palette.is_visible_in_tree():
 		return
 	if event is InputEventScreenTouch:
@@ -577,14 +584,26 @@ func _tidy_all() -> void:
 
 
 func _toggle_powers() -> void:
-	_powers_panel.visible = not _powers_panel.visible and not _done
+	if _done:
+		return
 	if _powers_panel.visible:
+		_powers_panel.close()
+	else:
 		_refresh_powers()
+		_powers_panel.open()
+		_update_board_input()
+
+
+func _update_board_input() -> void:
+	_board.input_enabled = not (_powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
+	_row_touch = -1
+	_fling = 0.0
 
 
 ## The power-ups she has charges of (or has on), each with a button.
 func _refresh_powers() -> void:
 	for child in _powers_list.get_children():
+		_powers_list.remove_child(child)
 		child.queue_free()
 	var any := false
 	for power: String in GemCatalog.POWERS:
@@ -594,30 +613,20 @@ func _refresh_powers() -> void:
 		if n <= 0 and not on:
 			continue
 		any = true
-		var row := HBoxContainer.new()
-		_powers_list.add_child(row)
-		var text := VBoxContainer.new()
-		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(text)
-		var title := Label.new()
-		title.text = "%s  ×%d" % [info["name"], n]
-		text.add_child(title)
-		var about := Label.new()
-		about.text = info["about"] + (" (for this whole puzzle)" if info["kind"] == "puzzle" else "")
-		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		about.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-		about.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-		text.add_child(about)
-		var use := _button(row, "On" if on else "Use", func() -> void: _use_power(power))
+		var text := UI.item(_powers_list, "%s  ×%d" % [info["name"], n],
+			info["about"] + (" · For this whole picture" if info["kind"] == "puzzle" else ""), "power")
+		var about := text.get_child(1) as Label
+		var use := _button(text.get_parent(), "Active" if on else "Use", func() -> void: _use_power(power))
+		use.icon = GameTheme.icon("check" if on else "power")
+		use.theme_type_variation = "QuietButton" if on else "PrimaryButton"
 		var needs_gem: bool = power in ["finish_gem", "sweep", "finder"]
 		use.disabled = on or (needs_gem and _selected < 0)
 		if needs_gem and _selected < 0 and not on:
 			about.text += " Pick a gem first."
 	if not any:
-		var none := Label.new()
-		none.text = "No power-ups yet. Get some from power-up packs in Collection & packs."
-		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_powers_list.add_child(none)
+		UI.item(_powers_list, "A little magic for later", "Discover useful boosts in power-up packs.", "pack")
+		var packs := _button(_powers_list, "Explore collection & packs", _open_collection)
+		packs.theme_type_variation = "PrimaryButton"
 
 
 ## Spends a charge and uses the power-up: a whole-puzzle one stays on (and
@@ -625,7 +634,7 @@ func _refresh_powers() -> void:
 func _use_power(power: String) -> void:
 	if _done or not Packs.spend(profile, power):
 		return
-	_powers_panel.visible = false
+	_powers_panel.close()
 	if GemCatalog.POWERS[power]["kind"] == "puzzle":
 		_powers_on.append(power)
 		_meta["powers"] = _powers_on
@@ -714,8 +723,8 @@ func _draw_ring() -> void:
 	var r := maxf(float(s["size"]), float(s["width"])) / 2.0 * _board.scale_px()
 	var pulse := fmod(u * 2.0, 1.0)
 	var fade := 1.0 - u
-	_ring.draw_arc(at, r * (1.15 + pulse * 0.9), 0.0, TAU, 48, Color(LabTheme.GOLD, fade * (1.0 - pulse)), 6.0, true)
-	_ring.draw_arc(at, r * 1.15, 0.0, TAU, 48, Color(LabTheme.GOLD, fade), 4.0, true)
+	_ring.draw_arc(at, r * (1.15 + pulse * 0.9), 0.0, TAU, 48, Color(GameTheme.GOLD, fade * (1.0 - pulse)), 6.0, true)
+	_ring.draw_arc(at, r * 1.15, 0.0, TAU, 48, Color(GameTheme.GOLD, fade), 4.0, true)
 
 
 func _on_landed(i: int) -> void:
@@ -757,58 +766,67 @@ func _buzz() -> void:
 func _update_progress() -> void:
 	var total := _type_of.size()
 	_progress.text = "%d / %d gems" % [_filled, total] if _filled < total else "All %d gems placed" % total
+	_progress_track.value = 100.0 * _filled / maxi(1, total)
 
 
 ## The picture is done: from now on it's only for looking at. `celebrate`
 ## plays the finale (not when reopening a finished picture).
 func _finish(celebrate: bool) -> void:
+	if _done:
+		return
 	_done = true
 	_stroke_type = -1
-	_powers_panel.visible = false
+	_powers_panel.close()
 	_hint.visible = false
 	_ring_slot = -1
 	_select(-1)
 	_board.stroke_filter = Callable()
 	_overlay.visible = false
 	_palette.visible = false
+	_palette_caption.hide()
 	_done_bar.visible = true
 	if not celebrate:
+		_completion_reward = _meta.get("completion_reward", {})
 		return
-	var reward := Packs.puzzle_finished(profile, _meta, _has_power("double_coins"))
-	var paid := ""
-	if reward["coins"] > 0:
-		paid = "+%d coins" % reward["coins"]
-		if reward["pick"]:
-			paid += " · +1 free pick"
-		_done_label.text = "Finished! %s. Pinch and drag to admire it." % paid
+	_completion_reward = Packs.puzzle_finished(profile, _meta, _has_power("double_coins"))
+	if int(_completion_reward["coins"]) > 0 or _completion_reward["pick"]:
+		_meta["completion_reward"] = _completion_reward.duplicate()
+	# Reward and progress are durable before any dialog or animation appears.
 	_save(true)
-	var w: float = _picture["width"]
-	var h: float = _picture["height"]
+	var center := Vector2(_picture["width"], _picture["height"]) / 2.0
 	var finale: String = profile["settings"].get("finale", "ripple")
 	if not finale in profile["unlocks"].get("finales", ["ripple"]):
 		finale = "ripple"
-	var lasts := _board.celebrate(Vector2(w, h) / 2.0, finale)
+	var lasts := _board.celebrate(center, finale)
 	Input.vibrate_handheld(70, 0.7)
-	var banner := Label.new()
-	banner.text = "Finished!" + ("\n" + paid if paid != "" else "")
-	banner.add_theme_font_size_override("font_size", 120)
-	banner.add_theme_color_override("font_color", LabTheme.GOLD)
-	banner.add_theme_color_override("font_outline_color", LabTheme.BG)
-	banner.add_theme_constant_override("outline_size", 24)
-	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_area.add_child(banner)
-	banner.pivot_offset = _area.size / 2.0
-	banner.scale = Vector2(0.3, 0.3)
-	banner.modulate.a = 0.0
-	var tw := create_tween()
-	tw.tween_property(banner, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(banner, "modulate:a", 1.0, 0.3)
-	tw.tween_interval(maxf(lasts, 1.5))
-	tw.tween_property(banner, "modulate:a", 0.0, 0.8)
-	tw.tween_callback(banner.queue_free)
+	get_tree().create_timer(minf(1.2, lasts)).timeout.connect(_show_rewards, CONNECT_ONE_SHOT)
+
+
+func _show_rewards() -> void:
+	if not _done:
+		return
+	if not is_instance_valid(_reward_dialog):
+		_reward_dialog = CompletionRewards.new()
+		_reward_dialog.reward = _completion_reward.duplicate()
+		_reward_dialog.profile = profile
+		_reward_dialog.picture = SaveStore.load_thumbnail(puzzle_id)
+		_reward_dialog.puzzle_name = GemCatalog.puzzle_name(_meta.get("type", "mandala"))
+		_reward_dialog.menu_requested.connect(_leave)
+		_reward_dialog.packs_requested.connect(_open_collection)
+		_reward_dialog.closed.connect(_update_board_input)
+		_reward_dialog.hide()
+		add_child(_reward_dialog)
+	if not _reward_dialog.visible:
+		_reward_dialog.open()
+	else:
+		_reward_dialog.contain_focus()
+	_update_board_input()
+
+
+func _open_collection() -> void:
+	_flights.land_all()
+	_save(true)
+	collection_requested.emit()
 
 
 func _process(delta: float) -> void:
@@ -863,7 +881,12 @@ func _leave() -> void:
 
 ## Android's back button.
 func go_back() -> void:
-	_leave()
+	if is_instance_valid(_reward_dialog) and _reward_dialog.visible:
+		_reward_dialog.close()
+	elif _powers_panel.visible:
+		_powers_panel.close()
+	else:
+		_leave()
 
 
 func _notification(what: int) -> void:
@@ -873,9 +896,9 @@ func _notification(what: int) -> void:
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	var b := GameTheme.button(text)
+	b.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	b.pressed.connect(action)
+	b.add_theme_font_size_override("font_size", 32)
 	parent.add_child(b)
 	return b

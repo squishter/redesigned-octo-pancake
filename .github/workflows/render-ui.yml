@@ -1,0 +1,61 @@
+name: Render player UI
+
+on:
+  push:
+    branches: [feat/menu-pack-experience]
+    paths:
+      - .github/workflows/render-ui.yml
+      - tests/*menu_ui.gd
+      - tests/run_pack_bundles.gd
+      - game/**
+      - scenes/game/**
+      - assets/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renders:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up a software Vulkan display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth mesa-vulkan-drivers libvulkan1
+      - name: Install Godot 4.7.2
+        run: |
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip \
+            -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+      - name: Capture the actual game menus and pack reveal
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          XDG_DATA_HOME: /tmp/gem-ui-render-data
+          XDG_CONFIG_HOME: /tmp/gem-ui-render-config
+          XDG_CACHE_HOME: /tmp/gem-ui-render-cache
+        run: |
+          set -euo pipefail
+          godot="$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+          "$godot" --headless --editor --import --quit --path .
+          "$godot" --headless --path . -s res://tests/run_menu_ui.gd
+          "$godot" --headless --path . -s res://tests/run_pack_bundles.gd
+          export VK_ICD_FILENAMES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*' | head -n 1)"
+          xvfb-run -a -s '-screen 0 1080x2400x24' "$godot" \
+            --path . --resolution 1080x2400 --audio-driver Dummy \
+            --rendering-method mobile --rendering-driver vulkan \
+            -s res://tests/render_menu_ui.gd
+          test -s build/ui-renders/01-main-menu.png
+          test -s build/ui-renders/04-unlocked-card.png
+          test -s build/ui-renders/10-completion-rewards.png
+          test -s build/ui-renders/14-bundle-summary.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paint-with-gems-ui-renders
+          path: build/ui-renders/*.png
+          if-no-files-found: error
+          retention-days: 14

@@ -797,7 +797,7 @@ func test_packs() -> void:
 	check(Unlockables.themes_gained(before, profile["unlocks"]).has("reds"), "the reds didn't bring Ruby Reds")
 	check(Packs.daily_open(profile) and not Packs.daily_open(profile), "daily pick not exactly once a day")
 	var got := Packs.open(profile, "colors", true, rng)
-	check(got.get("kind") == "color" and Packs.picks(profile) == 0, "free pick didn't open a color pack")
+	check(not got.is_empty() and got[0].get("kind") == "color" and Packs.picks(profile) == 0, "free pick didn't open a color pack")
 	var meta := {}
 	var r1 := Packs.puzzle_finished(profile, meta, false)
 	var r2 := Packs.puzzle_finished(profile, meta, false)
@@ -814,7 +814,7 @@ func test_packs() -> void:
 		while not Packs.sold_out(pack, profile) and guard < 200:
 			guard += 1
 			profile["wallet"]["coins"] = 1000
-			var item := Packs.open(profile, pack, false, rng)
+			var item: Dictionary = Packs.open(profile, pack, false, rng)[0]
 			check(not seen.has(item["id"]), "%s pack repeated %s" % [pack, item["id"]])
 			seen[item["id"]] = true
 		check(Packs.sold_out(pack, profile), "%s pack never sold out" % pack)
@@ -826,7 +826,7 @@ func test_packs() -> void:
 		check(GemCatalog.has_cut(unlocks, pair[0], pair[1]), "cut %s not unlocked" % [pair])
 	# With everything else out, the Everything and power-up packs still give charges.
 	profile["wallet"]["coins"] = 1000
-	var power := Packs.open(profile, "all", false, rng)
+	var power: Dictionary = Packs.open(profile, "all", false, rng)[0]
 	check(power.get("kind") == "power" and Packs.charges(profile, power["id"]) > 0, "everything pack gave %s" % power)
 	check(Packs.spend(profile, power["id"]), "couldn't spend a power-up charge")
 

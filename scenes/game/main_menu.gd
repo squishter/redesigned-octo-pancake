@@ -15,17 +15,24 @@ signal play_requested(id: String)
 signal lab_requested
 signal collection_requested
 
-const LabTheme := preload("res://scenes/dev/lab_theme.gd")
-const THUMB_PX := 220
+const GameTheme := preload("res://scenes/game/game_theme.gd")
+const UI := preload("res://scenes/game/ui_widgets.gd")
+const THUMB_PX := 180
 ## Restart and Delete ask again; a second tap within this long confirms.
 const CONFIRM_MS := 3000
 
 ## The player's profile (SaveStore), shared with the app; set before adding.
 var profile: Dictionary = {}
+var show_developer_tools := OS.has_feature("editor")
 
+var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
-var _new_panel: Control
-var _settings_panel: Control
+var _new_panel: GameDialog
+var _settings_panel: GameDialog
+var _mode_buttons: Array[Button] = []
+var _theme_preview: HBoxContainer
+var _photo_actions: HBoxContainer
+var _busy_art: TextureRect
 var _kind: OptionButton
 var _source: OptionButton
 var _about: Label
@@ -52,88 +59,125 @@ var _result: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_menu_scroll = ScrollContainer.new()
+	_menu_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 40)
+	_menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(_menu_scroll)
+	SafeArea.apply(_menu_scroll)
+	DragScroll.attach(_menu_scroll)
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 32)
-	add_child(root)
-	SafeArea.apply(root)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 28)
+	_menu_scroll.add_child(root)
+	var eyebrow := Label.new()
+	eyebrow.text = "A LITTLE SPARKLE. A LITTLE YOU."
+	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	eyebrow.add_theme_font_size_override("font_size", 27)
+	eyebrow.add_theme_color_override("font_color", GameTheme.MINT)
+	root.add_child(eyebrow)
+	var illustration := TextureRect.new()
+	illustration.texture = load("res://assets/ui/hero.svg")
+	illustration.custom_minimum_size.y = 260
+	illustration.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	illustration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	illustration.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(illustration)
 
 	var title := Label.new()
 	title.text = "Paint With Gems"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 84)
-	title.add_theme_color_override("font_color", LabTheme.GOLD)
+	title.add_theme_font_size_override("font_size", 78)
+	title.add_theme_color_override("font_color", GameTheme.GOLD)
 	root.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "Make something beautiful, one gem at a time."
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtitle.add_theme_font_size_override("font_size", 32)
+	subtitle.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
+	root.add_child(subtitle)
 
 	var new_button := _button(root, "New puzzle", func() -> void: _open_new({}))
-	new_button.custom_minimum_size.y = LabTheme.TAP_HEIGHT * 1.3
+	new_button.custom_minimum_size.y = 156
+	new_button.theme_type_variation = "PrimaryButton"
 
-	var wallet := HBoxContainer.new()
+	var wallet := VBoxContainer.new()
 	root.add_child(wallet)
 	var coins := Label.new()
 	coins.text = "%d coins · %d free pick%s" % [Packs.coins(profile), Packs.picks(profile),
 			"" if Packs.picks(profile) == 1 else "s"]
 	coins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	coins.add_theme_color_override("font_color", LabTheme.GOLD)
+	coins.add_theme_color_override("font_color", GameTheme.GOLD)
+	coins.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coins.add_theme_font_size_override("font_size", 30)
 	wallet.add_child(coins)
 	var packs := _button(wallet, "Collection & packs", func() -> void: collection_requested.emit())
 	if Packs.picks(profile) > 0:
-		packs.text = "Collection & packs (%d free!)" % Packs.picks(profile)
-		packs.add_theme_color_override("font_color", LabTheme.GOLD)
+		packs.text = "Collection & packs · %d free pick%s" % [Packs.picks(profile), "" if Packs.picks(profile) == 1 else "s"]
+		packs.add_theme_color_override("font_color", GameTheme.GOLD)
+	packs.add_theme_font_size_override("font_size", 36)
 
-	# Choosing what to make: hidden until asked for.
-	var panel := PanelContainer.new()
-	panel.visible = false
-	root.add_child(panel)
-	_new_panel = panel
-	var form := VBoxContainer.new()
-	panel.add_child(form)
-	_new_title = Label.new()
-	form.add_child(_new_title)
-	var grid := GridContainer.new()
-	grid.columns = 2
-	form.add_child(grid)
-	# 1. What kind of puzzle.
-	_kind = _options(grid, "Puzzle")
-	for pair: Array in [["collage", "Gem collage"], ["kit", "Diamond kit"]]:
+	# Creation is a focused workshop, with the same jewel framing as packs.
+	_new_panel = GameDialog.new("Create a new puzzle", "Make a little time for something beautiful.", "picture")
+	_new_panel.preferred_height = 1820
+	_new_panel.hide()
+	add_child(_new_panel)
+	_new_title = _new_panel.title_label
+	var form := _new_panel.body
+	form.add_child(UI.label("01  ·  CHOOSE YOUR CANVAS", 27, GameTheme.MINT))
+	_kind = OptionButton.new()
+	_kind.hide()
+	form.add_child(_kind)
+	var modes := HBoxContainer.new()
+	form.add_child(modes)
+	var mode_group := ButtonGroup.new()
+	for pair: Array in [["collage", "Gem collage", "Freeform jeweled pictures", "collage"],
+			["kit", "Diamond kit", "A soothing gem-by-gem grid", "kit"]]:
+		var index := _kind.item_count
 		_kind.add_item(pair[1])
-		_kind.set_item_metadata(_kind.item_count - 1, pair[0])
-	_kind.item_selected.connect(func(_i: int) -> void: _fill_sources())
-	# 2. Where its picture comes from: an unlocked picture type, or a photo.
-	_source = _options(grid, "Picture")
+		_kind.set_item_metadata(index, pair[0])
+		var choice := UI.choice(pair[1], pair[2], pair[3])
+		choice.button_group = mode_group
+		choice.pressed.connect(func() -> void:
+			_kind.select(index)
+			_fill_sources())
+		modes.add_child(choice)
+		_mode_buttons.append(choice)
+	form.add_child(UI.label("02  ·  MAKE IT YOURS", 27, GameTheme.MINT))
+	_source = _options(form, "Picture")
 	_source.item_selected.connect(func(_i: int) -> void: _refresh_new())
-	# 3. Only the options that source has.
-	_theme = _options(grid, "Colors")
-	# Photo collages: the subject alone (when there is a clear one), or the whole photo.
-	_subject = _options(grid, "Photo")
+	_theme = _options(form, "Color story")
+	_theme.item_selected.connect(func(_i: int) -> void: _update_theme_preview())
+	_theme_preview = HBoxContainer.new()
+	_theme_preview.alignment = BoxContainer.ALIGNMENT_CENTER
+	form.add_child(_theme_preview)
+	_subject = _options(form, "Photo composition")
 	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
 		_subject.add_item(pair[1])
 		_subject.set_item_metadata(_subject.item_count - 1, pair[0])
-	# Photo kits: her gems, or the photo's own colors in that many.
-	_kit_colors = _options(grid, "Drill colors")
+	_kit_colors = _options(form, "Gem colors")
 	for pair: Array in [[0, "My gems"], [12, "Photo's own 12 colors"], [20, "Photo's own 20 colors"],
 			[30, "Photo's own 30 colors"]]:
 		_kit_colors.add_item(pair[1])
 		_kit_colors.set_item_metadata(_kit_colors.item_count - 1, pair[0])
-	# Kits: drills on the longer side.
-	_kit_size = _options(grid, "Kit size")
+	_kit_size = _options(form, "Picture size")
 	for size: String in PuzzleMaker.KIT_SIZES:
 		_kit_size.add_item("%s (%d)" % [PuzzleMaker.KIT_SIZES[size], KitGenerator.LONG_SIDES[size]])
 		_kit_size.set_item_metadata(_kit_size.item_count - 1, size)
 	_kit_size.select(1)
-	_about = Label.new()
-	_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_about.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	_about.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	_about = UI.label("", 29, GameTheme.TEXT_DIM)
 	form.add_child(_about)
-	var actions := HBoxContainer.new()
-	form.add_child(actions)
-	_start = _button(actions, "Start", _start_making)
-	# A photo source starts from one of her photos or one taken right now.
-	_choose_photo = _button(actions, "Choose photo…", func() -> void: _pick_photo(_photo_mode()))
-	_take_photo_button = _button(actions, "Take photo…", func() -> void: _take_photo(_photo_mode()))
-	for b: Button in [_start, _choose_photo, _take_photo_button]:
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_button(actions, "Cancel", func() -> void: _new_panel.visible = false)
+	_start = _button(_new_panel.actions, "Start creating", _start_making)
+	_start.icon = GameTheme.icon("play")
+	_start.theme_type_variation = "PrimaryButton"
+	_photo_actions = HBoxContainer.new()
+	_new_panel.actions.add_child(_photo_actions)
+	_choose_photo = _small_button(_photo_actions, "Choose photo", func() -> void: _pick_photo(_photo_mode()))
+	_take_photo_button = _small_button(_photo_actions, "Take photo", func() -> void: _take_photo(_photo_mode()))
+	for button: Button in [_choose_photo, _take_photo_button]:
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_button(_new_panel.actions, "Cancel", _new_panel.close).theme_type_variation = "QuietButton"
 	_photo_dialog = FileDialog.new()
 	_photo_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_photo_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -144,9 +188,11 @@ func _ready() -> void:
 
 	var saved := Label.new()
 	saved.text = "Your puzzles"
-	saved.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	saved.add_theme_color_override("font_color", GameTheme.GOLD)
+	saved.add_theme_font_size_override("font_size", 48)
 	root.add_child(saved)
 	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = 470
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(scroll)
@@ -155,46 +201,58 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
 
-	# Settings: hidden until asked for, saved as soon as they change.
-	_settings_panel = PanelContainer.new()
-	_settings_panel.visible = false
-	root.add_child(_settings_panel)
-	var settings_grid := GridContainer.new()
-	settings_grid.columns = 2
-	_settings_panel.add_child(settings_grid)
-	_setting(settings_grid, "Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
-	_setting(settings_grid, "Finale", "finale", GemCatalog.FINALES, "finales")
-
+	_settings_panel = GameDialog.new("Your finishing touches", "Make the sparkle feel like you.", "settings")
+	_settings_panel.preferred_height = 1120
+	_settings_panel.hide()
+	add_child(_settings_panel)
+	_setting(_settings_panel.body, "Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
+	_setting(_settings_panel.body, "Grand finale", "finale", GemCatalog.FINALES, "finales")
+	_button(_settings_panel.actions, "Lovely, let's create", _settings_panel.close).theme_type_variation = "PrimaryButton"
 	var footer := HBoxContainer.new()
 	root.add_child(footer)
-	var settings_button := _small_button(footer, "Settings", func() -> void:
-		_settings_panel.visible = not _settings_panel.visible)
-	settings_button.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-	var lab := _small_button(footer, "Generator lab (debug)", func() -> void: lab_requested.emit())
-	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lab.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	_small_button(footer, "Settings", _settings_panel.open).theme_type_variation = "QuietButton"
+	if show_developer_tools:
+		var lab := _small_button(footer, "Generator lab (debug)", func() -> void: lab_requested.emit())
+		lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lab.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 
 	# Covers the menu while a puzzle is being made.
 	_busy = ColorRect.new()
-	(_busy as ColorRect).color = Color(LabTheme.BG, 0.85)
+	(_busy as ColorRect).color = Color(GameTheme.BG, 0.97)
+	_busy.z_index = 400
 	_busy.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_busy.mouse_filter = Control.MOUSE_FILTER_STOP
 	_busy.visible = false
 	add_child(_busy)
-	_busy_label = Label.new()
-	_busy_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_busy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_busy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_busy_label.add_theme_color_override("font_color", LabTheme.GOLD)
-	_busy.add_child(_busy_label)
+	var busy_center := CenterContainer.new()
+	busy_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_busy.add_child(busy_center)
+	var busy_card := UI.panel(true, 40)
+	busy_card.custom_minimum_size.x = 760
+	busy_center.add_child(busy_card)
+	var busy_copy := VBoxContainer.new()
+	busy_card.add_child(busy_copy)
+	_busy_art = UI.icon("gem", 180)
+	busy_copy.add_child(_busy_art)
+	_busy_label = UI.label("Gathering your gems…", 44, GameTheme.GOLD, true)
+	busy_copy.add_child(_busy_label)
+	busy_copy.add_child(UI.label("Your next little masterpiece is on its way.", 29, GameTheme.TEXT_DIM, true))
 
 	_camera = CameraCapture.new()
+	_camera.player_style = true
 	_camera.captured.connect(func(photo: Image) -> void:
 		if _task_id < 0:
 			_start_photo(photo, _photo_kind))
 	add_child(_camera)
 
+	for overlay: Control in [_new_panel, _settings_panel, _busy, _camera]:
+		overlay.visibility_changed.connect(_sync_menu_input)
 	_refresh_list()
+
+
+func _sync_menu_input() -> void:
+	var blocked := _new_panel.visible or _settings_panel.visible or _busy.visible or _camera.visible
+	_menu_scroll.process_mode = Node.PROCESS_MODE_DISABLED if blocked else Node.PROCESS_MODE_INHERIT
 
 
 ## Opens the panel for a new puzzle, or (with a puzzle's meta) for
@@ -222,7 +280,7 @@ func _open_new(recolor: Dictionary) -> void:
 	_source.disabled = not recolor.is_empty()
 	_new_title.text = "Recolor this picture" if not recolor.is_empty() else "A new puzzle"
 	_refresh_new()
-	_new_panel.visible = true
+	_new_panel.open()
 
 
 ## The sources for the chosen kind: her unlocked picture types of that kind,
@@ -250,16 +308,41 @@ func _refresh_new() -> void:
 	var photo := _is_photo()
 	var recoloring := not _recolor.is_empty()
 	_show_row(_theme, not photo)
+	_theme_preview.visible = not photo
 	_show_row(_subject, photo and not kit)
 	_show_row(_kit_colors, photo and kit)
 	_show_row(_kit_size, kit and not recoloring)
 	_start.visible = not photo
 	_choose_photo.visible = photo
 	_take_photo_button.visible = photo
+	_photo_actions.visible = photo
 	_start.disabled = _theme.item_count == 0
 	var type_id: String = _photo_mode() if photo else str(_source.get_item_metadata(maxi(_source.selected, 0)))
 	var info: Dictionary = GemCatalog.PUZZLES.get(type_id, GemCatalog.PHOTO_MODES.get(type_id, {}))
 	_about.text = info.get("about", "")
+	_source.icon = GameTheme.icon("camera" if photo else "picture")
+	for i in _mode_buttons.size():
+		_mode_buttons[i].set_pressed_no_signal(i == _kind.selected)
+		_mode_buttons[i].disabled = recoloring
+	_update_theme_preview()
+	_new_panel.contain_focus.call_deferred()
+
+
+func _update_theme_preview() -> void:
+	for child in _theme_preview.get_children():
+		_theme_preview.remove_child(child)
+		child.queue_free()
+	if _theme.selected < 0:
+		return
+	var id: String = _theme.get_item_metadata(_theme.selected)
+	for gem: String in GemCatalog.THEMES.get(id, {}).get("gems", []):
+		var swatch := UI.panel(false, 0)
+		var style := swatch.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+		style.bg_color = GemCatalog.color_of(gem)
+		style.set_corner_radius_all(10)
+		swatch.add_theme_stylebox_override("panel", style)
+		swatch.custom_minimum_size = Vector2(48, 34)
+		_theme_preview.add_child(swatch)
 
 
 func _is_kit() -> bool:
@@ -343,6 +426,8 @@ func _make(request: Dictionary, unlocks: Dictionary) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _busy.visible:
+		_busy_art.modulate.a = 0.7 + 0.3 * sin(Time.get_ticks_msec() / 500.0)
 	if _task_id < 0 or not WorkerThreadPool.is_task_completed(_task_id):
 		return
 	WorkerThreadPool.wait_for_task_completion(_task_id)
@@ -364,9 +449,10 @@ func go_back() -> void:
 		return
 	if _camera.visible:
 		_camera.close()
-	elif _new_panel.visible or _settings_panel.visible:
-		_new_panel.visible = false
-		_settings_panel.visible = false
+	elif _new_panel.visible:
+		_new_panel.close()
+	elif _settings_panel.visible:
+		_settings_panel.close()
 	else:
 		get_tree().quit()
 
@@ -376,49 +462,69 @@ func _refresh_list() -> void:
 		child.queue_free()
 	var puzzles: Array = profile["puzzles"]
 	if puzzles.is_empty():
+		var welcome := PanelContainer.new()
+		welcome.custom_minimum_size.y = 310
+		_list.add_child(welcome)
+		var box := VBoxContainer.new()
+		box.alignment = BoxContainer.ALIGNMENT_CENTER
+		welcome.add_child(box)
+		var art := TextureRect.new()
+		art.texture = GameTheme.icon("picture")
+		art.custom_minimum_size.y = 100
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		box.add_child(art)
 		var none := Label.new()
-		none.text = "No puzzles yet. Start one above!"
-		none.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-		_list.add_child(none)
+		none.text = "Your next beautiful thing starts here."
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		none.add_theme_font_size_override("font_size", 36)
+		box.add_child(none)
+		var tip := Label.new()
+		tip.text = "Start a puzzle above. Come back whenever you like."
+		tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.add_theme_font_size_override("font_size", 28)
+		tip.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
+		box.add_child(tip)
 		return
 	for meta: Dictionary in puzzles:
 		_list.add_child(_card(meta))
 
 
 func _card(meta: Dictionary) -> Control:
-	var card := PanelContainer.new()
+	var card := UI.panel(bool(meta["done"]))
+	var column := VBoxContainer.new()
+	card.add_child(column)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 24)
-	card.add_child(row)
+	column.add_child(row)
+	var thumb_frame := UI.panel(false, 8)
+	thumb_frame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	row.add_child(thumb_frame)
 	var thumb := TextureRect.new()
 	thumb.custom_minimum_size = Vector2(THUMB_PX, THUMB_PX)
 	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	thumb.texture = SaveStore.load_thumbnail(meta["id"])
-	row.add_child(thumb)
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(info)
-	var heading := Label.new()
-	heading.text = GemCatalog.puzzle_name(meta["type"])
-	info.add_child(heading)
-	var detail := Label.new()
-	var total := maxi(1, int(meta["total"]))
-	var state := "Finished" if meta["done"] else "%d%% placed" % int(100.0 * meta["filled"] / total)
-	var colors: String = "From your photo" if GemCatalog.PHOTO_MODES.has(meta["type"]) else GemCatalog.theme_name(
-			meta["theme"])
-	detail.text = "%s · %s · %s" % [colors, state, _ago(meta["updated"])]
-	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	detail.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-	info.add_child(detail)
+	thumb_frame.add_child(thumb)
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(copy)
+	copy.add_child(UI.label("COMPLETE" if meta["done"] else "IN YOUR STUDIO", 25, GameTheme.MINT))
+	copy.add_child(UI.label(GemCatalog.puzzle_name(meta["type"]), 42, GameTheme.GOLD))
+	var colors: String = "From your photo" if GemCatalog.PHOTO_MODES.has(meta["type"]) else GemCatalog.theme_name(meta["theme"])
+	copy.add_child(UI.label("%s · %s" % [colors, _ago(meta["updated"])], 28, GameTheme.TEXT_DIM))
+	var fraction := float(meta["filled"]) / maxi(1, int(meta["total"]))
+	column.add_child(UI.progress(fraction))
+	column.add_child(UI.label("%d%% complete · %d / %d gems" % [roundi(fraction * 100), meta["filled"], meta["total"]],
+		26, GameTheme.TEXT_DIM))
 	var buttons := HFlowContainer.new()
-	info.add_child(buttons)
+	column.add_child(buttons)
 	var id: String = meta["id"]
-	_small_button(buttons, "View" if meta["done"] else "Continue", func() -> void: play_requested.emit(id))
+	var resume := _small_button(buttons, "View" if meta["done"] else "Continue", func() -> void: play_requested.emit(id))
+	resume.theme_type_variation = "PrimaryButton"
 	var restart := _small_button(buttons, "Restart", Callable())
 	restart.pressed.connect(_confirmed.bind(restart, func() -> void: _restart(meta)))
-	# Photo puzzles take their colors from the photo, so they don't recolor.
 	if not GemCatalog.PHOTO_MODES.has(meta["type"]):
 		_small_button(buttons, "Recolor", func() -> void: _open_new(meta))
 	var delete := _small_button(buttons, "Delete", Callable())
@@ -439,8 +545,13 @@ func _setting(parent: Control, label: String, key: String, catalog: Dictionary, 
 			ob.set_item_metadata(ob.item_count - 1, id)
 			if id == settings.get(key, ""):
 				ob.select(ob.item_count - 1)
+	var about := UI.label("", 29, GameTheme.TEXT_DIM)
+	parent.add_child(about)
+	if ob.selected >= 0:
+		about.text = catalog[ob.get_item_metadata(ob.selected)].get("about", "")
 	ob.item_selected.connect(func(i: int) -> void:
 		settings[key] = ob.get_item_metadata(i)
+		about.text = catalog[settings[key]].get("about", "")
 		SaveStore.save_profile(profile))
 
 
@@ -485,28 +596,16 @@ static func _ago(unix: int) -> String:
 
 ## A labeled row in a two-column grid; _show_row shows or hides both halves.
 func _options(parent: Control, label: String) -> OptionButton:
-	var l := Label.new()
-	l.text = label
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	parent.add_child(l)
-	var ob := OptionButton.new()
-	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ob.custom_minimum_size.y = LabTheme.TAP_HEIGHT
-	ob.fit_to_longest_item = false
-	ob.set_meta("label", l)
-	parent.add_child(ob)
-	return ob
+	return UI.field(parent, label, "palette" if label in ["Color story", "Gem colors"] else "picture")
 
 
-func _show_row(c: Control, on: bool) -> void:
-	c.visible = on
-	(c.get_meta("label") as Control).visible = on
+func _show_row(control: Control, on: bool) -> void:
+	(control.get_meta("row") as Control).visible = on
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	var b := GameTheme.button(text)
+	b.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	if action.is_valid():
 		b.pressed.connect(action)
 	parent.add_child(b)
@@ -515,5 +614,7 @@ func _button(parent: Control, text: String, action: Callable) -> Button:
 
 func _small_button(parent: Control, text: String, action: Callable) -> Button:
 	var b := _button(parent, text, action)
-	b.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	b.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
+	b.theme_type_variation = "QuietButton"
+	b.add_theme_constant_override("icon_max_width", 40)
 	return b
