@@ -167,8 +167,8 @@ const PUZZLES := {
 const STARTING_PUZZLES := ["mandala"]
 ## Puzzles made from her own photos: always there, not unlocked.
 const PHOTO_MODES := {
-	"photo_collage": {"name": "Photo collage", "about": "Your photo traced into gem shapes."},
-	"photo_kit": {"name": "Photo kit", "about": "Your photo as a grid of drills."},
+	"photo_collage": {"name": "Photo collage", "short": "collage", "about": "Your photo traced into gem shapes."},
+	"photo_kit": {"name": "Photo kit", "short": "kit", "about": "Your photo as a grid of drills."},
 }
 
 ## Picture features, off until unlocked.

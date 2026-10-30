@@ -35,7 +35,11 @@ mode for trying out new pattern generation.
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Photos.** *Photo collage…* and *Photo kit…* in the New puzzle panel pick
   one of her photos (the phone's own picker; turned upright by its EXIF orientation, see `game/photo_loader.gd`) and turn it into a collage
-  or a kit of drills, in her unlocked colors. Photo puzzles can't be
+  or a kit of drills, in her unlocked colors. *Camera collage…* and
+  *Camera kit…* take a new photo instead (`scenes/game/camera_capture.gd`:
+  a full-screen camera view through `CameraServer`, with Switch for the
+  other camera and Turn for the photo's way up; Android asks for the camera
+  permission, which the export preset must include). Photo puzzles can't be
   recolored: their colors come from the photo.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
     edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
@@ -173,7 +177,7 @@ Buzzes need the `VIBRATE` permission in the Android export preset
 | Source | Kit mode | Collage mode |
 | --- | --- | --- |
 | Seeded mandala | `PictureSources.mandala_image()` → `KitGenerator.generate()` | `PictureSources.mandala_collage()` |
-| Photo | `KitGenerator.generate(photo)` | `PictureSources.photo_collage()` |
+| Photo (picked or from the camera) | `KitGenerator.generate(photo)` | `PictureSources.photo_collage()` |
 | Bundled line art | render with its colors → `KitGenerator.generate()` | `PictureSources.line_art_collage()` |
 
 ## Generators (`gen/`)
@@ -258,7 +262,10 @@ hold still when it does.
 - Open the project in Godot 4.7. The main scene, `scenes/game/app.tscn`, is
   the game; *Generator lab (debug)* in its menu opens the lab
   (`scenes/dev/generator_lab.tscn`, which also runs on its own), a dev screen. Pick a mandala shape, theme, seed and wobble, or load a
-  photo. *New pattern* (or the Pattern box) makes another collage of the same
+  photo (*Photo…*) or take one (*Camera…*). *Kit size* has the game's sizes,
+  small to X-large (50-250 drills on the longer side), and *Drill colors*
+  makes kits in the starter gem colors or in the picture's own colors (as
+  many as *Kit colors*, mapped like the game's photo kits). *New pattern* (or the Pattern box) makes another collage of the same
   lines; Setting and Line gems force a choice. Then view it as a collage, a kit or plain line art, and save the JSON.
   The **Lines** box above the picture flips between the collage (or kit) and
   the line art it was made from, without regenerating and keeping the zoom,

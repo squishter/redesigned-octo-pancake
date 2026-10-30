@@ -1,6 +1,8 @@
 extends Control
 ## Developer screen for the puzzle generators: pick a source (seeded mandala
-## or a photo) and a mode, generate on a worker thread, and look at the result.
+## or a photo, picked or taken with the camera) and a mode, generate on a
+## worker thread, and look at the result. Kits come in the game's sizes (up
+## to X-large), with drills in the gem colors or the picture's own colors.
 ## Laid out for phones: the picture fills the screen (pinch to zoom, drag to
 ## pan, double-tap to fit), with the main actions in a bar at the bottom and
 ## every setting in an Options panel above it. The Lines box above the
@@ -24,6 +26,7 @@ var _frame: OptionButton
 var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
+var _drill_colors: OptionButton
 var _sparsity: OptionButton
 var _line_style: OptionButton
 var _setting: OptionButton
@@ -45,6 +48,7 @@ var _board_stale := false
 var _options_panel: Control
 var _options_button: Button
 var _file_dialog: FileDialog
+var _camera: CameraCapture
 
 ## Show a Menu button that goes back to the game.
 var show_back := false
@@ -117,6 +121,7 @@ func _ready() -> void:
 	list.add_child(actions)
 	_button(actions, "Generate", _generate)
 	_button(actions, "Photo…", func() -> void: _file_dialog.popup_centered_ratio(0.8))
+	_button(actions, "Camera…", func() -> void: _camera.open())
 	_button(actions, "Save JSON", _save)
 
 	var controls := GridContainer.new()
@@ -139,7 +144,12 @@ func _ready() -> void:
 	_frame = _options(controls, "Frame", ["auto", "off", "on"])
 	_theme = _options(controls, "Theme", Array(Palettes.theme_names()))
 	_mode = _options(controls, "Mode", ["Collage", "Kit", "Line art"])
-	_kit_size = _options(controls, "Kit size", KitGenerator.BOARD_SIZES.keys())
+	# The game's kit sizes: drills on the longer side.
+	_kit_size = _options(controls, "Kit size", KitGenerator.LONG_SIDES.keys())
+	# Gem colors (k-means, snapped to the starter gems) or the picture's own
+	# colors (as many as Kit colors), each cell mapped straight to the nearest
+	# as the game's photo kits do.
+	_drill_colors = _options(controls, "Drill colors", ["gems", "photo"])
 	_sparsity = _options(controls, "Sparse", ["auto", "none", "some", "lots"])
 	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)
 	_setting = _options(controls, "Setting", ["auto"] + CollageGenerator.SETTINGS)
@@ -174,11 +184,18 @@ func _ready() -> void:
 	_file_dialog.file_selected.connect(_on_photo_selected)
 	add_child(_file_dialog)
 
+	_camera = CameraCapture.new()
+	_camera.captured.connect(_use_photo)
+	add_child(_camera)
+
 	_generate()
 
 
 ## Back to the game (a picture being made finishes first: its worker writes here).
 func go_back() -> void:
+	if _camera.visible:
+		_camera.close()
+		return
 	if not show_back:
 		return
 	if _task_id >= 0:
@@ -318,6 +335,11 @@ func _on_photo_selected(path: String) -> void:
 	if img == null or img.is_empty():
 		_say("Couldn't load %s" % path)
 		return
+	_use_photo(img)
+
+
+## A photo picked or taken: the source from now on.
+func _use_photo(img: Image) -> void:
 	_photo = img
 	_source.select(1)
 	_generate()
@@ -345,6 +367,7 @@ func _generate() -> void:
 		"mode": _selected(_mode),
 		"kit_size": _selected(_kit_size),
 		"colors": int(_colors.value),
+		"drill_colors": _selected(_drill_colors),
 		"sparsity": {"auto": -1.0, "none": 0.0, "some": 0.3, "lots": 0.6}[_selected(_sparsity)],
 		"line_style": _selected(_line_style),
 		"setting": _selected(_setting),
@@ -388,7 +411,12 @@ func _run_job(job: Dictionary) -> void:
 					else PictureSources.mandala_collage(job["seed"], opts, lines))
 		"Kit":
 			var src: Image = photo if photo else PictureSources.mandala_image(job["seed"], opts, lines)
-			out["picture"] = KitGenerator.generate(src, {"size": job["kit_size"], "colors": job["colors"], "seed": job["seed"]})
+			var kit_options := {"size": KitGenerator.board_long(src, KitGenerator.LONG_SIDES[job["kit_size"]]),
+					"colors": job["colors"], "seed": job["seed"]}
+			if job["drill_colors"] == "photo":
+				kit_options.merge({"direct": true, "exact": true, "dither": PuzzleMaker.PHOTO_OWN_DITHER,
+						"cleanup": false}, true)
+			out["picture"] = KitGenerator.generate(src, kit_options)
 	_result = out
 
 
@@ -453,7 +481,8 @@ func _process(_delta: float) -> void:
 			var k: Dictionary = out["picture"]
 			_canvas.show_kit(k)
 			_show_on_board(k)
-			_say("Kit: %d×%d, %d colors — %d ms" % [k["width"], k["height"], k["palette"].size(), ms])
+			_say("Kit: %d×%d, %d %s colors — %d ms" % [k["width"], k["height"], k["palette"].size(),
+					"own" if k["palette"][0]["gem_color_id"] == null else "gem", ms])
 		_:
 			_canvas.show_lines(art["mask"], art["width"], art["height"])
 			_show_on_board({})

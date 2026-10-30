@@ -5,8 +5,9 @@ extends Control
 ## continued, restarted, recolored (the same picture made again in another
 ## unlocked theme, as a new puzzle beside it) or deleted. Collection & packs
 ## shows what she has and opens packs for more (with her coins and free
-## picks shown beside it). Settings (how placed gems go in, the finale) and
-## the generator lab, a debug mode, are at the bottom.
+## picks shown beside it). Photo puzzles start from one of her photos or one
+## she takes right then with the camera. Settings (how placed gems go in, the
+## finale) and the generator lab, a debug mode, are at the bottom.
 
 signal play_requested(id: String)
 signal lab_requested
@@ -32,6 +33,7 @@ var _subject: OptionButton
 var _kit_size: OptionButton
 var _kit_colors: OptionButton
 var _photo_dialog: FileDialog
+var _camera: CameraCapture
 ## Which photo puzzle the picker is choosing a photo for.
 var _photo_kind := ""
 ## The puzzle being recolored, or empty for a brand new one.
@@ -121,6 +123,13 @@ func _ready() -> void:
 	for kind: String in GemCatalog.PHOTO_MODES:
 		var b := _button(photo_buttons, GemCatalog.PHOTO_MODES[kind]["name"] + "…", func() -> void: _pick_photo(kind))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Or a photo taken right now.
+	var camera_buttons := HBoxContainer.new()
+	_photo_row.add_child(camera_buttons)
+	for kind: String in GemCatalog.PHOTO_MODES:
+		var b := _button(camera_buttons, "Camera %s…" % GemCatalog.PHOTO_MODES[kind]["short"],
+				func() -> void: _take_photo(kind))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_photo_dialog = FileDialog.new()
 	_photo_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_photo_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -174,6 +183,12 @@ func _ready() -> void:
 	_busy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_busy_label.add_theme_color_override("font_color", LabTheme.GOLD)
 	_busy.add_child(_busy_label)
+
+	_camera = CameraCapture.new()
+	_camera.captured.connect(func(photo: Image) -> void:
+		if _task_id < 0:
+			_start_photo(photo, _photo_kind))
+	add_child(_camera)
 
 	_refresh_list()
 
@@ -229,6 +244,11 @@ func _start_making() -> void:
 func _pick_photo(kind: String) -> void:
 	_photo_kind = kind
 	_photo_dialog.popup_centered_ratio(0.9)
+
+
+func _take_photo(kind: String) -> void:
+	_photo_kind = kind
+	_camera.open()
 
 
 ## A photo was picked: make its puzzle, shrunk first (big phone photos
@@ -288,7 +308,9 @@ func _process(_delta: float) -> void:
 func go_back() -> void:
 	if _task_id >= 0:
 		return
-	if _new_panel.visible or _settings_panel.visible:
+	if _camera.visible:
+		_camera.close()
+	elif _new_panel.visible or _settings_panel.visible:
 		_new_panel.visible = false
 		_settings_panel.visible = false
 	else:
