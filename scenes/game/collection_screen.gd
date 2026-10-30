@@ -287,7 +287,7 @@ func _build_sheet() -> void:
 	_sheet.position = Vector2(-100000.0, 0.0)
 	_sheet.size = Vector2(cols, rows) * ICON_PX
 	add_child(_sheet)
-	_sheet.set_always_render()
+	_sheet.set_always_render(GemIcons.FPS)
 	_sheet.show_collage({"width": cols * ICON_CELL, "height": rows * ICON_CELL, "slots": stones})
 	for k in stones.size():
 		var icon := AtlasTexture.new()
@@ -390,8 +390,8 @@ func _collection_extras(unlocks: Dictionary) -> void:
 	for p: String in GemCatalog.POWERS:
 		var info: Dictionary = GemCatalog.POWERS[p]
 		var n := Packs.charges(profile, p)
-		if profile["powers"].has(p):
-			_item_row(_collection_list, "%s  ×%d" % [info["name"], n], info["about"], n > 0)
+		if profile["powers"].has(p) or SaveStore.is_unlock_all(profile):
+			_item_row(_collection_list, "%s  ×%s" % [info["name"], Packs.charges_text(profile, p)], info["about"], n > 0)
 		else:
 			_item_row(_collection_list, "?", "Find it in a power-up pack.", false)
 

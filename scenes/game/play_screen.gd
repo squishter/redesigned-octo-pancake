@@ -62,6 +62,9 @@ const POWER_EFFECTS := ["big_brush", "auto_finish", "free_hand", "double_coins",
 		"sprinkle"]
 ## The finished bar's words once the finale is over.
 const DONE_TEXT := "Beautifully finished. Pinch and pan to admire your work."
+## Holding the progress line this long (seconds) shows or hides the
+## performance readout.
+const READOUT_PRESS := 0.8
 
 ## Set before adding to the tree.
 var puzzle_id := ""
@@ -130,6 +133,8 @@ var _hint_carry := 0.0
 var _ring: Control
 var _ring_slot := -1
 var _ring_time := 0.0
+var _perf: PerfReadout
+var _perf_press: Timer
 
 
 func _ready() -> void:
@@ -156,6 +161,21 @@ func _ready() -> void:
 	controls.add_child(progress_copy)
 	_progress = UI.label("", 30, GameTheme.TEXT)
 	progress_copy.add_child(_progress)
+	_progress.mouse_filter = Control.MOUSE_FILTER_STOP
+	_perf_press = Timer.new()
+	_perf_press.one_shot = true
+	_perf_press.wait_time = READOUT_PRESS
+	_perf_press.timeout.connect(func() -> void:
+		_perf.toggle()
+		profile["settings"][PerfReadout.SHOWN_KEY] = PerfReadout.shown
+		SaveStore.save_profile(profile))
+	add_child(_perf_press)
+	_progress.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_perf_press.start()
+			else:
+				_perf_press.stop())
 	_progress_track = UI.progress(0)
 	progress_copy.add_child(_progress_track)
 	_hint = HintButton.new()
@@ -218,6 +238,10 @@ func _ready() -> void:
 	_ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ring.draw.connect(_draw_ring)
 	_area.add_child(_ring)
+	_perf = PerfReadout.new()
+	_perf.board = _board
+	_perf.position = Vector2(16.0, 16.0)
+	_area.add_child(_perf)
 	_board.stroke_filter = _can_stroke
 	_board.stroke_started.connect(_on_stroke_started)
 	_board.stroke_moved.connect(_on_stroke_moved)
@@ -320,7 +344,7 @@ func _build_icons() -> void:
 	_icons.position = Vector2(-100000.0, 0.0)
 	_icons.size = Vector2(cols, rows) * ICON_PX
 	add_child(_icons)
-	_icons.set_always_render()
+	_icons.set_always_render(GemIcons.FPS)
 	_icons.show_collage({"width": cols * ICON_CELL, "height": rows * ICON_CELL, "slots": stones})
 	for t in n:
 		var icon := AtlasTexture.new()
@@ -622,7 +646,7 @@ func _refresh_powers() -> void:
 		if n <= 0 and not on:
 			continue
 		any = true
-		var text := UI.item(_powers_list, "%s  ×%d" % [info["name"], n],
+		var text := UI.item(_powers_list, "%s  ×%s" % [info["name"], Packs.charges_text(profile, power)],
 			info["about"] + (" · For this whole picture" if info["kind"] == "puzzle" else ""), "power")
 		var about := text.get_child(1) as Label
 		var use := _button(text.get_parent(), "Active" if on else "Use", func() -> void: _use_power(power))

@@ -11,9 +11,10 @@ extends SubViewportContainer
 ## glints flare into star sparkles (gem_sparkle.gdshader). Caustics follow
 ## the light's direction only, so they hold still when it does.
 ##
-## Stones of one shape and cut share a mesh and draw as one MultiMesh, so
-## thousands stay cheap. Pinch to zoom, drag to pan, double-tap to fit (mouse
-## wheel on desktop), like PreviewCanvas.
+## Stones of one shape, cut and size share a mesh and draw as one
+## MultiMesh, so thousands stay cheap; tiny ones on screen draw as a flat
+## outline each (IMPOSTOR_PX). Pinch to zoom, drag to pan, double-tap to fit
+## (mouse wheel on desktop), like PreviewCanvas.
 ##
 ## For play, stones can be hidden until they are placed (`shown` in
 ## show_collage, set_slot_shown), pop in when placed (fill_slot), and ripple
@@ -31,6 +32,8 @@ const GEM_SHADER := preload("res://render/gem.gdshader")
 const SHADOW_SHADER := preload("res://render/gem_shadow.gdshader")
 const SPARKLE_SHADER := preload("res://render/gem_sparkle.gdshader")
 const PAPER_SHADER := preload("res://render/paper.gdshader")
+const GRAIN_SHADER := preload("res://render/paper_grain.gdshader")
+const IMPOSTOR_SHADER := preload("res://render/gem_impostor.gdshader")
 const BACKGROUND := Color("#2a1f3d")
 const MAX_ZOOM := 40.0
 const DOUBLE_TAP_MS := 300
@@ -61,13 +64,38 @@ const GIRDLE_HEIGHT := 0.45
 ## itself is drawn flat. It keeps a board of stones from all flashing alike.
 const TILT_MAX_DEG := 15.0
 const CROWN_HEIGHT := 0.3
-## Shadow and sparkle planes, in stone half-sizes (shadows must cover the
-## farthest the light can push them).
-const SHADOW_SPAN := 2.6
+## Shadow and sparkle planes, in stone half-sizes. Shadows (with the light
+## their stone focuses) fade out by SHADOW_FADE from their stone, and each
+## draws on a plane SHADOW_SPAN each way that gem_shadow.gdshader moves
+## toward where they fall (up to SHADOW_SHIFT): the smallest that holds them
+## for any light (MIN_KEY_ELEVATION up) and tilt (TILT_MAX_DEG), and a little more.
+const SHADOW_FADE := 2.6
+const SHADOW_SPAN := 1.75
+const SHADOW_SHIFT := 1.05
+## A stone's shadow and the light it focuses fade out as it shrinks on
+## screen, from SHADOW_FADE_PX across to gone at SHADOW_GONE_PX (when every
+## stone is that small the shadows aren't drawn at all).
+const SHADOW_FADE_PX := 12.0
+const SHADOW_GONE_PX := 6.0
 const SPARKLE_SPAN := 1.7
+## Stones smaller than this on screen (px across) draw as a flat outline
+## each, their facets from a picture (gem_impostor.gdshader, GemMesh.
+## get_facets), and go back to their meshes above IMPOSTOR_PX x
+## IMPOSTOR_BACK, so a pinch at the switch doesn't flicker. Gems are layered
+## by size (powers of 2) as well as shape and cut, so each size switches on
+## its own. A board gathers the pictures it needs into one FacetAtlas.
+const IMPOSTOR_PX := 10.0
+const IMPOSTOR_BACK := 1.2
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
 const KIT_DRILL := 0.98
+## The paper's grain is baked into a texture at most this many texels per
+## board unit and this many on a side (it is very soft; filtering fills in).
+const GRAIN_DENSITY := 2.0
+const GRAIN_MAX_PX := 2048
+## The ways debug_test can draw a board.
+const DEBUG_TESTS := ["normal", "no shadows", "no sparkles", "flat gems", "no gems", "MSAA 2x", "MSAA off",
+		"half resolution", "no impostors"]
 ## The key light: where it hangs when the picture appears (azimuth in the
 ## board's xz plane, toward the picture's top left; elevation above the
 ## paper) and how far it drifts. Radians.
@@ -86,7 +114,19 @@ const TURN_GAIN := 2.0
 ## How quickly gravity readings and the light settle (per second).
 const SENSOR_SMOOTH := 6.0
 const LIGHT_SMOOTH := 8.0
+## The board renders every frame while something moves (a touch, a pan or
+## zoom, a glide, stones animating, the finale's sweep, the phone turning)
+## and IDLE_FPS times a second while only the light's slow drift changes it.
+## The game's own frame rate is capped by application/run/max_fps.
+const IDLE_FPS := 30.0
+## The light moving more than this (radians) since the last render counts as
+## the phone turning; the drift alone moves it less between idle frames.
+const LIGHT_STEP := 0.006
 
+## Debug builds: draws boards built from now on with one part left out or
+## cheapened (one of DEBUG_TESTS), to measure what costs what on a phone
+## with PerfReadout. Settings → Testing sets it.
+static var debug_test := "normal"
 ## The light drifts with time (tests freeze it and set the time instead).
 var animate := true
 ## Seconds of drift; the light's position over time.
@@ -104,6 +144,7 @@ var shadows := true:
 	set(value):
 		shadows = value
 		_shadow_material.set_shader_parameter("shadow_strength", 1.0 if value else 0.0)
+		_redraw()
 ## Room around the fitted picture, as a share of its size.
 var margin := MARGIN
 ## Off: touches, drags and the wheel leave the board alone.
@@ -112,6 +153,16 @@ var input_enabled := true
 ## that touch a stroke (stroke_started, stroke_moved, stroke_ended) instead
 ## of a pan. Unset, every touch pans.
 var stroke_filter := Callable()
+## How many frames the board has rendered (for performance readouts).
+var render_count := 0
+## Gems look the studio up in a map rendered once a frame (on) or work it
+## out for every pixel (off: sharper, far slower; for comparing).
+var studio_map := true:
+	set(value):
+		studio_map = value
+		_gem_material.set_shader_parameter("use_studio_map", value)
+		_impostor_material.set_shader_parameter("use_studio_map", value)
+		_redraw()
 
 var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
@@ -121,9 +172,19 @@ var _env := Environment.new()
 var _flares := true
 var _layers := Node3D.new()
 var _gem_material := ShaderMaterial.new()
+## Tiny stones: their material (see IMPOSTOR_PX) and facet pictures.
+var _impostor_material := ShaderMaterial.new()
+var _facets := FacetAtlas.new()
+## The flat-colored gems' material while debug_test is "flat gems".
+var _debug_flat: ShaderMaterial
 var _shadow_material := ShaderMaterial.new()
 var _sparkle_material := ShaderMaterial.new()
 var _paper_material := ShaderMaterial.new()
+## Renders the paper's grain once per board (see _bake_grain).
+var _grain := SubViewport.new()
+var _grain_rect := ColorRect.new()
+## What gems look the studio up in (see studio_map).
+var _studio := StudioMap.new()
 ## Picture size in board units (picture pixels, or kit cells x KIT_CELL).
 var _board := Vector2(1.0, 1.0)
 var _zoom := 1.0
@@ -144,9 +205,11 @@ var _last_tap_ms := -DOUBLE_TAP_MS
 var _last_tap_pos := Vector2.ZERO
 ## The touch drawing a stroke, or -1.
 var _stroke := -1
-## Each slot's instances in every layer: [MultiMesh, index, full transform].
+## Each slot's instances in every layer: [MultiMesh, index, full transform,
+## "gem", "shadow" or "sparkle"].
 var _refs: Array = []
-## Slots animating: slot -> [start (on _clock), 0 pop in, 1 pulse or 2 land].
+## Slots animating: slot -> [start (on _clock), 0 pop in or 1 land]. The
+## finale's pulses run in the shaders instead (see _finale_wave).
 var _anims := {}
 var _clock := 0.0
 ## The light drifts faster until then (on _clock), sweeping glints over a
@@ -157,6 +220,31 @@ var _sweep_until := 0.0
 var _finale := ""
 var _finale_from := Vector2.ZERO
 var _next_wave := 0.0
+## When the finale's current wave started (on _clock; NAN: none yet), and
+## what the stones' delays in it were worked out for ([style, from]; see
+## _write_delays).
+var _wave_at := NAN
+var _wave_for := []
+## Each MultiMesh layer: [MultiMesh, "gem", "shadow" or "sparkle", its
+## instances' slots, the MultiMeshInstance3D drawing it].
+var _layer_slots := []
+## Each gem layer: [MultiMesh, its mesh, "shape|cut", its largest stone's
+## length or width (board units), the MultiMeshInstance3D drawing it, its
+## flat outline for when it's tiny].
+var _gem_layers := []
+## The shadows' layer, and the board's largest stone (length or width, in
+## board units): when even it is under SHADOW_GONE_PX, no shadow shows.
+var _shadow_layer: MultiMeshInstance3D
+var _largest := 0.0
+## Rendering (see IDLE_FPS): render this frame regardless; how much of an
+## idle frame has come due; the process frame last rendered, and the lights
+## it rendered with; a fixed rate instead (set_always_render), or 0.
+var _dirty := true
+var _due := 0.0
+var _drawn_frame := -1
+var _drawn_key := Vector3.UP
+var _drawn_fill := Vector3.UP
+var _fixed_fps := 0.0
 
 
 func _init() -> void:
@@ -164,6 +252,7 @@ func _init() -> void:
 	_viewport.own_world_3d = true
 	_viewport.msaa_3d = Viewport.MSAA_4X
 	_viewport.handle_input_locally = false
+	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(_viewport)
 	var env := _env
 	env.background_mode = Environment.BG_COLOR
@@ -184,19 +273,36 @@ func _init() -> void:
 	_camera.far = 4000.0
 	_viewport.add_child(_camera)
 	_gem_material.shader = GEM_SHADER
+	_impostor_material.shader = IMPOSTOR_SHADER
+	_impostor_material.set_shader_parameter("facets", _facets.texture)
 	_shadow_material.shader = SHADOW_SHADER
 	_shadow_material.render_priority = -1
-	_shadow_material.set_shader_parameter("span", SHADOW_SPAN)
+	_shadow_material.set_shader_parameter("span", SHADOW_FADE)
+	_shadow_material.set_shader_parameter("fade_from", SHADOW_FADE_PX)
+	_shadow_material.set_shader_parameter("fade_to", SHADOW_GONE_PX)
 	_sparkle_material.shader = SPARKLE_SHADER
 	_sparkle_material.render_priority = 1
+	for m: ShaderMaterial in _materials():
+		m.set_shader_parameter("wave_spread", CELEBRATE_TIME)
+		m.set_shader_parameter("pulse_time", PULSE_TIME)
 	_paper_material.shader = PAPER_SHADER
 	_paper.material_override = _paper_material
 	_viewport.add_child(_paper)
+	_grain.disable_3d = true
+	_grain.gui_disable_input = true
+	_grain.size = Vector2i.ONE
+	_grain.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_grain_rect.material = ShaderMaterial.new()
+	(_grain_rect.material as ShaderMaterial).shader = GRAIN_SHADER
+	_grain.add_child(_grain_rect)
+	_viewport.add_child(_grain)
+	_paper_material.set_shader_parameter("grain_tex", _grain.get_texture())
+	_viewport.add_child(_studio)
+	_gem_material.set_shader_parameter("studio_map", _studio.get_texture())
+	_impostor_material.set_shader_parameter("studio_map", _studio.get_texture())
 	_viewport.add_child(_layers)
 	resized.connect(_apply_view)
-	visibility_changed.connect(func() -> void:
-		_viewport.render_target_update_mode = (SubViewport.UPDATE_WHEN_VISIBLE if is_visible_in_tree()
-				else SubViewport.UPDATE_DISABLED))
+	visibility_changed.connect(_redraw)
 
 
 func _process(delta: float) -> void:
@@ -208,11 +314,49 @@ func _process(delta: float) -> void:
 		light_time += delta * (1.0 + 5.0 * sin(PI * sweep))
 	if _finale != "" and _clock >= _next_wave:
 		_finale_wave()
+	if not is_nan(_wave_at):
+		_set_wave_time(_clock - _wave_at)
 	if not _anims.is_empty():
 		_step_anims()
 	if use_sensor:
 		_read_sensors(delta)
 	update_light(delta)
+	_schedule(delta)
+
+
+## Renders this frame if anything moves, and otherwise once an idle frame
+## (IDLE_FPS) is due; at a fixed rate (set_always_render), only when due or
+## changed. The light keeps drifting every frame either way.
+func _schedule(delta: float) -> void:
+	_due += delta * (_fixed_fps if _fixed_fps > 0.0 else IDLE_FPS)
+	var moving := _fixed_fps <= 0.0 and (not _touches.is_empty() or not _anims.is_empty() or _clock < _sweep_until
+			or (_glide != null and _glide.is_valid()) or key_dir.angle_to(_drawn_key) > LIGHT_STEP
+			or fill_dir.angle_to(_drawn_fill) > LIGHT_STEP)
+	if _dirty or moving or _due >= 1.0:
+		_render()
+	if _drawn_frame == Engine.get_process_frames():
+		_drawn_key = key_dir
+		_drawn_fill = fill_dir
+		_studio.follow(key_dir, fill_dir)
+
+
+## Something changed (the view, a stone, visibility): render this frame.
+func _redraw() -> void:
+	_dirty = true
+	_render()
+
+
+## Renders the SubViewport once this frame (it is never left updating).
+func _render() -> void:
+	if not is_visible_in_tree():
+		return
+	_dirty = false
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_studio.follow(key_dir, fill_dir)
+	if _drawn_frame != Engine.get_process_frames():
+		_drawn_frame = Engine.get_process_frames()
+		render_count += 1
+		_due = fmod(maxf(_due - 1.0, 0.0), 1.0)
 
 
 ## Follows the phone's orientation, each sensor for one thing so they never
@@ -253,7 +397,7 @@ func update_light(delta := 0.0) -> void:
 	key_dir = key_dir.slerp(key, k).normalized()
 	fill_dir = fill_dir.slerp(fill, k).normalized()
 	_settle = true
-	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
+	for m: ShaderMaterial in _materials() + [_studio.material]:
 		m.set_shader_parameter("key_dir", key_dir)
 		m.set_shader_parameter("fill_dir", fill_dir)
 
@@ -302,7 +446,7 @@ func fill_slot(i: int) -> void:
 
 ## Shows one stone that has just flown in, settling into place.
 func land_slot(i: int) -> void:
-	_anims[i] = [_clock, 2]
+	_anims[i] = [_clock, 1]
 	_step_anims()
 
 
@@ -317,16 +461,19 @@ func set_transparent() -> void:
 	_env.background_mode = Environment.BG_CLEAR_COLOR
 	_env.glow_enabled = false
 	_paper.visible = false
+	_redraw()
 
 
 ## Finale styles celebrate() knows (GemCatalog.FINALES must be among them).
-const FINALES := ["ripple", "spiral", "sweep", "shimmer"]
+const FINALES := ["ripple", "spiral", "sweep", "shimmer", "light_ripple"]
 
 
 ## Waves of pulses through every stone while the light sweeps over them,
 ## timed by `style`: "ripple" outward from board point `from`, "spiral"
 ## round it, "sweep" from left to right, "shimmer" at random. They repeat
-## until end_celebration().
+## until end_celebration(). "light_ripple" goes out like "ripple", but plays
+## light over the stones and paper instead of swelling them (wave_light in
+## gem_light.gdshaderinc).
 func celebrate(from: Vector2, style := "ripple") -> void:
 	_finale = style
 	_finale_from = from
@@ -343,6 +490,14 @@ func is_celebrating() -> bool:
 
 
 func _finale_wave() -> void:
+	# The shaders pulse each stone from here (wave_scale in gem_light.gdshaderinc).
+	_wave_at = _clock
+	_set_wave_time(0.0)
+	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
+	_next_wave = _sweep_until + FINALE_REST
+	if _wave_for == [_finale, _finale_from]:
+		return  # the stones already hold this wave's delays
+	_wave_for = [_finale, _finale_from]
 	var from := _finale_from
 	var style := _finale
 	var far := 0.0
@@ -368,14 +523,51 @@ func _finale_wave() -> void:
 		at.append(t)
 		far = maxf(far, t)
 	far = maxf(far, 1e-6)
-	for i in _refs.size():
-		_anims[i] = [_clock + at[i] / far * CELEBRATE_TIME, 1]
-	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
-	_next_wave = _sweep_until + FINALE_REST
+	for m: ShaderMaterial in _materials():
+		m.set_shader_parameter("wave_light", 1.0 if style == "light_ripple" else 0.0)
+		m.set_shader_parameter("wave_from", from)
+		m.set_shader_parameter("wave_far", far)
+	var delays := PackedFloat32Array()
+	delays.resize(at.size())
+	for i in at.size():
+		delays[i] = at[i] / far
+	_write_delays(delays)
 
 
-## Moves animating stones along: pops ease out with an overshoot, pulses
-## swell and settle.
+## Gives every stone its delay in a finale wave (0..1 of CELEBRATE_TIME),
+## where its shaders read it: half of it after the cut in a gem's custom
+## data, a shadow's color alpha, a sparkle's custom w. One buffer write a
+## layer, as a big kit has tens of thousands of stones.
+func _write_delays(delays: PackedFloat32Array) -> void:
+	for layer: Array in _layer_slots:
+		var mm: MultiMesh = layer[0]
+		var which: PackedInt32Array = layer[2]
+		# Per instance: 12 floats of transform, then its color and custom data.
+		var buffer := mm.buffer
+		if layer[1] == "gem":
+			for k in which.size():
+				buffer[k * 20 + 19] = floorf(buffer[k * 20 + 19] + 0.01) + delays[which[k]] * 0.5
+		else:
+			var w := 15 if layer[1] == "shadow" else 19
+			for k in which.size():
+				buffer[k * 20 + w] = delays[which[k]]
+		mm.buffer = buffer
+
+
+## The board's 3D materials, which share the light and the finale's waves.
+func _materials() -> Array[ShaderMaterial]:
+	return [_gem_material, _impostor_material, _shadow_material, _sparkle_material, _paper_material]
+
+
+## Seconds since the finale's current wave started, for the shaders
+## (negative: no wave).
+func _set_wave_time(seconds: float) -> void:
+	for m: ShaderMaterial in _materials():
+		m.set_shader_parameter("wave_time", seconds)
+
+
+## Moves animating stones along: pops ease out with an overshoot, landings
+## settle.
 func _step_anims() -> void:
 	var done := []
 	for i: int in _anims:
@@ -383,15 +575,10 @@ func _step_anims() -> void:
 		var t: float = _clock - a[0]
 		if t < 0.0:
 			continue
-		var u := minf(t / ([POP_TIME, PULSE_TIME, LAND_TIME][a[1]] as float), 1.0)
-		var f := 1.0
-		match a[1]:
-			0:
-				f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
-			1:
-				f = 1.0 + 0.3 * sin(PI * u)
-			_:
-				f = 1.0 + 0.15 * (1.0 - u) * (1.0 - u)
+		var u := minf(t / (POP_TIME if a[1] == 0 else LAND_TIME), 1.0)
+		var f := 1.0 + 0.15 * (1.0 - u) * (1.0 - u)
+		if a[1] == 0:
+			f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
 		_apply_scale(i, f)
 		if u >= 1.0:
 			done.append(i)
@@ -409,6 +596,7 @@ func _apply_scale(i: int, f: float) -> void:
 		var o := xf.origin
 		(ref[0] as MultiMesh).set_instance_transform(ref[1],
 				Transform3D(xf.basis.scaled(Vector3(k, k, k)), Vector3(o.x, o.y * k, o.z)))
+	_redraw()
 
 
 ## The board's picture as a texture (for icons cut from a board of single stones).
@@ -416,9 +604,16 @@ func get_view_texture() -> ViewportTexture:
 	return _viewport.get_texture()
 
 
-## Keeps rendering while off screen.
-func set_always_render() -> void:
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+## The viewport the board renders in (for measuring it, as PerfReadout does).
+func render_viewport_rid() -> RID:
+	return _viewport.get_viewport_rid()
+
+
+## For a board kept off screen, whose picture is used elsewhere (icons):
+## renders `fps` times a second, however its light moves (0: as usual). It
+## renders off screen either way: nothing waits for the board to be drawn.
+func set_always_render(fps := 0.0) -> void:
+	_fixed_fps = fps
 
 
 ## Zooms and pans smoothly to show board rect `area` (as focus_on), over
@@ -500,6 +695,10 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_settle = false
 	_board = board
 	_anims.clear()
+	_wave_at = NAN
+	_wave_for = []
+	_layer_slots = []
+	_set_wave_time(-1.0)
 	_refs = []
 	_refs.resize(slots.size())
 	for i in slots.size():
@@ -510,28 +709,71 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_paper.position = Vector3(board.x / 2.0, 0.0, board.y / 2.0)
 	_paper_material.set_shader_parameter("board_px", board)
 	_paper_material.set_shader_parameter("lines_tex", _mask_texture(lines, lines_size))
+	if _paper.visible:
+		_bake_grain(board)
 
 	var by_mesh := {}
+	_gem_layers = []
 	for i in slots.size():
 		var s: Dictionary = slots[i]
 		var cut: String = s.get("cut", "")
 		if not cut in GemCuts.for_shape(s["shape"]):
 			cut = GemCuts.for_shape(s["shape"])[0]
-		by_mesh.get_or_add(s["shape"] + "|" + cut, []).append(i)
+		var band := floori(log(maxf(maxf(s["size"], s["width"]), 1.0)) / log(2.0))
+		by_mesh.get_or_add("%s|%s|%d" % [s["shape"], cut, band], []).append(i)
 	for key: String in by_mesh:
 		var parts := key.split("|")
-		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, by_mesh[key], "gem",
+		var which: Array = by_mesh[key]
+		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, which, "gem",
 				GemCuts.SHADER_STYLE.get(parts[1], 0))
+		var largest := 0.0
+		for i: int in which:
+			largest = maxf(largest, maxf(slots[i]["size"], slots[i]["width"]))
+		var added: Array = _layer_slots[_layer_slots.size() - 1]
+		# The outline sits above the girdle (stone's local units), over its shadow.
+		_gem_layers.append([added[0], GemMesh.get_mesh(parts[0], parts[1]), parts[0] + "|" + parts[1], largest,
+				added[3], GemMesh.get_outline_mesh(parts[0], 0.25)])
 	var all := range(slots.size())
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
+	var reach := SHADOW_SPAN + SHADOW_SHIFT
+	shadow_plane.custom_aabb = AABB(Vector3(-reach, -0.1, -reach), Vector3(reach * 2.0, 0.2, reach * 2.0))
 	_add_layer(shadow_plane, _shadow_material, slots, all, "shadow")
+	_shadow_layer = _layer_slots[_layer_slots.size() - 1][3]
+	_largest = 0.0
+	for s: Dictionary in slots:
+		_largest = maxf(_largest, maxf(s["size"], s["width"]))
 	if _flares:
 		var sparkle_plane := PlaneMesh.new()
 		sparkle_plane.size = Vector2(2.0, 2.0)
 		_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
+	_apply_debug_test()
 	update_light()
 	reset_view()
+
+
+## Leaves out or cheapens one part of the board, as debug_test says.
+func _apply_debug_test() -> void:
+	_viewport.msaa_3d = Viewport.MSAA_4X
+	stretch_shrink = 1
+	_debug_flat = null
+	if debug_test == "normal":
+		return
+	if debug_test == "flat gems":
+		_debug_flat = ShaderMaterial.new()
+		_debug_flat.shader = Shader.new()
+		_debug_flat.shader.code = ("shader_type spatial;\nrender_mode unshaded, cull_disabled;\n"
+				+ "void fragment() { ALBEDO = COLOR.rgb; }\n")
+	for layer: Array in _layer_slots:
+		if [debug_test, layer[1]] in [["no shadows", "shadow"], ["no sparkles", "sparkle"], ["no gems", "gem"]]:
+			(layer[3] as MultiMeshInstance3D).visible = false
+	match debug_test:
+		"MSAA 2x":
+			_viewport.msaa_3d = Viewport.MSAA_2X
+		"MSAA off":
+			_viewport.msaa_3d = Viewport.MSAA_DISABLED
+		"half resolution":
+			stretch_shrink = 2
 
 
 ## One MultiMesh: `mesh` for the given slots, as gems, shadows or sparkles.
@@ -576,12 +818,13 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 		mm.set_instance_transform(k, xf)
 		mm.set_instance_color(k, color)
 		if i < _refs.size():
-			_refs[i].append([mm, k, xf])
+			_refs[i].append([mm, k, xf, kind])
 	var layer := MultiMeshInstance3D.new()
 	layer.multimesh = mm
 	layer.material_override = material
 	layer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_layers.add_child(layer)
+	_layer_slots.append([mm, kind, PackedInt32Array(which), layer])
 
 
 ## Refractive index and dispersion for a gem color: pale, unsaturated
@@ -600,6 +843,17 @@ static func _optics(color: Color) -> Vector2:
 	return Vector2(1.72, 0.012)
 
 
+## Renders the paper's grain for a board this size into _grain's texture,
+## once (the GPU works it out in a moment; paper_grain.gdshader).
+func _bake_grain(board: Vector2) -> void:
+	var k := minf(GRAIN_DENSITY, GRAIN_MAX_PX / maxf(board.x, board.y))
+	var px := Vector2i((board * k).ceil()).maxi(1)
+	_grain.size = px
+	_grain_rect.size = px
+	(_grain_rect.material as ShaderMaterial).set_shader_parameter("board_px", board)
+	_grain.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
 static func _mask_texture(mask: PackedByteArray, size: Vector2i) -> ImageTexture:
 	if mask.is_empty() or size.x <= 0:
 		var empty := Image.create(1, 1, false, Image.FORMAT_L8)
@@ -609,6 +863,32 @@ static func _mask_texture(mask: PackedByteArray, size: Vector2i) -> ImageTexture
 	for i in mask.size():
 		data[i] = 255 if mask[i] != 0 else 0
 	return ImageTexture.create_from_image(Image.create_from_data(size.x, size.y, false, Image.FORMAT_L8, data))
+
+
+## Tiny stones draw as a flat outline each: each gem layer switches when
+## its largest stone is under IMPOSTOR_PX on screen (`scale_px` screen px
+## per board unit), and back to its mesh above IMPOSTOR_PX x IMPOSTOR_BACK.
+func _pick_meshes(scale_px: float) -> void:
+	for layer: Array in _gem_layers:
+		var mm: MultiMesh = layer[0]
+		var drawn: MultiMeshInstance3D = layer[4]
+		var px: float = layer[3] * scale_px
+		var flat: bool = mm.mesh == layer[5]
+		if not flat and px < IMPOSTOR_PX and debug_test != "no impostors":
+			flat = true
+		elif flat and px > IMPOSTOR_PX * IMPOSTOR_BACK:
+			flat = false
+		var mesh: Mesh = layer[5] if flat else layer[1]
+		if mesh != mm.mesh:
+			if flat:
+				drawn.set_instance_shader_parameter("facet_tile", _facets.tile(layer[2]))
+			mm.mesh = mesh
+			# The instance drawing it only picks up the new mesh when handed the MultiMesh again.
+			drawn.multimesh = null
+			drawn.multimesh = mm
+		var material: Material = _debug_flat if _debug_flat else (_impostor_material if flat else _gem_material)
+		if drawn.material_override != material:
+			drawn.material_override = material
 
 
 ## Points the camera at _center with the zoom. Zoomed in, the view may pan
@@ -628,6 +908,10 @@ func _apply_view() -> void:
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
+	_pick_meshes(scale_px)
+	if _shadow_layer != null:
+		_shadow_layer.visible = _largest * scale_px >= SHADOW_GONE_PX and debug_test != "no shadows"
+	_redraw()
 	view_changed.emit()
 
 

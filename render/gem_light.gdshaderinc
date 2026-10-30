@@ -8,6 +8,41 @@ uniform vec3 key_dir = vec3(-0.45, 0.62, -0.64);
 uniform vec3 fill_dir = vec3(0.7, 0.5, 0.5);
 uniform float light_strength = 1.0;
 uniform vec3 paper_color = vec3(0.86, 0.84, 0.8);
+// The finale's waves (GemBoard3D.celebrate): every stone pulses once a
+// wave, over pulse_time seconds, starting its `delay` (0..1, kept per
+// stone) times wave_spread seconds after the wave does. wave_time is the
+// seconds since the wave started (negative: none yet). A pulse swells the
+// stone, or with wave_light 1 (the light ripple) plays light over it
+// instead: the paper lights up too, wave_far board units from wave_from
+// being a delay of 1.
+uniform float wave_time = -1.0;
+uniform float wave_spread = 1.4;
+uniform float pulse_time = 0.6;
+uniform float wave_light = 0.0;
+uniform vec2 wave_from = vec2(0.0);
+uniform float wave_far = 1.0;
+
+// How far through its pulse a stone with this delay is: 0..1 while it lasts.
+float wave_phase(float delay) {
+	return (wave_time - delay * wave_spread) / pulse_time;
+}
+
+// Its pulse just now: rising from 0 to 1 and back, 0 outside it.
+float wave_pulse(float delay) {
+	float u = wave_phase(delay);
+	return u > 0.0 && u < 1.0 ? sin(PI * u) : 0.0;
+}
+
+// How much the finale's wave scales a stone with this delay just now.
+float wave_scale(float delay) {
+	return 1.0 + 0.3 * wave_pulse(delay) * (1.0 - wave_light);
+}
+
+// Local vertex v of a stone scaled by f about its place on the paper, its
+// height above the paper too, as if its whole transform (`model`) were.
+vec3 scaled_about_paper(vec3 v, float f, mat4 model) {
+	return v * f + inverse(mat3(model)) * vec3(0.0, (f - 1.0) * model[3].y, 0.0);
+}
 
 // What a facet sees in direction d (unit): a dark room with faint bands
 // around its walls, a key softbox (crossed by window bars), a weaker fill, a
@@ -36,6 +71,29 @@ vec3 studio(vec3 d) {
 	float f = dot(d, fill_dir);
 	c += vec3(0.85, 0.92, 1.0) * light_strength * (4.0 * smoothstep(0.986, 0.995, f) + 0.5 * smoothstep(0.85, 0.98, f));
 	return c;
+}
+
+// Directions on a square, for the studio map (studio_map.gdshader): the
+// octahedral mapping, up (y) in the middle, the horizon on the diamond
+// between the edges' midpoints and down at the corners. p and the result
+// of oct_encode are in -1..1.
+vec3 oct_decode(vec2 p) {
+	vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
+	if (d.y < 0.0) {
+		vec2 side = vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+		d.xz = (1.0 - abs(d.zx)) * side;
+	}
+	return normalize(d);
+}
+
+vec2 oct_encode(vec3 d) {
+	d /= abs(d.x) + abs(d.y) + abs(d.z);
+	vec2 p = d.xz;
+	if (d.y < 0.0) {
+		vec2 side = vec2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+		p = (1.0 - abs(p.yx)) * side;
+	}
+	return p;
 }
 
 // How far the key light has moved the caustics: their offset and their

@@ -23,8 +23,10 @@ const VERSION := 2
 const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
 ## Debug builds only: the setting that lends her everything for testing.
 ## While it's on, the profile's `unlocks` hold every item and her own are
-## kept aside under REAL_UNLOCKS, which is what save_profile writes. Turned
-## off (or in a release build) she has exactly what she had.
+## kept aside under REAL_UNLOCKS, which is what save_profile writes; every
+## power-up has unlimited charges that cost nothing to use (Packs.charges),
+## her own left as they are. Turned off (or in a release build) she has
+## exactly what she had.
 const UNLOCK_ALL := "debug_unlock_all"
 const REAL_UNLOCKS := "_real_unlocks"
 
