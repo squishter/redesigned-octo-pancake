@@ -6,7 +6,7 @@ extends SceneTree
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const MainMenu := preload("res://scenes/game/main_menu.gd")
 const CollectionScreen := preload("res://scenes/game/collection_screen.gd")
-const App := preload("res://scenes/game/app.gd")
+const AppScene := preload("res://scenes/game/app.tscn")
 var _failures := 0
 var _checks := 0
 
@@ -193,7 +193,7 @@ func _test_reward_kinds() -> void:
 
 func _test_transitions() -> void:
 	print("Screen transitions and board entry")
-	var app := App.new()
+	var app = AppScene.instantiate()
 	root.add_child(app)
 	await create_timer(0.65).timeout
 	_check(not app._transitioning and not app._veil.visible, "Initial menu transition completes")
@@ -211,6 +211,11 @@ func _test_transitions() -> void:
 	app._play(meta["id"])
 	await create_timer(0.8).timeout
 	_check(not app._transitioning and app._screen.puzzle_id == meta["id"], "Menu-to-board transition completes")
+	_check_button_widths(app._screen, app._screen.size.x)
+	_check(not app._screen._hint.disabled, "A new puzzle starts with an available hint")
+	app._screen._use_hint()
+	_check(app._screen._hint.disabled and int(meta["hints"]) == 0 and app._screen._ring_slot >= 0,
+		"Hint focuses an open slot and spends its charge")
 	app._screen.go_back()
 	await create_timer(0.8).timeout
 	_check(app._screen.get_script() == MainMenu and not app._veil.visible, "Board-to-menu transition completes")

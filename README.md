@@ -27,9 +27,11 @@ mode for trying out new pattern generation.
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
   mandala collages, with no frames or collars, placing gems with Pop or
   Fly and the Ripple finale. Everything else comes from packs.
-- **Colors and themes.** 105 gem colors, at least 10 of each hue (red,
+- **Colors and themes.** 109 gem colors, at least 10 of each hue (red,
   orange, yellow, green, teal, blue, purple, pink, brown and neutrals; some,
-  like pearl, ivory, jade and turquoise, are opaque stones), and 33 themes:
+  like pearl, ivory, jade and turquoise, are opaque stones). The 14 neutrals
+  step from white to black (Lab lightness 97 to 11, never more than 14
+  apart), so gray shading blends as smoothly as other hues. 33 themes:
   one per hue, the starting rainbow ones and mixes like Tropical, Galaxy and
   Seaside. A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
@@ -108,6 +110,12 @@ mode for trying out new pattern generation.
   Finish gem, Sweep (the picked gem's slots on screen), Finder (zooms to
   the picked gem's slots) and Sprinkle (40 gems anywhere). She starts with
   a Finish gem and two Finders.
+- **Hints** belong to each puzzle (`game/hints.gd`): a new puzzle starts
+  with 1, and another comes every 3 minutes of play in it, up to 3 banked
+  (with 3 the clock waits). *Hint* in the top bar glides the board to the
+  selected gem's open slot nearest the middle of the view (never zooming
+  out from a closer view) and rings it in gold. The button fills from the
+  left, a shade lighter than itself, as the next hint comes closer.
 - **Diamond kits**: a mandala painted with the theme, turned into a grid of
   round or square drills (whichever are unlocked), played like a collage.
   Drills fill 98% of their cell, so neighbors almost touch, like a real kit
@@ -146,7 +154,12 @@ mode for trying out new pattern generation.
   trail of tiny sparkles and a little burst as it lands, or in another
   unlocked style chosen in *Settings* on the menu (where the finale is
   chosen too), always with a tiny buzz. A drag that doesn't start
-  on the selected gem's slot pans instead, and two fingers pinch. When the
+  on the selected gem's slot pans instead, and two fingers pinch. The
+  selected gem's open slots are tinted with its color, or with a medium
+  light gray for white and pale gray stones (snow, diamond, pearl, ivory...),
+  which would hardly show on the paper. Zoomed
+  in, the board pans until an edge reaches the middle of the screen, so
+  stones at the very edge can be placed comfortably. When the
   last stone is in, a wave ripples out from the middle while the light
   sweeps over the gems, and the picture is left to look at, zoomed and
   panned at will, until *‹ Menu*. Progress saves every couple of seconds
@@ -229,7 +242,7 @@ permission; both are on in the committed Android export preset
 | `color_quantizer.gd`, `lab_color.gd` | Weighted k-means++ in Lab over a color histogram, plus sRGB ↔ Lab conversion. |
 | `line_raster.gd` | Polylines or line-art images → line masks; dilation to close gaps; carving channels around line stones. |
 | `contours.gd` | Vector paths from rasters: iso-lines of a region's edge distance (marching squares) and centerlines of a line mask (thinning, spur pruning, split at junctions). |
-| `gem_variety.gd` | Steers each collage to 25–30 **gem types** (a shape in one of its cuts in a gem color; sizes don't count) and gives every stone its `cut`: each shape in a color starts with its own seeded cut. It changes whole pattern parts (one row, one ring, the center stones, one symmetry class of lines) across symmetric copies, so every row and every line keeps a single type: first a sibling shape (round ↔ cushion ↔ octagon ↔ hexagon ↔ flower ↔ square ↔ pentagon ↔ heart ↔ trillion ↔ triangle ↔ star, oval ↔ marquise ↔ lozenge ↔ kite ↔ teardrop, which fit the same slot), then another cut of the same shape, then a color, choosing colors the picture already uses before harmonious new ones. Given the shapes and cuts she has unlocked (`shapes`), it first gives every other stone the nearest unlocked shape (its own family first, resized to fit when it comes from another) and only swaps among unlocked ones. Too many types fold into common ones. If a picture is still short, it is rebuilt with **spacer rows** (thin rows of small stones between the main rows) to give it more rows to vary. |
+| `gem_variety.gd` | Steers each collage to 25–30 **gem types** (a shape in one of its cuts in a gem color; sizes don't count) and gives every stone its `cut`: each shape in a color starts with its own seeded cut. It changes whole pattern parts (one row, one ring, the center stones, one symmetry class of lines) across symmetric copies, so every row and every line keeps a single type: first a sibling shape (round ↔ cushion ↔ octagon ↔ hexagon ↔ flower ↔ square ↔ pentagon ↔ heart ↔ trillion ↔ triangle ↔ star, oval ↔ marquise ↔ lozenge ↔ kite ↔ teardrop, which fit the same slot), then another cut of the same shape, then a color, choosing colors the picture already uses before harmonious new ones. Given the shapes and cuts she has unlocked (`shapes`), it first gives every other stone the nearest unlocked shape (its own family first, resized to fit when it comes from another) and only swaps among unlocked ones. Too many types fold into common ones. If a picture is still short, it is rebuilt with **spacer rows** (thin rows of small stones between the main rows) to give it more rows to vary. Finally `even_aspects` gives every stone of a type the type's median proportions (width / length), shrinking each inside its own slot, so a type only ever changes size, never shape; the play screen does the same to older saves when it loads them. |
 | `gem_lines.gd` | Gem lines: stones slotted along every line's centerline, one on each junction, evenly spaced between, narrowing toward loose ends. 12 styles: beads, pearls (big/small), marquise, baguette, emerald (clipped-corner step cuts), lozenge, taper (swells mid-stroke), pulse (grows and shrinks in waves from the middle of each line), ramp (grows outward along some classes of lines and inward along others; lines that run around the center swell or pinch instead), radial (shrinks toward the picture's center) and hub (shrinks toward the nearest hub where 4+ lines meet). Lines carry on through junctions where they continue nearly straight (**strokes**), and sizes change along a whole stroke; in the styles of one size, 60% of longer strokes grow, shrink or swell too (0.35× to 1.45× the line stone), so runs of stones change size as they go. Each line's stones are sized to the room beside it (down to 0.35× the line stone), so short lines in fine details carry stones too, and junction stones are no bigger than their smallest line's; a last pass adds a stone wherever one still fits along a line. The channel around the stones is carved to their sizes, so a line is as wide as its stones at every point. Lines that are symmetric copies (same distance from the center and length) form one class, so a ring of lines can take its own gem type. About 1 in 5 classes of longer lines (10+ stones) instead repeat a short **sequence** of gem types: 1-2, 1-2-2, 1-1-2, 1-1-2-2, 1-2-2-2, 1-2-3, 1-2-3-2, 1-2-1-3 or the wave 1-2-2-3-3-2-2-1 (never more than 3 types), counted from both ends toward the middle so it reads the same either way (loops only alternate 1-2). Each step gets its own color, and the variety pass never merges steps. 2 or 3 classes of **bold lines** through the middle of the picture (spread from the center outward, where the areas beside have room; a little further out when the middle has too few) take medium or large stones (1.7× or 2.3×) in the line's accent color, to break up the run of small stones there. A line is laid out once and its symmetric copies copy its stones (by the rotation or reflection that carries it onto them), junctions included (each set of matching junctions snapped to one radius and angle), so copies match stone for stone; loops around the center take a multiple of the symmetry around them, starting on a mirror axis. Finally `line_mirror.gd` makes all line stones exactly as symmetric as the line art: band by band around the center, each band's folds and mirror axis are read from the line art, one wedge's stones are kept and repeated around (mirrored across the vertical axis for hearts and butterflies). |
 | `region_map.gd` | Flood-fills closed regions, merges tiny ones into the lines (except one holding a given point: collages keep a symmetric picture's center), and computes a chamfer distance transform with per-region stats (area, centroid, elongation, principal axis, deepest point). |
 | `slot_packer.gd` | Patterned fills, chosen per symmetry group so copies match. **echo**: rows of stones following the outline inward (round, hexagon, square, cushion, octagon, flower, heart, marquise, lozenge or oval; optionally alternating big/small rows, or graded smaller or bigger row by row); **halo**: 1–2 outline rows around a big center stone shaped to the region (round, cushion, octagon, heart, flower, star, trillion or pentagon; marquise, oval, lozenge or kite when the region is long); **rosette**: center stone, ring of teardrops (or kites or marquises), outline rows; **honeycomb**: an even lattice (round, hexagon, flower or cushion stones) lined up with the region's axis, optionally graded smaller toward the rim; **stripes**: straight parallel rows, optionally graded from the middle; **sunburst**: a center stone with spokes of stones growing outward; **spine**: a chain along the region's medial axis, each stone as wide as the region there, so petals taper; **solitaire**: one shaped stone; **pave**: the old free-form packing, kept for some variety. Patterns can use the region's accent color (alternate rows, outer row or center stone), and a picture can shrink all its stones toward its center. Every stone shrinks to the room left where it lands (a "free distance" field), down to a quarter of a stone unit in thin places, or is left out. **Symmetry** (see `slot_mirror.gd`): a region is packed once and its symmetric copies get the same stones; a region that mirrors onto itself gets a mirror-symmetric pattern, with single stones (accents, centers, big tier stones) on its axis; a region around the picture's center repeats one wedge all the way round, and its rows take a multiple of its folds; the region holding the center, when at most 3 stone units deep, gets one centerpiece stone of any center shape, standing upright (a heart point down, a star or pentagon point up; hearts elsewhere follow their pattern). Some groups get **spacer rows** between their main rows. Some pattern seeds are **tiered**: groups first get one large stone in a feature color, then a few medium ones (round, hexagon, square, cushion, octagon, heart, star, flower, oval, marquise or kite), and their pattern fills around them. |
@@ -383,8 +396,10 @@ your own Godot settings:
   `XDG_*_HOME` folders pointed there, which is how it finds them and its
   templates.
 
-It imports the project first (so `class_name` scripts are registered) and
-then runs `godot --headless --export-debug Android`. Install with
+It imports the project first (so `class_name` scripts are registered),
+checks that every script compiles (`tools/check_scripts.gd`; Godot's export
+would otherwise pack a broken script without complaint, and the build stops
+here instead), and then runs `godot --headless --export-debug Android`. Install with
 `adb install -r build/paint-with-gems-debug.apk`.
 
 For a release APK, make a keystore (never commit it; `*.keystore` and

@@ -64,6 +64,7 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 		meta["done"] = bool(meta.get("done", false))
 		meta["rewarded"] = bool(meta.get("rewarded", false))
 		meta["powers"] = meta.get("powers", [])
+		Hints.upgrade(meta)
 	profile["puzzles"] = puzzles
 	return profile
 
@@ -90,6 +91,8 @@ static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
 		"total": picture["slots"].size(),
 		"filled": 0,
 		"done": false,
+		"hints": Hints.START,
+		"hint_ms": 0,
 	}
 	# Kits save as their grid, not their (many) slots.
 	var kept := picture

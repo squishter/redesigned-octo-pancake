@@ -122,6 +122,8 @@ var _board := Vector2(1.0, 1.0)
 var _zoom := 1.0
 ## The board point at the middle of the view.
 var _center := Vector2(0.5, 0.5)
+## A glide_to in progress, or null.
+var _glide: Tween
 ## Smoothed gravity in the phone's axes, which way was up (in them) when
 ## the picture appeared, and how far the phone has spun about the vertical
 ## since (radians, from the gyroscope).
@@ -388,6 +390,26 @@ func set_always_render() -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
 
+## Zooms and pans smoothly to show board rect `area` (as focus_on), over
+## `seconds`; never zooms out from a closer view. A touch stops it.
+func glide_to(area: Rect2, seconds := 0.5) -> void:
+	var from_zoom := _zoom
+	var from_center := _center
+	focus_on(area)
+	var to_zoom := maxf(_zoom, from_zoom)
+	var to_center := _center
+	_zoom = from_zoom
+	_center = from_center
+	_apply_view()
+	if _glide != null:
+		_glide.kill()
+	_glide = create_tween()
+	_glide.tween_method(func(u: float) -> void:
+		_zoom = exp(lerpf(log(from_zoom), log(to_zoom), u))
+		_center = from_center.lerp(to_center, u)
+		_apply_view(), 0.0, 1.0, seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
 ## Zooms and pans to show board rect `area` (with some room around it).
 func focus_on(area: Rect2) -> void:
 	var view := Vector2(maxf(size.x, 1.0), maxf(size.y, 1.0))
@@ -549,18 +571,20 @@ static func _mask_texture(mask: PackedByteArray, size: Vector2i) -> ImageTexture
 	return ImageTexture.create_from_image(Image.create_from_data(size.x, size.y, false, Image.FORMAT_L8, data))
 
 
-## Points the camera at _center with the zoom, keeping the board covering
-## the view (or centered when it's smaller).
+## Points the camera at _center with the zoom. Zoomed in, the view may pan
+## until a board edge reaches the middle of the screen, so stones at the
+## very edge can be brought to the middle; at the whole-picture zoom it
+## stays centered.
 func _apply_view() -> void:
 	var view := Vector2(maxf(size.x, 1.0), maxf(size.y, 1.0))
 	var fit := minf(view.x / (_board.x * (1.0 + margin * 2.0)), view.y / (_board.y * (1.0 + margin * 2.0)))
 	var scale_px := fit * _zoom  # screen px per board unit
 	var seen := view / scale_px
 	for axis in 2:
-		if seen[axis] >= _board[axis]:
+		if _zoom <= 1.0001:
 			_center[axis] = _board[axis] / 2.0
 		else:
-			_center[axis] = clampf(_center[axis], seen[axis] / 2.0, _board[axis] - seen[axis] / 2.0)
+			_center[axis] = clampf(_center[axis], 0.0, _board[axis])
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
@@ -575,6 +599,9 @@ func _input(event: InputEvent) -> void:
 		if event.pressed:
 			if not Rect2(Vector2.ZERO, size).has_point(p):
 				return
+			if _glide != null:
+				_glide.kill()
+				_glide = null
 			_touches[event.index] = p
 			if _touches.size() > 1 and _stroke >= 0:
 				# A second finger: the stroke ends and the pair pinches.

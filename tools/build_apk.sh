@@ -153,6 +153,8 @@ export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
 cd "$ROOT"
 echo "Importing the project (registers class names)"
 "$GODOT" --headless --import --path "$ROOT" >/dev/null 2>&1 || "$GODOT" --headless --import --path "$ROOT"
+echo "Checking that every script compiles"
+"$GODOT" --headless --path "$ROOT" -s res://tools/check_scripts.gd
 APK="$OUT_DIR/paint-with-gems-$MODE.apk"
 echo "Exporting $APK"
 "$GODOT" --headless --path "$ROOT" "--export-$MODE" "Android" "$APK"

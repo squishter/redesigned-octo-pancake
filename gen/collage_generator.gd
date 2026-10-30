@@ -317,6 +317,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		if s.get("centerpiece", false):
 			s["rotation"] = SlotPacker.upright(s["shape"])
 			s.erase("centerpiece")
+	# Every stone of a gem type in the same proportions; only sizes vary.
+	GemVariety.even_aspects(slots)
 
 	var regions := []
 	for r in map.regions:
