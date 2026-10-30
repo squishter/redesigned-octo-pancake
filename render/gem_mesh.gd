@@ -15,6 +15,11 @@ extends RefCounted
 ## rings with fewer points (offset by half a step) make the kite and star
 ## facets of a brilliant, and aligned rings make the flat steps of a step
 ## cut. The last ring is the table (a flat top), or a single apex point.
+##
+## Tiny stones (a few px across on screen) draw from a low-poly version
+## (get_low_mesh): a quarter of the girdle points (keeping the corners) and
+## only the cut's top ring, at the same height, so about a quarter of the
+## triangles; facets that small are under a pixel anyway.
 
 ## Girdle points per shape, before rounding: a multiple of its corners.
 const GIRDLE := {"star": 40, "pentagon": 40, "triangle": 48, "trillion": 48, "hexagon": 48}
@@ -33,9 +38,12 @@ const RINGS := {
 	"rose": [[1, 0, 1.0, 0.0], [4, 2, 0.62, 0.2], [0, 0, 0.0, 0.34]],
 	"checker": [[1, 0, 1.0, 0.0], [2, 1, 0.8, 0.12], [4, 0, 0.58, 0.21], [4, 2, 0.34, 0.27], [0, 0, 0.0, 0.3]],
 }
-## Cabochon: a smooth dome this high, in this many rings.
+## Cabochon: a smooth dome this high, in this many rings (low-poly: fewer).
 const DOME_HEIGHT := 0.4
 const DOME_RINGS := 6
+const DOME_RINGS_LOW := 2
+## Low-poly meshes have this share of the girdle points.
+const LOW_SHARE := 0.25
 
 static var _cache := {}
 
@@ -48,17 +56,32 @@ static func get_mesh(shape: String, cut: String) -> ArrayMesh:
 	return _cache[key]
 
 
-## Builds the mesh for a shape in a cut (unknown cuts make a brilliant).
-static func build(shape: String, cut: String) -> ArrayMesh:
-	var girdle := girdle_points(shape)
+## Its low-poly version, for stones a few px across, built once and shared.
+static func get_low_mesh(shape: String, cut: String) -> ArrayMesh:
+	var key := shape + "|" + cut + "|low"
+	if not _cache.has(key):
+		_cache[key] = build(shape, cut, true)
+	return _cache[key]
+
+
+## Builds the mesh for a shape in a cut (unknown cuts make a brilliant),
+## or its low-poly version.
+static func build(shape: String, cut: String, low := false) -> ArrayMesh:
+	var want: int = GIRDLE.get(shape, GIRDLE_DEFAULT)
+	var girdle := (girdle_points(shape, roundi(want * LOW_SHARE), 1) if low else girdle_points(shape))
 	var rings := []
 	if cut == "cabochon":
-		for k in DOME_RINGS + 1:
-			var t := float(k) / DOME_RINGS
-			rings.append([1, 0, cos(t * PI / 2.0), DOME_HEIGHT * sin(t * PI / 2.0)] if k < DOME_RINGS
+		var steps := DOME_RINGS_LOW if low else DOME_RINGS
+		for k in steps + 1:
+			var t := float(k) / steps
+			rings.append([1, 0, cos(t * PI / 2.0), DOME_HEIGHT * sin(t * PI / 2.0)] if k < steps
 					else [0, 0, 0.0, DOME_HEIGHT])
 	else:
 		rings = RINGS.get(cut, RINGS["brilliant"])
+		if low:
+			# The girdle straight up to the top ring (every point, at its height).
+			var top: Array = rings[rings.size() - 1]
+			rings = [rings[0], [mini(top[0], 1), 0, top[2], top[3]]]
 	var tris := PackedVector3Array()
 	var built := []
 	for spec: Array in rings:
@@ -79,10 +102,11 @@ static func build(shape: String, cut: String) -> ArrayMesh:
 	return _mesh(tris, cut == "cabochon")
 
 
-## The outline as [u, Vector2] points (u: 0..1 around), resampled so every
-## corner keeps a point and the points between corners come in QUANTUM
-## steps, evenly spaced along each side.
-static func girdle_points(shape: String) -> Array:
+## The outline as [u, Vector2] points (u: 0..1 around), about `want` of
+## them (the shape's GIRDLE count when -1), resampled so every corner keeps
+## a point and the points between corners come in `quantum` steps, evenly
+## spaced along each side.
+static func girdle_points(shape: String, want := -1, quantum := QUANTUM) -> Array:
 	var outline := GemShapes.outline(shape, 2.0, 2.0, 96)
 	var n := outline.size()
 	var corners := []
@@ -109,12 +133,13 @@ static func girdle_points(shape: String) -> Array:
 				break
 		sides.append(side)
 		total += _length(side)
-	var want: int = GIRDLE.get(shape, GIRDLE_DEFAULT)
+	if want < 0:
+		want = GIRDLE.get(shape, GIRDLE_DEFAULT)
 	var out := []
 	var count := 0
 	var counts := []
 	for side: PackedVector2Array in sides:
-		var m := maxi(1, roundi(want * _length(side) / total / QUANTUM)) * QUANTUM
+		var m := maxi(1, roundi(want * _length(side) / total / quantum)) * quantum
 		counts.append(m)
 		count += m
 	var done := 0

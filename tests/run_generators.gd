@@ -602,7 +602,8 @@ static func turn_match(p: Dictionary) -> float:
 
 func test_gem_cuts() -> void:
 	print("Gem cuts")
-	# Every shape's mesh in every cut covers its outline once, facets facing up.
+	# Every shape's mesh in every cut covers its outline once, facets facing up;
+	# its low-poly version (fewer girdle points) covers nearly as much.
 	var meshes := 0
 	for shape: String in GemCuts.BY_SHAPE:
 		var girdle := GemMesh.girdle_points(shape)
@@ -611,19 +612,22 @@ func test_gem_cuts() -> void:
 			outline += (girdle[i][1] as Vector2).cross(girdle[(i + 1) % girdle.size()][1])
 		outline = absf(outline) / 2.0
 		for cut: String in GemCuts.ALL:
-			var arrays := GemMesh.build(shape, cut).surface_get_arrays(0)
-			var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-			var covered := 0.0
-			var down := 0
-			for t in range(0, v.size(), 3):
-				var a := Vector2(v[t].x, v[t].z)
-				covered += absf((Vector2(v[t + 1].x, v[t + 1].z) - a).cross(Vector2(v[t + 2].x, v[t + 2].z) - a)) / 2.0
-				if n[t].y <= 0.0:
-					down += 1
-			check(absf(covered / outline - 1.0) < 0.02 and down == 0, "%s %s mesh covers %.3f of its outline, %d facets down"
-					% [shape, cut, covered / outline, down])
-			meshes += 1
+			for low: bool in [false, true]:
+				var arrays := GemMesh.build(shape, cut, low).surface_get_arrays(0)
+				var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+				var covered := 0.0
+				var down := 0
+				for t in range(0, v.size(), 3):
+					var a := Vector2(v[t].x, v[t].z)
+					covered += absf((Vector2(v[t + 1].x, v[t + 1].z) - a).cross(Vector2(v[t + 2].x, v[t + 2].z) - a)) / 2.0
+					if n[t].y <= 0.0:
+						down += 1
+				var share := covered / outline
+				check((share > 0.85 and share < 1.02 if low else absf(share - 1.0) < 0.02) and down == 0,
+						"%s %s %smesh covers %.3f of its outline, %d facets down"
+						% [shape, cut, "low-poly " if low else "", share, down])
+				meshes += 1
 	# Every stone gets a cut its shape has; stones of one part share it.
 	var cuts := {}
 	for i in 3:

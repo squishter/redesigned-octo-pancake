@@ -11,9 +11,10 @@ extends SubViewportContainer
 ## glints flare into star sparkles (gem_sparkle.gdshader). Caustics follow
 ## the light's direction only, so they hold still when it does.
 ##
-## Stones of one shape and cut share a mesh and draw as one MultiMesh, so
-## thousands stay cheap. Pinch to zoom, drag to pan, double-tap to fit (mouse
-## wheel on desktop), like PreviewCanvas.
+## Stones of one shape, cut and size share a mesh and draw as one
+## MultiMesh, so thousands stay cheap; tiny ones on screen draw from a
+## low-poly mesh (LOW_POLY_PX). Pinch to zoom, drag to pan, double-tap to
+## fit (mouse wheel on desktop), like PreviewCanvas.
 ##
 ## For play, stones can be hidden until they are placed (`shown` in
 ## show_collage, set_slot_shown), pop in when placed (fill_slot), and ripple
@@ -71,6 +72,13 @@ const SHADOW_FADE := 2.6
 const SHADOW_SPAN := 1.75
 const SHADOW_SHIFT := 1.05
 const SPARKLE_SPAN := 1.7
+## Stones smaller than this on screen (px across) draw from low-poly meshes
+## (GemMesh.get_low_mesh), and go back to the full ones above LOW_POLY_PX x
+## LOW_POLY_BACK, so a pinch at the switch doesn't flicker. Gems are layered
+## by size (powers of 2) as well as shape and cut, so each size switches on
+## its own.
+const LOW_POLY_PX := 10.0
+const LOW_POLY_BACK := 1.2
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
 const KIT_DRILL := 0.98
@@ -189,8 +197,11 @@ var _next_wave := 0.0
 var _wave_at := NAN
 var _wave_for := []
 ## Each MultiMesh layer: [MultiMesh, "gem", "shadow" or "sparkle", its
-## instances' slots].
+## instances' slots, the MultiMeshInstance3D drawing it].
 var _layer_slots := []
+## Each gem layer: [MultiMesh, full mesh, low-poly mesh, its largest
+## stone's length or width (board units), the MultiMeshInstance3D drawing it].
+var _gem_layers := []
 ## Rendering (see IDLE_FPS): render this frame regardless; how much of an
 ## idle frame has come due; the process frame last rendered, and the lights
 ## it rendered with; a fixed rate instead (set_always_render), or 0.
@@ -648,16 +659,25 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 		_bake_grain(board)
 
 	var by_mesh := {}
+	_gem_layers = []
 	for i in slots.size():
 		var s: Dictionary = slots[i]
 		var cut: String = s.get("cut", "")
 		if not cut in GemCuts.for_shape(s["shape"]):
 			cut = GemCuts.for_shape(s["shape"])[0]
-		by_mesh.get_or_add(s["shape"] + "|" + cut, []).append(i)
+		var band := floori(log(maxf(maxf(s["size"], s["width"]), 1.0)) / log(2.0))
+		by_mesh.get_or_add("%s|%s|%d" % [s["shape"], cut, band], []).append(i)
 	for key: String in by_mesh:
 		var parts := key.split("|")
-		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, by_mesh[key], "gem",
+		var which: Array = by_mesh[key]
+		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, which, "gem",
 				GemCuts.SHADER_STYLE.get(parts[1], 0))
+		var largest := 0.0
+		for i: int in which:
+			largest = maxf(largest, maxf(slots[i]["size"], slots[i]["width"]))
+		var added: Array = _layer_slots[_layer_slots.size() - 1]
+		_gem_layers.append([added[0], GemMesh.get_mesh(parts[0], parts[1]), GemMesh.get_low_mesh(parts[0], parts[1]),
+				largest, added[3]])
 	var all := range(slots.size())
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
@@ -720,7 +740,7 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 	layer.material_override = material
 	layer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_layers.add_child(layer)
-	_layer_slots.append([mm, kind, PackedInt32Array(which)])
+	_layer_slots.append([mm, kind, PackedInt32Array(which), layer])
 
 
 ## Refractive index and dispersion for a gem color: pale, unsaturated
@@ -761,6 +781,26 @@ static func _mask_texture(mask: PackedByteArray, size: Vector2i) -> ImageTexture
 	return ImageTexture.create_from_image(Image.create_from_data(size.x, size.y, false, Image.FORMAT_L8, data))
 
 
+## Tiny stones draw from low-poly meshes: each gem layer switches when its
+## largest stone is under LOW_POLY_PX on screen (`scale_px` screen px per
+## board unit), and back above LOW_POLY_PX x LOW_POLY_BACK.
+func _pick_meshes(scale_px: float) -> void:
+	for layer: Array in _gem_layers:
+		var mm: MultiMesh = layer[0]
+		var px: float = layer[3] * scale_px
+		var mesh: Mesh = mm.mesh
+		if mesh == layer[1] and px < LOW_POLY_PX:
+			mesh = layer[2]
+		elif mesh == layer[2] and px > LOW_POLY_PX * LOW_POLY_BACK:
+			mesh = layer[1]
+		if mesh != mm.mesh:
+			mm.mesh = mesh
+			# The instance drawing it only picks up the new mesh when handed the MultiMesh again.
+			var drawn: MultiMeshInstance3D = layer[4]
+			drawn.multimesh = null
+			drawn.multimesh = mm
+
+
 ## Points the camera at _center with the zoom. Zoomed in, the view may pan
 ## until a board edge reaches the middle of the screen, so stones at the
 ## very edge can be brought to the middle; at the whole-picture zoom it
@@ -778,6 +818,7 @@ func _apply_view() -> void:
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
+	_pick_meshes(scale_px)
 	_redraw()
 	view_changed.emit()
 
