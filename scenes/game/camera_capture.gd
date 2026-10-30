@@ -276,6 +276,14 @@ func _check_chroma() -> void:
 	_material.set_shader_parameter("chroma_interleaved", _chroma == "interleaved")
 
 
+## How a CbCr plane's bytes are laid out: "pairs" (two channels per pixel,
+## Cb then Cr, as Godot's Android camera builds it) or "interleaved" (one
+## channel, Cb and Cr side by side, so twice as wide).
+static func chroma_layout(chroma: Image) -> String:
+	var per_pixel := chroma.get_data().size() / maxi(1, chroma.get_width() * chroma.get_height())
+	return "interleaved" if per_pixel == 1 else "pairs"
+
+
 ## A CbCr plane as RG8 (R: Cb, G: Cr), whichever layout it came in.
 static func chroma_pairs(chroma: Image) -> Image:
 	match chroma_layout(chroma):

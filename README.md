@@ -364,8 +364,10 @@ your own Godot settings:
   `XDG_*_HOME` folders pointed there, which is how it finds them and its
   templates.
 
-It imports the project first (so `class_name` scripts are registered) and
-then runs `godot --headless --export-debug Android`. Install with
+It imports the project first (so `class_name` scripts are registered),
+checks that every script compiles (`tools/check_scripts.gd`; Godot's export
+would otherwise pack a broken script without complaint, and the build stops
+here instead), and then runs `godot --headless --export-debug Android`. Install with
 `adb install -r build/paint-with-gems-debug.apk`.
 
 For a release APK, make a keystore (never commit it; `*.keystore` and
