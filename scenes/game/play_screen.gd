@@ -113,6 +113,8 @@ var _palette_caption: Control
 var _reward_dialog: CompletionRewards
 var _completion_reward: Dictionary = {}
 var _done_bar: Control
+## The finished bar's button: ends a finale still playing, or reopens the rewards.
+var _rewards_button: Button
 var _area: Control
 var _selected := -1
 ## The gem type the current stroke fills.
@@ -198,7 +200,7 @@ func _ready() -> void:
 	done_row.add_child(UI.icon("trophy", 80))
 	_done_label = UI.label(DONE_TEXT, 34, GameTheme.GOLD)
 	done_row.add_child(_done_label)
-	_button(done_row, "Rewards", _show_rewards)
+	_rewards_button = _button(done_row, "Rewards", _show_rewards)
 
 	_area = Control.new()
 	_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -407,14 +409,6 @@ func _apply_scroll() -> void:
 ## The gem row's touches: a drag scrolls it (and flings on letting go), a
 ## tap picks the gem under the finger (or lets go of the picked one).
 func _input(event: InputEvent) -> void:
-	if _board.is_celebrating():
-		# Any tap ends the finale and goes no further. It ends on letting go,
-		# so the dialog never sees the press and the tap can't click its buttons.
-		if event is InputEventScreenTouch or event is InputEventMouseButton:
-			get_viewport().set_input_as_handled()
-			if not event.pressed:
-				_show_rewards()
-		return
 	if _powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible):
 		return
 	if not _palette.is_visible_in_tree():
@@ -610,8 +604,7 @@ func _toggle_powers() -> void:
 
 
 func _update_board_input() -> void:
-	_board.input_enabled = not (_powers_panel.visible or _board.is_celebrating()
-			or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
+	_board.input_enabled = not (_powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
 	_row_touch = -1
 	_fling = 0.0
 
@@ -689,12 +682,13 @@ func _use_power(power: String) -> void:
 
 
 ## Debug builds: places every open stone at once, as if she had, and plays
-## the finale (rewards and all), for testing finales.
+## the finale (rewards and all) over the whole picture, for testing finales.
 func _debug_complete() -> void:
 	_powers_panel.close()
 	_flights.land_all()
 	if _done:
 		return
+	_board.reset_view()
 	for i in _overlay.placed.size():
 		if _overlay.placed[i] == 0:
 			_overlay.place(i)
@@ -832,8 +826,8 @@ func _finish(celebrate: bool) -> void:
 	if not finale in profile["unlocks"].get("finales", ["ripple"]):
 		finale = "ripple"
 	_board.celebrate(center, finale)
-	_done_label.text = "Tap anywhere to finish the celebration."
-	_update_board_input()
+	_done_label.text = "Your finale plays on. Pinch and pan to admire it."
+	_rewards_button.text = "End finale"
 	Input.vibrate_handheld(70, 0.7)
 
 
@@ -843,6 +837,7 @@ func _show_rewards() -> void:
 		return
 	_board.end_celebration()
 	_done_label.text = DONE_TEXT
+	_rewards_button.text = "Rewards"
 	if not is_instance_valid(_reward_dialog):
 		_reward_dialog = CompletionRewards.new()
 		_reward_dialog.reward = _completion_reward.duplicate()

@@ -358,19 +358,20 @@ func _test_completion_rewards() -> void:
 		"Debug complete fills every slot and finishes the puzzle")
 	await create_timer(3.5).timeout
 	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
-		"The finale keeps playing until she taps")
-	_check(not play._board.input_enabled, "The board ignores gestures during the finale")
-	var tap := InputEventScreenTouch.new()
-	tap.position = play.size / 2.0
-	tap.pressed = true
-	Input.parse_input_event(tap)
-	await process_frame
-	_check(play._board.is_celebrating(), "Pressing alone doesn't end the finale")
-	tap = tap.duplicate()
-	tap.pressed = false
-	Input.parse_input_event(tap)
-	await process_frame
-	_check(not play._board.is_celebrating(), "Letting go of a tap ends the finale")
+		"The finale keeps playing until she ends it")
+	_check(play._board.input_enabled, "She can pinch and pan during the finale")
+	_check(play._rewards_button.text == "End finale", "The finished bar offers to end the finale")
+	for pressed: bool in [true, false]:
+		var tap := InputEventScreenTouch.new()
+		tap.position = play._board.get_global_rect().get_center()
+		tap.pressed = pressed
+		Input.parse_input_event(tap)
+		await process_frame
+	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
+		"Tapping the board doesn't end the finale")
+	play._rewards_button.pressed.emit()
+	_check(not play._board.is_celebrating() and play._rewards_button.text == "Rewards",
+		"End finale ends it and the button goes back to Rewards")
 	await _layout_frames()
 	var saved := SaveStore.load_profile()
 	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Double coins and the daily pick are saved before the dialog")

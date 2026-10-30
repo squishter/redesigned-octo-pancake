@@ -33,8 +33,9 @@ mode for trying out new pattern generation.
   uses illustrated mode cards and a color-story preview. Dialogs scroll on
   smaller screens, keep their actions visible and contain keyboard focus;
   the board ignores touches while a power-up or reward dialog is open.
-- **Completion rewards.** The finale's waves repeat until she taps (or
-  presses back); then a framed dialog shows the
+- **Completion rewards.** The finale's waves repeat, while she pinches and
+  pans around the picture, until she taps *End finale* (or presses back);
+  then a framed dialog shows the
   finished picture, exact coins (including a Double coins bonus), the day's
   free pick when earned, and the resulting wallet. Rewards are saved before
   the dialog appears. She can admire the picture, visit Collection & packs,
@@ -166,8 +167,8 @@ mode for trying out new pattern generation.
   it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
   and power-up charges are real.
   The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
-  which places every open stone at once and plays the finale and rewards,
-  for testing finales.
+  which places every open stone at once, fits the whole picture in view
+  and plays the finale, for testing finales.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
   the most used first. Open slots show as thin outlines of their shape with
   the number inside, drawn at screen size so it grows as you zoom, and
