@@ -31,6 +31,7 @@ const GEM_SHADER := preload("res://render/gem.gdshader")
 const SHADOW_SHADER := preload("res://render/gem_shadow.gdshader")
 const SPARKLE_SHADER := preload("res://render/gem_sparkle.gdshader")
 const PAPER_SHADER := preload("res://render/paper.gdshader")
+const GRAIN_SHADER := preload("res://render/paper_grain.gdshader")
 const BACKGROUND := Color("#2a1f3d")
 const MAX_ZOOM := 40.0
 const DOUBLE_TAP_MS := 300
@@ -73,6 +74,10 @@ const SPARKLE_SPAN := 1.7
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
 const KIT_DRILL := 0.98
+## The paper's grain is baked into a texture at most this many texels per
+## board unit and this many on a side (it is very soft; filtering fills in).
+const GRAIN_DENSITY := 2.0
+const GRAIN_MAX_PX := 2048
 ## The key light: where it hangs when the picture appears (azimuth in the
 ## board's xz plane, toward the picture's top left; elevation above the
 ## paper) and how far it drifts. Radians.
@@ -140,6 +145,9 @@ var _gem_material := ShaderMaterial.new()
 var _shadow_material := ShaderMaterial.new()
 var _sparkle_material := ShaderMaterial.new()
 var _paper_material := ShaderMaterial.new()
+## Renders the paper's grain once per board (see _bake_grain).
+var _grain := SubViewport.new()
+var _grain_rect := ColorRect.new()
 ## Picture size in board units (picture pixels, or kit cells x KIT_CELL).
 var _board := Vector2(1.0, 1.0)
 var _zoom := 1.0
@@ -218,6 +226,15 @@ func _init() -> void:
 	_paper_material.shader = PAPER_SHADER
 	_paper.material_override = _paper_material
 	_viewport.add_child(_paper)
+	_grain.disable_3d = true
+	_grain.gui_disable_input = true
+	_grain.size = Vector2i.ONE
+	_grain.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_grain_rect.material = ShaderMaterial.new()
+	(_grain_rect.material as ShaderMaterial).shader = GRAIN_SHADER
+	_grain.add_child(_grain_rect)
+	_viewport.add_child(_grain)
+	_paper_material.set_shader_parameter("grain_tex", _grain.get_texture())
 	_viewport.add_child(_layers)
 	resized.connect(_apply_view)
 	visibility_changed.connect(_redraw)
@@ -569,6 +586,8 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_paper.position = Vector3(board.x / 2.0, 0.0, board.y / 2.0)
 	_paper_material.set_shader_parameter("board_px", board)
 	_paper_material.set_shader_parameter("lines_tex", _mask_texture(lines, lines_size))
+	if _paper.visible:
+		_bake_grain(board)
 
 	var by_mesh := {}
 	for i in slots.size():
@@ -659,6 +678,17 @@ static func _optics(color: Color) -> Vector2:
 	if color.s < 0.18 and color.v > 0.7:
 		return Vector2(2.42, 0.035)
 	return Vector2(1.72, 0.012)
+
+
+## Renders the paper's grain for a board this size into _grain's texture,
+## once (the GPU works it out in a moment; paper_grain.gdshader).
+func _bake_grain(board: Vector2) -> void:
+	var k := minf(GRAIN_DENSITY, GRAIN_MAX_PX / maxf(board.x, board.y))
+	var px := Vector2i((board * k).ceil()).maxi(1)
+	_grain.size = px
+	_grain_rect.size = px
+	(_grain_rect.material as ShaderMaterial).set_shader_parameter("board_px", board)
+	_grain.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 static func _mask_texture(mask: PackedByteArray, size: Vector2i) -> ImageTexture:

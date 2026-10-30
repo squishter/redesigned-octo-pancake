@@ -348,6 +348,7 @@ light's slow drift changes it. `render_count` counts its renders.
 | `gem_shadow.gdshader` | Each stone's soft shadow on the paper (lighter under the tiniest stones), cast away from the light by how high it stands, with the colored caustic light it focuses inside it, shifting as the light moves; both fade out before the edge of their plane, which moves toward where they fall so it can stay small (`SHADOW_SPAN`, worked out for the lowest light and the most tilt). The caustics follow the stone's tilt (below); the shadow follows the true light. |
 | `gem_sparkle.gdshader` | Four-point star flares when one of a stone's two brightest facets turns a light straight up at the viewer; planes for unlit stones collapse to nothing. Every stone sits up to 15° tilted in its own direction (as the glue and board leave real stones), and its flares see the lights and viewer through that tilt, so a board of stones doesn't all flash alike. The stones themselves are drawn flat. |
 | `paper.gdshader` | The paper's faint grain, lit by the key; metal-setting lines as gold ridges that shine toward the light. |
+| `paper_grain.gdshader` | The grain itself (value noise in board units), rendered once per board into a texture (at most 2 texels per board unit and 2048 on a side; filtering fills in the rest) that `paper.gdshader` samples, instead of being worked out for every pixel every frame. |
 | `gem_light.gdshaderinc` | The light and studio shared by all of them, and `as_tilted`, which turns a direction into a tilted stone's frame. |
 
 ## Trying it
