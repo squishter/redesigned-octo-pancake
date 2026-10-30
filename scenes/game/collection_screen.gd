@@ -193,6 +193,9 @@ func _update_pack(pack: String) -> void:
 	var info: Dictionary = Packs.PACKS[pack]
 	_pack_title.text = info["name"]
 	_pack_about.text = info["about"]
+	var count := Packs.reward_count(pack)
+	if count > 1:
+		_pack_about.text += "\nUp to %d distinct discoveries, plus any completed themes." % count
 	var left := Packs.pool(pack, profile).size()
 	_pack_stock.text = "Collection complete — you found them all!" if left == 0 else (
 		"Always a little more magic" if pack in ["powers", "all"] else "%d discoveries still to find" % left)
@@ -205,29 +208,29 @@ func _update_pack(pack: String) -> void:
 func _open(pack: String, with_pick: bool) -> void:
 	if is_instance_valid(_opening):
 		return
-	var before: Dictionary = (profile["unlocks"] as Dictionary).duplicate(true)
-	var item := Packs.open(profile, pack, with_pick, _rng)
-	if item.is_empty():
+	var rewards := Packs.open(profile, pack, with_pick, _rng)
+	if rewards.is_empty():
 		return
 	SaveStore.save_profile(profile)
 	_refresh()
-	# A new color may complete themes: say so on the same card.
-	var themes := Unlockables.themes_gained(before, profile["unlocks"])
-	if not themes.is_empty():
-		item["themes"] = themes
-	_reveal(pack, item)
+	_reveal(pack, rewards)
 
 
-## The paid reward is already saved; the opening scene only presents it.
-func _reveal(pack: String, item: Dictionary) -> void:
+## The complete paid bundle is already saved. Presentation never draws again.
+func _reveal(pack: String, rewards: Array[Dictionary]) -> void:
 	_opening = PackOpening.new()
 	_opening.pack = pack
-	_opening.item = item
-	_opening.picture = _item_picture(item, 300.0)
+	_opening.rewards = rewards
+	_opening.picture_factory = _item_picture
 	_opening.dismissed.connect(func() -> void:
 		_opening = null
-		_carousel.set_process(true)
-		_free.grab_focus())
+		_carousel.set_process(_packs_view.visible)
+		if not _free.disabled:
+			_free.grab_focus()
+		elif not _buy.disabled:
+			_buy.grab_focus()
+		else:
+			_carousel.grab_focus())
 	_carousel.set_process(false)
 	add_child(_opening)
 

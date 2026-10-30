@@ -104,9 +104,13 @@ mode for trying out new pattern generation.
   swing on damped springs as the display rotates; the front pack's details
   and payment buttons appear below it. Opening a pack flexes the foil,
   tears away its crimped top and lifts out a collectible card, which flips
-  over amid confetti and glints. The reward is saved before the animation;
-  *Skip animation* or Back reveals it immediately, and Back again dismisses
-  it. *Collection*: every
+  over amid confetti and glints. All rewards are saved before the animation.
+  Bundles reveal each card in turn, then show a scrollable summary of
+  everything found, including power-up quantities and bonus color themes.
+  *Skip animation* or Back jumps to the full bundle summary; a single-card
+  pack reveals its card immediately. Back again dismisses either. Completing
+  a theme with a new color adds its own bonus card, without using a base draw
+  or charging again. *Collection*: every
   gem color and every shape in every cut as real rendered gems, then
   themes, picture types (collages and Diamond kits), flourishes (frames,
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
@@ -218,6 +222,17 @@ table, so additions never touch old puzzles or what she has:
   only once, ever, through the profile's `granted` ledger.
 - **A new kind:** add a row to `Unlockables.KINDS` (its unlock list and its
   pack), its items to `Unlockables.items()`, and the pack to `Packs.PACKS`.
+- **A reward bundle:** set `"rewards": N` on a `Packs.PACKS` definition
+  (default 1). Optional `source` selects an existing category or `all`;
+  `price` overrides the coin cost. Existing definitions retain their prices
+  and one base draw. `Packs.open()` returns an `Array[Dictionary]` receipt,
+  grants all entries and charges once. Draws are distinct within a bundle;
+  newly unlocked shapes make their cuts eligible for later draws. If stock
+  is short, the pack gives up to its configured count at the displayed pack
+  price. Newly completed themes are additional bonus entries. Save the
+  profile once before passing the receipt to `PackOpening.rewards`; reveal,
+  skip and dismissal only present that receipt. The optional `catalog`
+  argument to the pack APIs supports isolated definitions in tests.
 - **Ids are forever:** saves keep ids, never positions or names, so never
   rename or reuse one (map an old id to a new one in `Unlockables.RENAMED`
   if you must).
@@ -375,7 +390,13 @@ hold still when it does.
 
   ```sh
   XDG_DATA_HOME=/tmp/paint-with-gems-ui-tests godot --headless -s res://tests/run_menu_ui.gd
+  XDG_DATA_HOME=/tmp/paint-with-gems-bundle-tests godot --headless -s res://tests/run_pack_bundles.gd
   ```
+
+  Bundle checks also cover one-payment grants, custom prices, low stock,
+  newly eligible cuts, saved theme bonuses, sequential cards, rapid taps,
+  skipping mid-flip and long summaries. The render workflow captures the
+  actual multi-card reveal and full reward summary as well as single packs.
 
 Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen game scenes tests`.
 

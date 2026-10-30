@@ -58,6 +58,7 @@ func _capture() -> void:
 	await _snapshot("04-unlocked-card.png")
 	opening.close()
 	await create_timer(0.3).timeout
+	await _capture_bundle(collection)
 	collection._show_tab(false)
 	await create_timer(0.4).timeout
 	await _snapshot("06-collection.png")
@@ -66,6 +67,31 @@ func _capture() -> void:
 	await _capture_studio(profile)
 	print("UI renders saved to ", ProjectSettings.globalize_path(_out))
 	quit()
+
+
+func _capture_bundle(collection: Control) -> void:
+	# Use the real purchase API with an example five-reward pack definition.
+	# Production pack counts and prices remain unchanged.
+	var catalog: Dictionary = Packs.PACKS.duplicate(true)
+	catalog["all"]["rewards"] = 5
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 8421
+	var rewards := Packs.open(collection.profile, "all", true, rng, catalog)
+	SaveStore.save_profile(collection.profile)
+	collection._refresh()
+	collection._reveal("all", rewards)
+	var opening: PackOpening = collection._opening
+	opening._timeline.custom_step(10)
+	await create_timer(0.3).timeout
+	await _snapshot("12-bundle-first.png")
+	opening._advance()
+	await create_timer(0.75).timeout
+	await _snapshot("13-bundle-next.png")
+	opening.show_all_rewards()
+	await create_timer(0.4).timeout
+	await _snapshot("14-bundle-summary.png")
+	opening.advance_or_close()
+	await create_timer(0.3).timeout
 
 
 func _capture_studio(profile: Dictionary) -> void:

@@ -1,11 +1,15 @@
 class_name PackOpening
 extends Control
-## Presentation only: the caller grants and saves the reward before opening.
+## Presentation only: the caller grants and saves all rewards before opening.
 ## Skipping, Android back, and dismissal never touch the wallet or draw again.
 
 signal dismissed
 
 const GameTheme := preload("res://scenes/game/game_theme.gd")
+const UI := preload("res://scenes/game/ui_widgets.gd")
+var rewards: Array[Dictionary] = []
+var picture_factory: Callable
+## Legacy single-card inputs are normalized to a one-item bundle at entry.
 var pack := "colors"
 var item: Dictionary = {}
 var picture: Control
@@ -23,9 +27,20 @@ var _revealed := false
 var _closing := false
 var _burst := -1.0
 var _glow := 0.0
+var _index := 0
+var _transitioning := false
+var _showing_summary := false
+var _summary: GameDialog
 
 
 func _ready() -> void:
+	if rewards.is_empty() and not item.is_empty():
+		rewards.append(item)
+	if rewards.is_empty():
+		_reject_empty.call_deferred()
+		return
+	rewards = rewards.duplicate(true)
+	item = rewards[0]
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	z_index = 200
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -60,14 +75,9 @@ func _ready() -> void:
 	_keep.position = Vector2(140, 1300)
 	_keep.size = Vector2(620, 130)
 	_keep.visible = false
-	_keep.pressed.connect(close)
+	_keep.pressed.connect(_advance)
 	_stage.add_child(_keep)
-	for button: Button in [_skip, _keep]:
-		# Keep keyboard/controller focus within the opening overlay.
-		button.focus_next = button.get_path()
-		button.focus_previous = button.get_path()
-		for direction: String in ["top", "bottom", "left", "right"]:
-			button.set("focus_neighbor_" + direction, button.get_path())
+	_update_focus()
 	_skip.grab_focus()
 	resized.connect(_layout)
 	_layout()
@@ -75,6 +85,10 @@ func _ready() -> void:
 
 
 func _build_card() -> void:
+	if picture_factory.is_valid():
+		picture = picture_factory.call(item, 300.0)
+	elif _index > 0:
+		picture = null
 	_card = PanelContainer.new()
 	_card.position = Vector2(150, 260)
 	_card.size = Vector2(600, 910)
@@ -104,7 +118,8 @@ func _build_card() -> void:
 	_front.visible = false
 	_front_scroll.add_child(_front)
 	var kind := Label.new()
-	kind.text = Unlockables.KINDS.get(item.get("kind", ""), {}).get("found", "A new discovery!").to_upper()
+	kind.text = "BONUS COLOR STORY" if item.get("bonus", false) else (
+		Unlockables.KINDS.get(item.get("kind", ""), {}).get("found", "A new discovery!").to_upper())
 	kind.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kind.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	kind.add_theme_font_size_override("font_size", 28)
@@ -199,14 +214,84 @@ func _animate() -> void:
 
 func _settle() -> void:
 	_revealed = true
-	_heading.text = "Look what you found!"
-	_skip.hide()
+	_transitioning = false
+	_keep.disabled = false
+	if rewards.size() > 1:
+		_heading.text = "Discovery %d of %d" % [_index + 1, rewards.size()]
+		_keep.text = "Next discovery" if _index + 1 < rewards.size() else "See everything you found"
+		_keep.icon = GameTheme.icon("next" if _index + 1 < rewards.size() else "collection")
+		_skip.text = "Show all rewards"
+		_skip.show()
+	else:
+		_heading.text = "Look what you found!"
+		_skip.hide()
 	GameTheme.appear(_keep)
+	_update_focus()
 	_keep.grab_focus()
 
 
+func _update_focus() -> void:
+	var buttons: Array[Button] = []
+	for button: Button in [_skip, _keep]:
+		if button.visible and not button.disabled:
+			buttons.append(button)
+	for i in buttons.size():
+		var next := buttons[(i + 1) % buttons.size()].get_path()
+		buttons[i].focus_next = next
+		buttons[i].focus_previous = next
+		for direction: String in ["top", "bottom", "left", "right"]:
+			buttons[i].set("focus_neighbor_" + direction, next)
+
+
+func _advance() -> void:
+	if _closing or _transitioning or not _revealed:
+		return
+	if _index + 1 >= rewards.size():
+		if rewards.size() > 1:
+			show_all_rewards()
+		else:
+			close()
+		return
+	_transitioning = true
+	_revealed = false
+	_keep.disabled = true
+	_update_focus()
+	_skip.grab_focus()
+	_timeline = create_tween()
+	_timeline.tween_property(_card, "position:x", 90.0, 0.18).set_trans(Tween.TRANS_QUAD)
+	_timeline.parallel().tween_property(_card, "modulate:a", 0.0, 0.18)
+	_timeline.tween_callback(_next_card)
+
+
+func _next_card() -> void:
+	_stage.remove_child(_card)
+	_card.queue_free()
+	_index += 1
+	item = rewards[_index]
+	_build_card()
+	_card.position = Vector2(150, 220)
+	_card.scale = Vector2(0, 0.92)
+	_card.show()
+	_back.hide()
+	_front.show()
+	_front_scroll.show()
+	_heading.text = "Discovery %d of %d" % [_index + 1, rewards.size()]
+	_burst = 0.0
+	_timeline = create_tween()
+	_timeline.tween_property(_card, "scale", Vector2.ONE, 0.36).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_timeline.tween_callback(_settle)
+	Input.vibrate_handheld(25, 0.4)
+
+
+## Skip is presentation only. For bundles it always exposes the full receipt,
+## including cards that have not animated yet.
 func show_reward() -> void:
-	if _revealed or _closing:
+	if _closing or _showing_summary or rewards.is_empty():
+		return
+	if rewards.size() > 1:
+		show_all_rewards()
+		return
+	if _revealed:
 		return
 	if _timeline != null and _timeline.is_valid():
 		_timeline.kill()
@@ -222,15 +307,62 @@ func show_reward() -> void:
 	_settle()
 
 
+func show_all_rewards() -> void:
+	if _closing or _showing_summary or rewards.is_empty():
+		return
+	if _timeline != null and _timeline.is_valid():
+		_timeline.kill()
+	_transitioning = false
+	_revealed = true
+	_showing_summary = true
+	_stage.hide()
+	_summary = GameDialog.new("Everything you found", "%d discoveries, all saved to your collection." % rewards.size(),
+		"collection")
+	_summary.preferred_height = 1700
+	for reward: Dictionary in rewards:
+		var title: String = reward.get("name", "A new discovery")
+		if reward.get("kind") == "power":
+			title += " ×%d" % reward.get("charges", 1)
+		if reward.get("bonus", false):
+			title = "Bonus · " + title
+		var copy := UI.item(_summary.body, title, reward.get("about", ""),
+			GameTheme.pack_glyph(reward.get("pack", pack)))
+		if picture_factory.is_valid():
+			var art: Control = picture_factory.call(reward, 84.0)
+			if art != null:
+				var row := copy.get_parent()
+				var placeholder := row.get_child(0)
+				row.remove_child(placeholder)
+				placeholder.queue_free()
+				row.add_child(art)
+				row.move_child(art, 0)
+	var done := GameTheme.button("Keep all the sparkle", true)
+	done.pressed.connect(_summary.close)
+	_summary.actions.add_child(done)
+	_summary.closed.connect(close)
+	_summary.hide()
+	add_child(_summary)
+	_summary.open()
+
+
 func advance_or_close() -> void:
-	if _revealed:
+	if _showing_summary:
+		close()
+	elif rewards.size() > 1:
+		show_all_rewards()
+	elif _revealed:
 		close()
 	else:
 		show_reward()
 
 
 func close() -> void:
-	if not _revealed or _closing:
+	if _closing:
+		return
+	if rewards.size() > 1 and not _showing_summary:
+		show_all_rewards()
+		return
+	if not _revealed:
 		return
 	_closing = true
 	_keep.disabled = true
@@ -241,7 +373,14 @@ func close() -> void:
 		queue_free())
 
 
+func _reject_empty() -> void:
+	dismissed.emit()
+	queue_free()
+
+
 func _process(delta: float) -> void:
+	if _showing_summary:
+		return
 	if _burst >= 0.0:
 		_burst += delta
 	queue_redraw()
