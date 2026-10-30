@@ -155,20 +155,27 @@ const THEMES := {
 const STARTING_THEMES := ["rainbow", "sunset", "ocean", "garden", "night", "ember"]
 
 ## Puzzle types: which picture generator makes them. Kits turn a mandala
-## into a grid of round or square drills, one color per cell.
+## into a grid of round or square drills, one color per cell. `source` names
+## the picture in the New puzzle panel, under its kind (collage or kit).
 const PUZZLES := {
-	"mandala": {"name": "Mandala collage", "variant": "mandala", "about": "Rings of patterned gems around a center."},
-	"flower": {"name": "Flower collage", "variant": "flower", "about": "Layered petals, round and round."},
-	"snowflake": {"name": "Snowflake collage", "variant": "snowflake", "about": "Six-fold frosty arms and plates."},
-	"heart": {"name": "Heart collage", "variant": "heart", "about": "Hearts filled with patterns and motifs."},
-	"butterfly": {"name": "Butterfly collage", "variant": "butterfly", "about": "Mirrored wings with spots and veins."},
-	"kit": {"name": "Diamond kit", "variant": "mandala", "kit": true, "about": "A grid of drills, one color per cell."},
+	"mandala": {"name": "Mandala collage", "source": "Mandala", "variant": "mandala",
+			"about": "Rings of patterned gems around a center."},
+	"flower": {"name": "Flower collage", "source": "Flower", "variant": "flower",
+			"about": "Layered petals, round and round."},
+	"snowflake": {"name": "Snowflake collage", "source": "Snowflake", "variant": "snowflake",
+			"about": "Six-fold frosty arms and plates."},
+	"heart": {"name": "Heart collage", "source": "Heart", "variant": "heart",
+			"about": "Hearts filled with patterns and motifs."},
+	"butterfly": {"name": "Butterfly collage", "source": "Butterfly", "variant": "butterfly",
+			"about": "Mirrored wings with spots and veins."},
+	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,
+			"about": "A mandala as a grid of drills, one color per cell."},
 }
 const STARTING_PUZZLES := ["mandala"]
 ## Puzzles made from her own photos: always there, not unlocked.
 const PHOTO_MODES := {
-	"photo_collage": {"name": "Photo collage", "short": "collage", "about": "Your photo traced into gem shapes."},
-	"photo_kit": {"name": "Photo kit", "short": "kit", "about": "Your photo as a grid of drills."},
+	"photo_collage": {"name": "Photo collage", "about": "Your photo traced into gem shapes."},
+	"photo_kit": {"name": "Photo kit", "about": "Your photo as a grid of drills."},
 }
 
 ## Picture features, off until unlocked.

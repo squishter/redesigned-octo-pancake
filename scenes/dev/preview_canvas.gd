@@ -226,7 +226,7 @@ func _draw_kit() -> void:
 			var c: Color = entry["color"]
 			var pos := rect.position + Vector2(x, y) * cell
 			if round_drill:
-				_content.draw_circle(pos + Vector2(cell, cell) / 2.0, cell * 0.46, c)
+				_content.draw_circle(pos + Vector2(cell, cell) / 2.0, cell * 0.49, c)
 			else:
 				_content.draw_rect(Rect2(pos, Vector2(cell, cell)), c)
 			if font_size >= 7:

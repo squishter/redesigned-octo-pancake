@@ -33,10 +33,10 @@ mode for trying out new pattern generation.
   one per hue, the starting rainbow ones and mixes like Tropical, Galaxy and
   Seaside. A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
-- **Photos.** *Photo collage…* and *Photo kit…* in the New puzzle panel pick
-  one of her photos (the phone's own picker; turned upright by its EXIF orientation, see `game/photo_loader.gd`) and turn it into a collage
-  or a kit of drills, in her unlocked colors. *Camera collage…* and
-  *Camera kit…* take a new photo instead (`scenes/game/camera_capture.gd`:
+- **Photos.** *A photo* is a picture source for both kinds of puzzle in the
+  New puzzle panel: *Choose photo…* picks one of her photos (the phone's own picker; turned upright by its EXIF orientation, see `game/photo_loader.gd`) and turns it into a collage
+  or a kit of drills, in her unlocked colors. *Take photo…* takes a new
+  photo instead (`scenes/game/camera_capture.gd`:
   a full-screen camera view through `CameraServer`, with Switch for the
   other camera and Turn for the photo's way up; Android asks for the camera
   permission, which the committed export preset includes). Photo puzzles can't be
@@ -89,6 +89,7 @@ mode for trying out new pattern generation.
   a Finish gem and two Finders.
 - **Diamond kits**: a mandala painted with the theme, turned into a grid of
   round or square drills (whichever are unlocked), played like a collage.
+  Drills fill 98% of their cell, so neighbors almost touch, like a real kit.
   *Kit size* in the New puzzle panel (for photo kits too) sets the drills
   on the longer side: Small 50, Medium 90, Large 130 or X-large 250; the
   shorter side follows the picture's shape (an X-large kit can have 62,500
@@ -96,8 +97,14 @@ mode for trying out new pattern generation.
   where every drill as a slot would be 11 MB) and turn back into drills on
   loading; filling a drill only collapses its own outline, so big boards
   stay quick.
-- **Menu.** *New puzzle* picks an unlocked type and theme and makes a fresh
-  one (on a worker thread). Every puzzle keeps its own save, so starting a
+- **Menu.** *New puzzle* opens a panel that asks in steps and shows only
+  what applies: the kind (*Gem collage* or *Diamond kit*), then the picture
+  (her unlocked collage pictures, the mandala for kits once unlocked, or *A
+  photo*), then that picture's options (*Colors* for generated pictures;
+  *Photo* subject for photo collages; *Drill colors* for photo kits; *Kit
+  size* for kits). It makes the puzzle on a worker thread.
+  Recoloring opens the same panel with the kind and picture fixed and only
+  *Colors* to choose. Every puzzle keeps its own save, so starting a
   new one never touches the others. Each saved puzzle shows a thumbnail and
   how far along it is, and can be continued, restarted (asks "Sure?"
   first), recolored (the same picture made again in another unlocked theme,

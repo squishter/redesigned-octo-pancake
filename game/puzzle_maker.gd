@@ -14,7 +14,7 @@ const WOBBLE_CHANCE := 0.4
 ## Kits: px per cell and the drill's share of it, how often a kit uses
 ## square drills (when both are unlocked) and the bigger board.
 const KIT_CELL := 10
-const KIT_DRILL := 0.9
+const KIT_DRILL := 0.98
 const SQUARE_DRILL_CHANCE := 0.4
 const MEDIUM_KIT_CHANCE := 0.4
 ## Kit sizes she can pick (KitGenerator.LONG_SIDES: drills on the longer side).

@@ -60,7 +60,7 @@ const SHADOW_SPAN := 2.6
 const SPARKLE_SPAN := 1.7
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
-const KIT_DRILL := 0.9
+const KIT_DRILL := 0.98
 ## The key light: where it hangs when the picture appears (azimuth in the
 ## board's xz plane, toward the picture's top left; elevation above the
 ## paper) and how far it drifts. Radians.

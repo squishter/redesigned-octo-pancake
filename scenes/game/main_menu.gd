@@ -1,6 +1,8 @@
 extends Control
-## The game's menu: start a new puzzle (an unlocked type in an unlocked
-## color theme), or pick up a saved one. Every puzzle keeps its own save, so
+## The game's menu: start a new puzzle, or pick up a saved one. A new puzzle
+## is chosen in steps: the kind (gem collage or diamond kit), then its source
+## (an unlocked picture type, or a photo), then only the options that source
+## has (colors, photo subject, kit colors, kit size). Every puzzle keeps its own save, so
 ## a new one never overwrites one in progress. Each saved puzzle can be
 ## continued, restarted, recolored (the same picture made again in another
 ## unlocked theme, as a new puzzle beside it) or deleted. Collection & packs
@@ -24,11 +26,14 @@ var profile: Dictionary = {}
 var _list: VBoxContainer
 var _new_panel: Control
 var _settings_panel: Control
-var _type: OptionButton
+var _kind: OptionButton
+var _source: OptionButton
+var _about: Label
 var _theme: OptionButton
 var _start: Button
+var _choose_photo: Button
+var _take_photo_button: Button
 var _new_title: Label
-var _photo_row: Control
 var _subject: OptionButton
 var _kit_size: OptionButton
 var _kit_colors: OptionButton
@@ -87,49 +92,48 @@ func _ready() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 2
 	form.add_child(grid)
-	_type = _options(grid, "Picture")
+	# 1. What kind of puzzle.
+	_kind = _options(grid, "Puzzle")
+	for pair: Array in [["collage", "Gem collage"], ["kit", "Diamond kit"]]:
+		_kind.add_item(pair[1])
+		_kind.set_item_metadata(_kind.item_count - 1, pair[0])
+	_kind.item_selected.connect(func(_i: int) -> void: _fill_sources())
+	# 2. Where its picture comes from: an unlocked picture type, or a photo.
+	_source = _options(grid, "Picture")
+	_source.item_selected.connect(func(_i: int) -> void: _refresh_new())
+	# 3. Only the options that source has.
 	_theme = _options(grid, "Colors")
-	# Kits (Diamond kits and photo kits): drills on the longer side.
+	# Photo collages: the subject alone (when there is a clear one), or the whole photo.
+	_subject = _options(grid, "Photo")
+	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
+		_subject.add_item(pair[1])
+		_subject.set_item_metadata(_subject.item_count - 1, pair[0])
+	# Photo kits: her gems, or the photo's own colors in that many.
+	_kit_colors = _options(grid, "Drill colors")
+	for pair: Array in [[0, "My gems"], [12, "Photo's own 12 colors"], [20, "Photo's own 20 colors"],
+			[30, "Photo's own 30 colors"]]:
+		_kit_colors.add_item(pair[1])
+		_kit_colors.set_item_metadata(_kit_colors.item_count - 1, pair[0])
+	# Kits: drills on the longer side.
 	_kit_size = _options(grid, "Kit size")
 	for size: String in PuzzleMaker.KIT_SIZES:
 		_kit_size.add_item("%s (%d)" % [PuzzleMaker.KIT_SIZES[size], KitGenerator.LONG_SIDES[size]])
 		_kit_size.set_item_metadata(_kit_size.item_count - 1, size)
 	_kit_size.select(1)
+	_about = Label.new()
+	_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_about.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	_about.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	form.add_child(_about)
 	var actions := HBoxContainer.new()
 	form.add_child(actions)
 	_start = _button(actions, "Start", _start_making)
-	_start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# A photo source starts from one of her photos or one taken right now.
+	_choose_photo = _button(actions, "Choose photo…", func() -> void: _pick_photo(_photo_mode()))
+	_take_photo_button = _button(actions, "Take photo…", func() -> void: _take_photo(_photo_mode()))
+	for b: Button in [_start, _choose_photo, _take_photo_button]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_button(actions, "Cancel", func() -> void: _new_panel.visible = false)
-	# Or from one of her photos: colors come from the photo (snapped to her
-	# gem colors), so there's no theme to pick.
-	_photo_row = VBoxContainer.new()
-	form.add_child(_photo_row)
-	var photo_grid := GridContainer.new()
-	photo_grid.columns = 2
-	_photo_row.add_child(photo_grid)
-	# Photo collages: the subject alone (when there is a clear one), or the whole photo.
-	_subject = _options(photo_grid, "Photo collage")
-	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
-		_subject.add_item(pair[1])
-		_subject.set_item_metadata(_subject.item_count - 1, pair[0])
-	# Photo kits: her gems, or the photo's own colors in that many.
-	_kit_colors = _options(photo_grid, "Photo kit colors")
-	for pair: Array in [[0, "My gems"], [12, "Photo's own 12 colors"], [20, "Photo's own 20 colors"],
-			[30, "Photo's own 30 colors"]]:
-		_kit_colors.add_item(pair[1])
-		_kit_colors.set_item_metadata(_kit_colors.item_count - 1, pair[0])
-	var photo_buttons := HBoxContainer.new()
-	_photo_row.add_child(photo_buttons)
-	for kind: String in GemCatalog.PHOTO_MODES:
-		var b := _button(photo_buttons, GemCatalog.PHOTO_MODES[kind]["name"] + "…", func() -> void: _pick_photo(kind))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Or a photo taken right now.
-	var camera_buttons := HBoxContainer.new()
-	_photo_row.add_child(camera_buttons)
-	for kind: String in GemCatalog.PHOTO_MODES:
-		var b := _button(camera_buttons, "Camera %s…" % GemCatalog.PHOTO_MODES[kind]["short"],
-				func() -> void: _take_photo(kind))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_photo_dialog = FileDialog.new()
 	_photo_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_photo_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -194,14 +198,11 @@ func _ready() -> void:
 
 
 ## Opens the panel for a new puzzle, or (with a puzzle's meta) for
-## recoloring that one in another theme.
+## recoloring that one in another theme: then the kind and picture are
+## fixed and only the colors can change.
 func _open_new(recolor: Dictionary) -> void:
 	_recolor = recolor
 	var unlocks: Dictionary = profile["unlocks"]
-	_type.clear()
-	for t: String in GemCatalog.unlocked_puzzles(unlocks):
-		_type.add_item(GemCatalog.puzzle_name(t))
-		_type.set_item_metadata(_type.item_count - 1, t)
 	_theme.clear()
 	for th: String in GemCatalog.unlocked_themes(unlocks):
 		if not recolor.is_empty() and th == recolor["theme"]:
@@ -210,21 +211,74 @@ func _open_new(recolor: Dictionary) -> void:
 		_theme.set_item_metadata(_theme.item_count - 1, th)
 	if _theme.item_count > 0:
 		_theme.select(randi() % _theme.item_count)
-	_type.disabled = not recolor.is_empty()
 	if not recolor.is_empty():
-		for i in _type.item_count:
-			if _type.get_item_metadata(i) == recolor["type"]:
-				_type.select(i)
+		_kind.select(1 if GemCatalog.PUZZLES.get(recolor["type"], {}).get("kit", false) else 0)
+	_fill_sources()
+	if not recolor.is_empty():
+		for i in _source.item_count:
+			if _source.get_item_metadata(i) == recolor["type"]:
+				_source.select(i)
+	_kind.disabled = not recolor.is_empty()
+	_source.disabled = not recolor.is_empty()
 	_new_title.text = "Recolor this picture" if not recolor.is_empty() else "A new puzzle"
-	_photo_row.visible = recolor.is_empty()
-	_start.disabled = _type.item_count == 0 or _theme.item_count == 0
+	_refresh_new()
 	_new_panel.visible = true
 
 
+## The sources for the chosen kind: her unlocked picture types of that kind,
+## then a photo (always there).
+func _fill_sources() -> void:
+	var kit := _is_kit()
+	var previous: Variant = _source.get_item_metadata(_source.selected) if _source.selected >= 0 else null
+	_source.clear()
+	for t: String in GemCatalog.unlocked_puzzles(profile["unlocks"]):
+		if GemCatalog.PUZZLES[t].get("kit", false) == kit:
+			_source.add_item(GemCatalog.PUZZLES[t].get("source", GemCatalog.puzzle_name(t)))
+			_source.set_item_metadata(_source.item_count - 1, t)
+	_source.add_item("A photo")
+	_source.set_item_metadata(_source.item_count - 1, "photo")
+	_source.select(0)
+	for i in _source.item_count:
+		if _source.get_item_metadata(i) == previous:
+			_source.select(i)
+	_refresh_new()
+
+
+## Shows only the options and buttons the chosen kind and source have.
+func _refresh_new() -> void:
+	var kit := _is_kit()
+	var photo := _is_photo()
+	var recoloring := not _recolor.is_empty()
+	_show_row(_theme, not photo)
+	_show_row(_subject, photo and not kit)
+	_show_row(_kit_colors, photo and kit)
+	_show_row(_kit_size, kit and not recoloring)
+	_start.visible = not photo
+	_choose_photo.visible = photo
+	_take_photo_button.visible = photo
+	_start.disabled = _theme.item_count == 0
+	var type_id: String = _photo_mode() if photo else str(_source.get_item_metadata(maxi(_source.selected, 0)))
+	var info: Dictionary = GemCatalog.PUZZLES.get(type_id, GemCatalog.PHOTO_MODES.get(type_id, {}))
+	_about.text = info.get("about", "")
+
+
+func _is_kit() -> bool:
+	return _kind.get_item_metadata(maxi(_kind.selected, 0)) == "kit"
+
+
+func _is_photo() -> bool:
+	return _source.selected >= 0 and _source.get_item_metadata(_source.selected) == "photo"
+
+
+## The photo puzzle (GemCatalog.PHOTO_MODES) for the chosen kind.
+func _photo_mode() -> String:
+	return "photo_kit" if _is_kit() else "photo_collage"
+
+
 func _start_making() -> void:
-	if _task_id >= 0 or _type.selected < 0 or _theme.selected < 0:
+	if _task_id >= 0 or _source.selected < 0 or _theme.selected < 0 or _is_photo():
 		return
-	var type_id: String = _type.get_item_metadata(_type.selected)
+	var type_id: String = _source.get_item_metadata(_source.selected)
 	var theme_id: String = _theme.get_item_metadata(_theme.selected)
 	_request = PuzzleMaker.new_request(type_id, theme_id)
 	_request["kit_size"] = _kit_size.get_item_metadata(maxi(_kit_size.selected, 0))
@@ -429,6 +483,7 @@ static func _ago(unix: int) -> String:
 	return "%d days ago" % roundi(s / 86400.0)
 
 
+## A labeled row in a two-column grid; _show_row shows or hides both halves.
 func _options(parent: Control, label: String) -> OptionButton:
 	var l := Label.new()
 	l.text = label
@@ -438,8 +493,14 @@ func _options(parent: Control, label: String) -> OptionButton:
 	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ob.custom_minimum_size.y = LabTheme.TAP_HEIGHT
 	ob.fit_to_longest_item = false
+	ob.set_meta("label", l)
 	parent.add_child(ob)
 	return ob
+
+
+func _show_row(c: Control, on: bool) -> void:
+	c.visible = on
+	(c.get_meta("label") as Control).visible = on
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
