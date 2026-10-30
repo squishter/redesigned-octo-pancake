@@ -27,6 +27,7 @@ func _capture() -> void:
 	var menu := MainMenu.new()
 	menu.profile = profile
 	menu.show_developer_tools = false
+	menu.show_debug_settings = false
 	root.add_child(menu)
 	await create_timer(0.8).timeout
 	await _snapshot("01-main-menu.png")
@@ -128,6 +129,10 @@ func _capture_studio(profile: Dictionary) -> void:
 	root.add_child(play)
 	await create_timer(0.8).timeout
 	await _snapshot("08-game-controls.png")
+	play._open_settings()
+	await create_timer(0.35).timeout
+	await _snapshot("15-board-settings.png")
+	play.go_back()
 	play._toggle_powers()
 	await create_timer(0.35).timeout
 	await _snapshot("09-power-ups.png")

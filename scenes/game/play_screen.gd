@@ -26,6 +26,7 @@ signal collection_requested
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const UI := preload("res://scenes/game/ui_widgets.gd")
 const HintButton := preload("res://scenes/game/hint_button.gd")
+const SettingsDialog := preload("res://scenes/game/settings_dialog.gd")
 ## A hint: how long the board takes to get there, how long the ring around
 ## the slot lasts (it pulses twice), and how much around the slot shows.
 const HINT_GLIDE := 0.55
@@ -103,6 +104,7 @@ var _finish_pending := false
 ## Whole-puzzle power-ups on for this puzzle (kept in its meta).
 var _powers_on: Array = []
 var _powers_panel: GameDialog
+var _settings_panel: SettingsDialog
 var _powers_list: VBoxContainer
 var _done_label: Label
 ## Tidy up places stones itself; it doesn't start again inside itself.
@@ -146,6 +148,12 @@ func _ready() -> void:
 	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	top.add_child(heading)
 	_button(top, "Fit", func() -> void: _board.reset_view()).theme_type_variation = "QuietButton"
+	var settings := _button(top, "", _open_settings)
+	settings.name = "SettingsButton"
+	settings.icon = GameTheme.icon("settings")
+	settings.tooltip_text = "Settings"
+	settings.custom_minimum_size.x = GameTheme.TAP_HEIGHT
+	settings.theme_type_variation = "QuietButton"
 	var toolbar := UI.panel(false, 20)
 	root.add_child(toolbar)
 	var controls := HBoxContainer.new()
@@ -179,9 +187,13 @@ func _ready() -> void:
 	_palette.add_child(_row)
 	_card_style = _card(GameTheme.FIELD, Color.TRANSPARENT)
 	_picked_style = _card(GameTheme.FIELD_PRESSED, GameTheme.GOLD)
-	_fill_animation = profile.get("settings", {}).get("fill_animation", "fly")
-	if not _fill_animation in profile["unlocks"].get("animations", ["pop"]):
-		_fill_animation = "pop"
+	_apply_settings()
+	_settings_panel = SettingsDialog.new()
+	_settings_panel.profile = profile
+	_settings_panel.done_text = "Back to my picture"
+	_settings_panel.settings_changed.connect(_apply_settings)
+	_settings_panel.visibility_changed.connect(_update_board_input)
+	add_child(_settings_panel)
 
 	_powers_panel = GameDialog.new("A little helping hand", "Choose a boost. Keep your creative flow.", "power")
 	_powers_panel.preferred_height = 1660
@@ -409,7 +421,7 @@ func _apply_scroll() -> void:
 ## The gem row's touches: a drag scrolls it (and flings on letting go), a
 ## tap picks the gem under the finger (or lets go of the picked one).
 func _input(event: InputEvent) -> void:
-	if _powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible):
+	if _modal_open():
 		return
 	if not _palette.is_visible_in_tree():
 		return
@@ -603,8 +615,26 @@ func _toggle_powers() -> void:
 		_update_board_input()
 
 
+func _apply_settings() -> void:
+	_fill_animation = profile.get("settings", {}).get("fill_animation", "fly")
+	if not _fill_animation in profile["unlocks"].get("animations", ["pop"]):
+		_fill_animation = "pop"
+
+
+func _open_settings() -> void:
+	_settings_panel.open()
+
+
+func _modal_open() -> bool:
+	return (_settings_panel.visible or _powers_panel.visible
+			or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
+
+
 func _update_board_input() -> void:
-	_board.input_enabled = not (_powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
+	if not is_instance_valid(_board):
+		return
+	_board.input_enabled = not _modal_open()
+	_stroke_type = -1
 	_row_touch = -1
 	_fling = 0.0
 
@@ -914,7 +944,9 @@ func _leave() -> void:
 
 ## Android's back button.
 func go_back() -> void:
-	if _board.is_celebrating():
+	if _settings_panel.visible:
+		_settings_panel.close()
+	elif _board.is_celebrating():
 		_show_rewards()
 	elif is_instance_valid(_reward_dialog) and _reward_dialog.visible:
 		_reward_dialog.close()

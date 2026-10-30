@@ -31,6 +31,7 @@ func _ready() -> void:
 	_veil.hide()
 	add_child(_veil)
 	profile = SaveStore.load_profile()
+	SaveStore.apply_settings(profile)
 	_show_menu()
 
 

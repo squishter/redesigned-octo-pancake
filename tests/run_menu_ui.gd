@@ -27,6 +27,7 @@ func _run() -> void:
 	await _test_carousel()
 	await _test_purchases()
 	await _test_reward_kinds()
+	await _test_settings()
 	await _test_transitions()
 	await _test_completion_rewards()
 	await _test_unlock_all()
@@ -293,12 +294,60 @@ func _test_reward_kinds() -> void:
 	await process_frame
 
 
+func _choose_setting(dialog: GameDialog, control_name: String, value: Variant) -> void:
+	var options := dialog.body.find_child(control_name, true, false) as OptionButton
+	_check(options != null, "Settings offers %s" % control_name)
+	if options == null:
+		return
+	for i in options.item_count:
+		if options.get_item_metadata(i) == value:
+			options.select(i)
+			options.item_selected.emit(i)
+			return
+	_check(false, "%s offers %s" % [control_name, value])
+
+
+func _test_settings() -> void:
+	print("Production settings, frame cap defaults, migration and persistence")
+	_check(int(ProjectSettings.get_setting("application/run/max_fps")) == 30, "The engine starts capped at 30 FPS")
+	var profile := SaveStore.upgrade({})
+	_check(profile["settings"]["fps_cap"] == 30, "New players default to 30 FPS")
+	var old := SaveStore.upgrade({"settings": {"fill_animation": "pop", "finale": "ripple"}})
+	_check(old["settings"]["fps_cap"] == 30 and old["settings"]["fill_animation"] == "pop",
+		"Existing players get 30 FPS and keep their animation preference")
+	for cap: Variant in [-1, 25, "60", null, true, 60.5]:
+		var invalid := SaveStore.upgrade({"settings": {"fps_cap": cap}})
+		_check(invalid["settings"]["fps_cap"] == 30, "Invalid frame cap falls back to 30: %s" % cap)
+	var menu := MainMenu.new()
+	menu.profile = profile
+	menu.show_debug_settings = false
+	menu.show_developer_tools = false
+	root.add_child(menu)
+	menu._settings_panel.open()
+	await _layout_frames()
+	_check(menu._settings_panel.body.find_child("UnlockAll", true, false) == null, "Production settings hide debug unlocks")
+	_check_dialog(menu._settings_panel)
+	_check_button_widths(menu, menu.size.x)
+	for cap: int in SaveStore.FPS_CAPS:
+		_choose_setting(menu._settings_panel, "FpsCap", cap)
+		_check(Engine.max_fps == cap, "Frame cap applies immediately: %d" % cap)
+		var loaded := SaveStore.load_profile()
+		_check(loaded["settings"]["fps_cap"] == cap, "Frame cap survives saving and loading: %d" % cap)
+		Engine.max_fps = 30
+		SaveStore.apply_settings(loaded)
+		_check(Engine.max_fps == cap, "Saved frame cap applies on startup: %d" % cap)
+	_choose_setting(menu._settings_panel, "FpsCap", 60)
+	menu.queue_free()
+	await process_frame
+
+
 func _test_transitions() -> void:
 	print("Screen transitions and board entry")
 	var app = AppScene.instantiate()
 	root.add_child(app)
 	await create_timer(0.65).timeout
 	_check(not app._transitioning and not app._veil.visible, "Initial menu transition completes")
+	_check(Engine.max_fps == 60, "App startup restores the player's frame cap")
 	app._show_collection()
 	app._show_collection()
 	await create_timer(0.8).timeout
@@ -315,6 +364,28 @@ func _test_transitions() -> void:
 	_check(not app._transitioning and app._screen.puzzle_id == meta["id"], "Menu-to-board transition completes")
 	_check_button_widths(app._screen, app._screen.size.x)
 	_check(not app._screen._hint.disabled, "A new puzzle starts with an available hint")
+	var play: Control = app._screen
+	var settings_button := play.find_child("SettingsButton", true, false) as Button
+	_check(settings_button != null and settings_button.is_visible_in_tree(), "Settings is accessible on the board")
+	settings_button.pressed.emit()
+	await _layout_frames()
+	_check(play._settings_panel.visible and not play._board.input_enabled, "Board settings open and block puzzle gestures")
+	_check_dialog(play._settings_panel)
+	_check_button_widths(play, play.size.x)
+	var selected: int = play._selected
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	touch.position = play._palette.get_global_rect().get_center()
+	play._input(touch)
+	_check(play._row_touch == -1 and play._selected == selected, "Settings block touches on the gem tray underneath")
+	_choose_setting(play._settings_panel, "FillAnimation", "pop")
+	_check(play._fill_animation == "pop", "Changing placement animation updates the active puzzle immediately")
+	_choose_setting(play._settings_panel, "FpsCap", 30)
+	_check(Engine.max_fps == 30, "Board frame cap applies immediately")
+	play.go_back()
+	_check(not play._settings_panel.visible and play._board.input_enabled and app._screen == play,
+		"Back closes settings and returns to the same puzzle")
+	_check(play._filled == 0 and play._overlay.placed[0] == 0, "Changing settings preserves puzzle progress")
 	app._screen._use_hint()
 	_check(app._screen._hint.disabled and int(meta["hints"]) == 0 and app._screen._ring_slot >= 0,
 		"Hint focuses an open slot and spends its charge")
@@ -360,6 +431,10 @@ func _test_completion_rewards() -> void:
 	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
 		"The finale keeps playing until she ends it")
 	_check(play._board.input_enabled, "She can pinch and pan during the finale")
+	play._open_settings()
+	play.go_back()
+	_check(not play._settings_panel.visible and play._board.is_celebrating(),
+		"Back closes settings on a finished board without ending the finale")
 	_check(play._rewards_button.text == "End finale", "The finished bar offers to end the finale")
 	for pressed: bool in [true, false]:
 		var tap := InputEventScreenTouch.new()

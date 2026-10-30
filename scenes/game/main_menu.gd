@@ -20,6 +20,7 @@ signal reload_requested
 
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const UI := preload("res://scenes/game/ui_widgets.gd")
+const SettingsDialog := preload("res://scenes/game/settings_dialog.gd")
 const THUMB_PX := 180
 ## Restart and Delete ask again; a second tap within this long confirms.
 const CONFIRM_MS := 3000
@@ -32,7 +33,7 @@ var show_debug_settings := OS.is_debug_build()
 var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
 var _new_panel: GameDialog
-var _settings_panel: GameDialog
+var _settings_panel: SettingsDialog
 var _mode_buttons: Array[Button] = []
 var _theme_preview: HBoxContainer
 var _photo_actions: HBoxContainer
@@ -205,15 +206,12 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
 
-	_settings_panel = GameDialog.new("Your finishing touches", "Make the sparkle feel like you.", "settings")
-	_settings_panel.preferred_height = 1120
-	_settings_panel.hide()
+	_settings_panel = SettingsDialog.new()
+	_settings_panel.profile = profile
+	_settings_panel.show_debug_settings = show_debug_settings
+	_settings_panel.done_text = "Lovely, let's create"
+	_settings_panel.reload_requested.connect(func() -> void: reload_requested.emit())
 	add_child(_settings_panel)
-	_setting(_settings_panel.body, "Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
-	_setting(_settings_panel.body, "Grand finale", "finale", GemCatalog.FINALES, "finales")
-	if show_debug_settings:
-		_unlock_all_setting(_settings_panel.body)
-	_button(_settings_panel.actions, "Lovely, let's create", _settings_panel.close).theme_type_variation = "PrimaryButton"
 	var footer := HBoxContainer.new()
 	root.add_child(footer)
 	_small_button(footer, "Settings", _settings_panel.open).theme_type_variation = "QuietButton"
@@ -538,41 +536,6 @@ func _card(meta: Dictionary) -> Control:
 		SaveStore.delete_puzzle(profile, id)
 		_refresh_list()))
 	return card
-
-
-## A settings row choosing `key` among the unlocked entries of `catalog`
-## (unlock list `unlocked`), saved as soon as it changes.
-func _setting(parent: Control, label: String, key: String, catalog: Dictionary, unlocked: String) -> void:
-	var ob := _options(parent, label)
-	var settings: Dictionary = profile["settings"]
-	for id: String in catalog:
-		if id in profile["unlocks"].get(unlocked, []):
-			ob.add_item(catalog[id]["name"])
-			ob.set_item_metadata(ob.item_count - 1, id)
-			if id == settings.get(key, ""):
-				ob.select(ob.item_count - 1)
-	var about := UI.label("", 29, GameTheme.TEXT_DIM)
-	parent.add_child(about)
-	if ob.selected >= 0:
-		about.text = catalog[ob.get_item_metadata(ob.selected)].get("about", "")
-	ob.item_selected.connect(func(i: int) -> void:
-		settings[key] = ob.get_item_metadata(i)
-		about.text = catalog[settings[key]].get("about", "")
-		SaveStore.save_profile(profile))
-
-
-## Debug builds: lends her every item while on; her own come back when off.
-func _unlock_all_setting(parent: Control) -> void:
-	parent.add_child(UI.label("Testing (debug builds only)", 32, GameTheme.GOLD))
-	var on := SaveStore.is_unlock_all(profile)
-	var b := _button(parent, "Unlock everything: %s" % ("On" if on else "Off"), func() -> void:
-		SaveStore.set_unlock_all(profile, not SaveStore.is_unlock_all(profile))
-		SaveStore.save_profile(profile)
-		reload_requested.emit())
-	b.theme_type_variation = "QuietButton"
-	b.name = "UnlockAll"
-	parent.add_child(UI.label("Every color, shape, cut, theme, picture type, flourish and animation, for "
-			+ "testing. Your own collection is kept and comes back when this is off.", 29, GameTheme.TEXT_DIM))
 
 
 ## Runs `action` on a second tap within CONFIRM_MS; the first asks "Sure?".

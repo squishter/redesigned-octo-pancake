@@ -19,8 +19,10 @@ const DIR := "user://saves"
 ## a newer version) are kept as they are.
 const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
-## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES).
-const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
+## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES), and frame cap.
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple", "fps_cap": 30}
+## Player frame caps, with 0 leaving the rate uncapped by the engine.
+const FPS_CAPS := [30, 60, 90, 120, 0]
 ## Debug builds only: the setting that lends her everything for testing.
 ## While it's on, the profile's `unlocks` hold every item and her own are
 ## kept aside under REAL_UNLOCKS, which is what save_profile writes. Turned
@@ -76,6 +78,7 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 	for key: String in DEFAULT_SETTINGS:
 		if not settings.has(key):
 			settings[key] = DEFAULT_SETTINGS[key]
+	settings["fps_cap"] = fps_cap(settings)
 	profile["settings"] = settings
 	var wallet: Dictionary = profile.get("wallet", {})
 	for key in ["coins", "picks"]:
@@ -95,6 +98,20 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 		Hints.upgrade(meta)
 	profile["puzzles"] = puzzles
 	return profile
+
+
+## JSON numbers may be floats; invalid or unsupported values use the default.
+static func fps_cap(settings: Dictionary) -> int:
+	var cap: Variant = settings.get("fps_cap", DEFAULT_SETTINGS["fps_cap"])
+	if cap is int or cap is float:
+		for allowed: int in FPS_CAPS:
+			if cap == allowed:
+				return allowed
+	return DEFAULT_SETTINGS["fps_cap"]
+
+
+static func apply_settings(profile: Dictionary) -> void:
+	Engine.max_fps = fps_cap(profile.get("settings", {}))
 
 
 static func save_profile(profile: Dictionary) -> Error:

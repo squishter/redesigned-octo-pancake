@@ -169,6 +169,13 @@ mode for trying out new pattern generation.
   The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
   which places every open stone at once, fits the whole picture in view
   and plays the finale, for testing finales.
+- **Settings.** Open Settings from the menu or the gear button beside Fit
+  on the game board, including completed pictures. Placement animations,
+  the grand finale and the FPS cap share one dialog; changes save immediately,
+  and placement changes take effect on the active puzzle. The FPS cap is
+  available in release builds: 30 (the default), 60, 90, 120 or Unlimited.
+  Lower caps save battery; higher caps allow smoother movement up to the
+  screen's refresh rate. Existing profiles without a cap also start at 30 FPS.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
   the most used first. Open slots show as thin outlines of their shape with
   the number inside, drawn at screen size so it grows as you zoom, and
