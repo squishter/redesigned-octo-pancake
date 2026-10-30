@@ -51,9 +51,8 @@ mode for trying out new pattern generation.
   pixel, and decodes either. The shader gets its CbCr texture again
   whenever a camera starts: a material keeps the texture it was handed, and
   a CameraTexture with no feed yet is only a placeholder, which read as CbCr
-  turns the preview green and blue. The status line names the camera format and,
-  after that check, the CbCr plane's format, size, layout and its Cb and Cr
-  values (both near 128 in an ordinary scene). The main back camera (the
+  turns the preview green and blue. The line above the preview names the
+  camera (*Back camera 1*, *Front camera*, ...). The main back camera (the
   lowest id, "0" on Android) opens first; higher ids are extra lenses. Photo puzzles can't be
   recolored: their colors come from the photo.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an

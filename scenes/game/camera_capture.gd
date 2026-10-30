@@ -64,7 +64,6 @@ var _extra_turns := 0  # quarter turns clockwise she added with Turn
 ## and when to look (a moment after the feed starts, so frames have come).
 var _chroma := ""
 var _chroma_check_at := 0
-var _feed_text := ""
 var _viewport: SubViewport
 var _feed_rect: TextureRect
 var _material: ShaderMaterial
@@ -197,12 +196,8 @@ func _activate(feed: CameraFeed) -> void:
 		if other != feed:
 			other.feed_is_active = false
 	var formats := feed.get_formats()
-	var format := ""
 	if not formats.is_empty():
-		var best := _best_format(formats)
-		feed.set_format(best, {})
-		var f: Dictionary = formats[best]
-		format = " · %s %d×%d" % [f.get("format", "?"), f.get("width", 0), f.get("height", 0)]
+		feed.set_format(_best_format(formats), {})
 	feed.feed_is_active = true
 	_main_tex.camera_feed_id = feed.get_id()
 	_cbcr_tex.camera_feed_id = feed.get_id()
@@ -212,9 +207,7 @@ func _activate(feed: CameraFeed) -> void:
 	_material.set_shader_parameter("cbcr_tex", null)
 	_material.set_shader_parameter("cbcr_tex", _cbcr_tex)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	# The format (and the CbCr layout, once seen) helps tell camera problems apart.
-	_feed_text = "%s (%d of %d)%s" % [feed.get_name(), _feed_index + 1, _feeds.size(), format]
-	_status.text = _feed_text
+	_status.text = _camera_label(feed)
 	_chroma = ""
 	_chroma_check_at = Time.get_ticks_msec() + 600
 
@@ -281,36 +274,6 @@ func _check_chroma() -> void:
 		return
 	_chroma = chroma_layout(c)
 	_material.set_shader_parameter("chroma_interleaved", _chroma == "interleaved")
-	_status.text = "%s · CbCr %s %d×%d (%s) · %s" % [_feed_text, _format_name(c.get_format()), c.get_width(),
-			c.get_height(), _chroma, chroma_stats(chroma_pairs(c))]
-
-
-## Cb and Cr's average and range over a sample of a CbCr plane (RG8): both
-## sit near 128 in an ordinary scene, so this shows a broken plane at once.
-static func chroma_stats(pairs: Image) -> String:
-	var data := pairs.get_data()
-	var n := data.size() / 2
-	var sums := [0, 0]
-	var lo := [255, 255]
-	var hi := [0, 0]
-	var count := 0
-	for i in range(0, n, 97):
-		for ch in 2:
-			var v := data[i * 2 + ch]
-			sums[ch] += v
-			lo[ch] = mini(lo[ch], v)
-			hi[ch] = maxi(hi[ch], v)
-		count += 1
-	count = maxi(count, 1)
-	return "Cb %d (%d-%d), Cr %d (%d-%d)" % [sums[0] / count, lo[0], hi[0], sums[1] / count, lo[1], hi[1]]
-
-
-## How a CbCr plane's bytes are laid out: "pairs" (two channels per pixel,
-## Cb then Cr, as Godot's Android camera builds it) or "interleaved" (one
-## channel, Cb and Cr side by side, so twice as wide).
-static func chroma_layout(chroma: Image) -> String:
-	var per_pixel := chroma.get_data().size() / maxi(1, chroma.get_width() * chroma.get_height())
-	return "interleaved" if per_pixel == 1 else "pairs"
 
 
 ## A CbCr plane as RG8 (R: Cb, G: Cr), whichever layout it came in.
@@ -331,21 +294,17 @@ static func chroma_pairs(chroma: Image) -> Image:
 	return out
 
 
-static func _format_name(format: int) -> String:
-	match format:
-		Image.FORMAT_L8:
-			return "L8"
-		Image.FORMAT_LA8:
-			return "LA8"
-		Image.FORMAT_R8:
-			return "R8"
-		Image.FORMAT_RG8:
-			return "RG8"
-		Image.FORMAT_RGB8:
-			return "RGB8"
-		Image.FORMAT_RGBA8:
-			return "RGBA8"
-	return "format %d" % format
+## "Back camera", "Front camera" or "Camera", numbered when there are
+## several of that kind (phones often have extra back lenses).
+func _camera_label(feed: CameraFeed) -> String:
+	var kind := "Camera"
+	match feed.get_position():
+		CameraFeed.FEED_BACK:
+			kind = "Back camera"
+		CameraFeed.FEED_FRONT:
+			kind = "Front camera"
+	var same := _feeds.filter(func(f: CameraFeed) -> bool: return f.get_position() == feed.get_position())
+	return kind if same.size() < 2 else "%s %d" % [kind, same.find(feed) + 1]
 
 
 ## Sizes `viewport` to the feed turned `turns` quarter turns clockwise, and
