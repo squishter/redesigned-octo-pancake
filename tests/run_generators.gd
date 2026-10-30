@@ -600,10 +600,26 @@ static func turn_match(p: Dictionary) -> float:
 	return float(hit) / maxi(1, counted)
 
 
+## A mesh's area seen from above (its triangles' xz) and how many of them
+## face down.
+static func _covers(mesh: ArrayMesh) -> Array:
+	var arrays := mesh.surface_get_arrays(0)
+	var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var covered := 0.0
+	var down := 0
+	for t in range(0, v.size(), 3):
+		var a := Vector2(v[t].x, v[t].z)
+		covered += absf((Vector2(v[t + 1].x, v[t + 1].z) - a).cross(Vector2(v[t + 2].x, v[t + 2].z) - a)) / 2.0
+		down += int(n[t].y <= 0.0)
+	return [covered, down]
+
+
 func test_gem_cuts() -> void:
 	print("Gem cuts")
 	# Every shape's mesh in every cut covers its outline once, facets facing up;
-	# its low-poly version (fewer girdle points) covers nearly as much.
+	# so does the flat outline tiny stones draw as (fewer girdle points, so
+	# nearly as much), and their facet picture covers as much as the mesh.
 	var meshes := 0
 	for shape: String in GemCuts.BY_SHAPE:
 		var girdle := GemMesh.girdle_points(shape)
@@ -611,23 +627,22 @@ func test_gem_cuts() -> void:
 		for i in girdle.size():
 			outline += (girdle[i][1] as Vector2).cross(girdle[(i + 1) % girdle.size()][1])
 		outline = absf(outline) / 2.0
+		var flat := _covers(GemMesh.get_outline_mesh(shape, 0.25))
+		check(flat[0] / outline > 0.85 and flat[0] / outline < 1.02 and flat[1] == 0,
+				"%s flat outline covers %.3f of its outline, %d faces down" % [shape, flat[0] / outline, flat[1]])
 		for cut: String in GemCuts.ALL:
-			for low: bool in [false, true]:
-				var arrays := GemMesh.build(shape, cut, low).surface_get_arrays(0)
-				var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-				var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-				var covered := 0.0
-				var down := 0
-				for t in range(0, v.size(), 3):
-					var a := Vector2(v[t].x, v[t].z)
-					covered += absf((Vector2(v[t + 1].x, v[t + 1].z) - a).cross(Vector2(v[t + 2].x, v[t + 2].z) - a)) / 2.0
-					if n[t].y <= 0.0:
-						down += 1
-				var share := covered / outline
-				check((share > 0.85 and share < 1.02 if low else absf(share - 1.0) < 0.02) and down == 0,
-						"%s %s %smesh covers %.3f of its outline, %d facets down"
-						% [shape, cut, "low-poly " if low else "", share, down])
-				meshes += 1
+			var full := _covers(GemMesh.build(shape, cut))
+			check(absf(full[0] / outline - 1.0) < 0.02 and full[1] == 0, "%s %s mesh covers %.3f of its outline, %d facets down"
+					% [shape, cut, full[0] / outline, full[1]])
+			var facets := GemMesh.get_facets(shape, cut)
+			var texels := 0
+			for y in range(1, facets.get_height() - 1):
+				for x in range(1, facets.get_width() - 1):
+					texels += int(facets.get_pixel(x, y).b > 0.5)
+			var pictured := texels * 4.0 / (GemMesh.FACET_PX * GemMesh.FACET_PX)
+			check(absf(pictured / outline - 1.0) < 0.04, "%s %s facet picture covers %.3f of its outline"
+					% [shape, cut, pictured / outline])
+			meshes += 1
 	# Every stone gets a cut its shape has; stones of one part share it.
 	var cuts := {}
 	for i in 3:

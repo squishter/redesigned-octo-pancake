@@ -16,10 +16,8 @@ extends RefCounted
 ## facets of a brilliant, and aligned rings make the flat steps of a step
 ## cut. The last ring is the table (a flat top), or a single apex point.
 ##
-## Tiny stones (a few px across on screen) draw from a low-poly version
-## (get_low_mesh): a quarter of the girdle points (keeping the corners) and
-## only the cut's top ring, at the same height, so about a quarter of the
-## triangles; facets that small are under a pixel anyway.
+## Tiny stones (a few px across on screen) draw as a flat outline instead
+## (get_outline_mesh), their facets from a picture (get_facets).
 
 ## Girdle points per shape, before rounding: a multiple of its corners.
 const GIRDLE := {"star": 40, "pentagon": 40, "triangle": 48, "trillion": 48, "hexagon": 48}
@@ -38,12 +36,14 @@ const RINGS := {
 	"rose": [[1, 0, 1.0, 0.0], [4, 2, 0.62, 0.2], [0, 0, 0.0, 0.34]],
 	"checker": [[1, 0, 1.0, 0.0], [2, 1, 0.8, 0.12], [4, 0, 0.58, 0.21], [4, 2, 0.34, 0.27], [0, 0, 0.0, 0.3]],
 }
-## Cabochon: a smooth dome this high, in this many rings (low-poly: fewer).
+## Cabochon: a smooth dome this high, in this many rings.
 const DOME_HEIGHT := 0.4
 const DOME_RINGS := 6
-const DOME_RINGS_LOW := 2
-## Low-poly meshes have this share of the girdle points.
+## Outlines for tiny stones have this share of the girdle points.
 const LOW_SHARE := 0.25
+## Facet pictures (get_facets) are this many texels a side, plus a texel of
+## border all round (repeating the edge, so filtering never reads past it).
+const FACET_PX := 64
 
 static var _cache := {}
 
@@ -56,32 +56,99 @@ static func get_mesh(shape: String, cut: String) -> ArrayMesh:
 	return _cache[key]
 
 
-## Its low-poly version, for stones a few px across, built once and shared.
-static func get_low_mesh(shape: String, cut: String) -> ArrayMesh:
-	var key := shape + "|" + cut + "|low"
+## A stone's outline as a flat polygon (a quarter of its girdle points,
+## keeping the corners) at height `y`, facing up, for drawing tiny stones
+## (gem_impostor.gdshader): their facets come from get_facets. An octagon
+## for a round stone: 6 triangles. Built once a shape.
+static func get_outline_mesh(shape: String, y: float) -> ArrayMesh:
+	var key := "%s|outline|%f" % [shape, y]
 	if not _cache.has(key):
-		_cache[key] = build(shape, cut, true)
+		var girdle := girdle_points(shape, roundi(GIRDLE.get(shape, GIRDLE_DEFAULT) * LOW_SHARE), 1)
+		var flat := PackedVector2Array()
+		for g: Array in girdle:
+			flat.append(g[1])
+		var tris := PackedVector3Array()
+		var order := Geometry2D.triangulate_polygon(flat)
+		for k in range(0, order.size(), 3):
+			var a := flat[order[k]]
+			var b := flat[order[k + 1]]
+			var c := flat[order[k + 2]]
+			_tri(Vector3(a.x, y, a.y), Vector3(b.x, y, b.y), Vector3(c.x, y, c.y), tris)
+		_cache[key] = _mesh(tris, false)
 	return _cache[key]
 
 
-## Builds the mesh for a shape in a cut (unknown cuts make a brilliant),
-## or its low-poly version.
-static func build(shape: String, cut: String, low := false) -> ArrayMesh:
-	var want: int = GIRDLE.get(shape, GIRDLE_DEFAULT)
-	var girdle := (girdle_points(shape, roundi(want * LOW_SHARE), 1) if low else girdle_points(shape))
+## A stone seen from above as a picture, for drawing tiny stones as a flat
+## outline each (gem_impostor.gdshader): FACET_PX texels a side over the
+## mesh's -1..1 in x and z (plus a border texel), each holding the normal of
+## the facet there (its x and z, as 0..1 in red and green; y is the rest, as
+## every facet faces up) and in blue whether the stone covers it. Built once
+## a shape and cut, from the full mesh.
+static func get_facets(shape: String, cut: String) -> Image:
+	var key := shape + "|" + cut + "|facets"
+	if not _cache.has(key):
+		_cache[key] = _facets(get_mesh(shape, cut))
+	return _cache[key]
+
+
+static func _facets(mesh: ArrayMesh) -> Image:
+	var n := FACET_PX
+	var data := PackedByteArray()
+	data.resize(n * n * 4)
+	for i in n * n:
+		data[i * 4] = 128
+		data[i * 4 + 1] = 128
+		data[i * 4 + 3] = 255
+	var arrays := mesh.surface_get_arrays(0)
+	var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var nm: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	# Texel (i, j)'s center is at x, z = (i + 0.5) / n * 2 - 1: in texels, a
+	# point sits at (x + 1) / 2 * n - 0.5.
+	var to_px := func(p: Vector3) -> Vector2: return Vector2((p.x + 1.0) * 0.5 * n - 0.5, (p.z + 1.0) * 0.5 * n - 0.5)
+	for t in range(0, v.size(), 3):
+		var a: Vector2 = to_px.call(v[t])
+		var b: Vector2 = to_px.call(v[t + 1])
+		var c: Vector2 = to_px.call(v[t + 2])
+		var area := (b - a).cross(c - a)
+		if absf(area) < 1e-9:
+			continue
+		for j in range(maxi(0, ceili(minf(a.y, minf(b.y, c.y)))), mini(n - 1, floori(maxf(a.y, maxf(b.y, c.y)))) + 1):
+			for i in range(maxi(0, ceili(minf(a.x, minf(b.x, c.x)))), mini(n - 1, floori(maxf(a.x, maxf(b.x, c.x)))) + 1):
+				var p := Vector2(i, j)
+				var wa := (c - b).cross(p - b) / area
+				var wb := (a - c).cross(p - c) / area
+				var wc := 1.0 - wa - wb
+				if wa < -1e-4 or wb < -1e-4 or wc < -1e-4:
+					continue
+				var normal := (nm[t] * wa + nm[t + 1] * wb + nm[t + 2] * wc).normalized()
+				var at := (j * n + i) * 4
+				data[at] = clampi(roundi((normal.x * 0.5 + 0.5) * 255.0), 0, 255)
+				data[at + 1] = clampi(roundi((normal.z * 0.5 + 0.5) * 255.0), 0, 255)
+				data[at + 2] = 255
+	var inner := Image.create_from_data(n, n, false, Image.FORMAT_RGBA8, data)
+	# The border: each edge texel once more outside it.
+	var out := Image.create(n + 2, n + 2, false, Image.FORMAT_RGBA8)
+	out.blit_rect(inner, Rect2i(0, 0, n, n), Vector2i(1, 1))
+	for k in n + 2:
+		var e := clampi(k - 1, 0, n - 1)
+		out.set_pixel(k, 0, inner.get_pixel(e, 0))
+		out.set_pixel(k, n + 1, inner.get_pixel(e, n - 1))
+		out.set_pixel(0, k, inner.get_pixel(0, e))
+		out.set_pixel(n + 1, k, inner.get_pixel(n - 1, e))
+	return out
+
+
+## Builds the mesh for a shape in a cut (unknown cuts make a brilliant).
+static func build(shape: String, cut: String) -> ArrayMesh:
+	var girdle := girdle_points(shape)
 	var rings := []
 	if cut == "cabochon":
-		var steps := DOME_RINGS_LOW if low else DOME_RINGS
-		for k in steps + 1:
-			var t := float(k) / steps
-			rings.append([1, 0, cos(t * PI / 2.0), DOME_HEIGHT * sin(t * PI / 2.0)] if k < steps
+		for k in DOME_RINGS + 1:
+			var t := float(k) / DOME_RINGS
+			rings.append([1, 0, cos(t * PI / 2.0), DOME_HEIGHT * sin(t * PI / 2.0)] if k < DOME_RINGS
 					else [0, 0, 0.0, DOME_HEIGHT])
 	else:
 		rings = RINGS.get(cut, RINGS["brilliant"])
-		if low:
-			# The girdle straight up to the top ring (every point, at its height).
-			var top: Array = rings[rings.size() - 1]
-			rings = [rings[0], [mini(top[0], 1), 0, top[2], top[3]]]
 	var tris := PackedVector3Array()
 	var built := []
 	for spec: Array in rings:
