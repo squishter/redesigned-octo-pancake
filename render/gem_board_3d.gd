@@ -120,6 +120,10 @@ const IDLE_FPS := 30.0
 ## the phone turning; the drift alone moves it less between idle frames.
 const LIGHT_STEP := 0.006
 
+## Debug builds: draws boards built from now on with one part left out or
+## cheapened (one of DEBUG_TESTS), to measure what costs what on a phone
+## with PerfReadout. Settings → Testing sets it.
+static var debug_test := "normal"
 ## The light drifts with time (tests freeze it and set the time instead).
 var animate := true
 ## Seconds of drift; the light's position over time.
@@ -150,10 +154,6 @@ var stroke_filter := Callable()
 var render_count := 0
 ## Gems look the studio up in a map rendered once a frame (on) or work it
 ## out for every pixel (off: sharper, far slower; for comparing).
-## Debug builds: draws boards built from now on with one part left out or
-## cheapened (one of DEBUG_TESTS), to measure what costs what on a phone
-## with PerfReadout. Settings → Testing sets it.
-static var debug_test := "normal"
 var studio_map := true:
 	set(value):
 		studio_map = value
