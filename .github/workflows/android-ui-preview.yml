@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 25
     env:
       GODOT_VERSION: 4.7.2-stable
-      BUILD_CACHE: ${{ runner.temp }}/paint-with-gems-build
+      BUILD_CACHE: /tmp/paint-with-gems-build
       ANDROID_SDK_SOURCE: existing
     steps:
       - uses: actions/checkout@v4
