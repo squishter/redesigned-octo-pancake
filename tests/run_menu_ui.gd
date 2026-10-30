@@ -346,10 +346,16 @@ func _test_completion_rewards() -> void:
 	_check_button_widths(play, play.size.x)
 	play.go_back()
 	_check(not play._powers_panel.visible and play._board.input_enabled, "Back closes power-ups and restores the board")
-	play._overlay.placed[0] = 1
-	play._filled = 1
 	play._powers_on.append("double_coins")
-	play._finish(true)
+	_check(play._filled == 0 and play._overlay.placed[0] == 0, "The puzzle starts open")
+	var complete: Button = null
+	for b: Button in play._powers_panel.actions.find_children("*", "Button", true, false):
+		if b.text == "Complete puzzle (debug)":
+			complete = b
+	_check(complete != null, "Debug builds offer to complete the puzzle in Power-ups")
+	complete.pressed.emit()
+	_check(play._done and play._filled == play._type_of.size() and not 0 in play._overlay.placed,
+		"Debug complete fills every slot and finishes the puzzle")
 	await create_timer(3.5).timeout
 	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
 		"The finale keeps playing until she taps")

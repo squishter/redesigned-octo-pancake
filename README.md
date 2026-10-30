@@ -165,6 +165,9 @@ mode for trying out new pattern generation.
   and finale is hers. Her own unlocks are what's saved and come back when
   it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
   and power-up charges are real.
+  The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
+  which places every open stone at once and plays the finale and rewards,
+  for testing finales.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
   the most used first. Open slots show as thin outlines of their shape with
   the number inside, drawn at screen size so it grows as you zoom, and

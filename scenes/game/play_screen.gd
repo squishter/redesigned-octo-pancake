@@ -66,6 +66,8 @@ const DONE_TEXT := "Beautifully finished. Pinch and pan to admire your work."
 ## Set before adding to the tree.
 var puzzle_id := ""
 var profile: Dictionary = {}
+## Debug builds: Power-ups also offers to complete the puzzle at once.
+var show_debug_tools := OS.is_debug_build()
 
 var _meta: Dictionary = {}
 var _picture: Dictionary = {}
@@ -186,6 +188,8 @@ func _ready() -> void:
 	_powers_panel.closed.connect(_update_board_input)
 	_powers_list = _powers_panel.body
 	_button(_powers_panel.actions, "Back to my picture", _powers_panel.close).theme_type_variation = "PrimaryButton"
+	if show_debug_tools:
+		_button(_powers_panel.actions, "Complete puzzle (debug)", _debug_complete).theme_type_variation = "QuietButton"
 	_done_bar = UI.panel(true, 24)
 	_done_bar.visible = false
 	root.add_child(_done_bar)
@@ -682,6 +686,24 @@ func _use_power(power: String) -> void:
 					_fill(i)
 	_dirty = true
 	_save(false)
+
+
+## Debug builds: places every open stone at once, as if she had, and plays
+## the finale (rewards and all), for testing finales.
+func _debug_complete() -> void:
+	_powers_panel.close()
+	_flights.land_all()
+	if _done:
+		return
+	for i in _overlay.placed.size():
+		if _overlay.placed[i] == 0:
+			_overlay.place(i)
+			_board.set_slot_shown(i, true)
+			_filled += 1
+			_types[_type_of[i]]["left"] -= 1
+	_update_progress()
+	_dirty = true
+	_finish(true)
 
 
 ## Spends a hint: picks a gem if none is picked, then glides to its open
