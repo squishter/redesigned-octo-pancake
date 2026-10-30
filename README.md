@@ -346,8 +346,11 @@ and the Collection cut their icons from render 10 times a second
 
 For judging speed on a phone there is a performance readout
 (`scenes/game/perf_readout.gd`, off by default). In debug builds, Settings →
-*Testing* has *Performance readout* (On/Off) and *Frame cap* (45, 60, 30 or
-none, overriding `max_fps`), both saved. Holding the progress line
+*Testing* has *Performance readout* (On/Off), *Frame cap* (45, 60, 30 or
+none, overriding `max_fps`) and *Board test*, which draws puzzles opened
+from then on with one part left out or cheapened (no shadows, no
+sparkles, flat-colored gems, no gems, MSAA 2× or off, half resolution;
+`GemBoard3D.DEBUG_TESTS`) to see what costs what on a phone, all saved. Holding the progress line
 ("12 / 340 gems") on the play screen for a moment also turns the readout on
 or off, as does *Readout* in the generator lab's Options. It shows frames
 a second, frame time and the last frame's process time; the board's renders

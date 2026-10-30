@@ -15,6 +15,7 @@ const EVERY := 0.5
 ## caps Settings offers (0: none; unset, application/run/max_fps holds).
 const SHOWN_KEY := "debug_perf_readout"
 const CAP_KEY := "debug_max_fps"
+const TEST_KEY := "debug_board_test"
 const CAPS := [45, 60, 30, 0]
 
 ## Shown on every screen that has one, for the rest of the session.
@@ -61,6 +62,7 @@ static func apply_settings(settings: Dictionary) -> void:
 	if not OS.is_debug_build():
 		return
 	shown = bool(settings.get(SHOWN_KEY, false))
+	GemBoard3D.debug_test = str(settings.get(TEST_KEY, "normal"))
 	if settings.has(CAP_KEY):
 		Engine.max_fps = int(settings[CAP_KEY])
 

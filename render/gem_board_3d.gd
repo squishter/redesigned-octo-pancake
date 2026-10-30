@@ -87,6 +87,9 @@ const KIT_DRILL := 0.98
 ## board unit and this many on a side (it is very soft; filtering fills in).
 const GRAIN_DENSITY := 2.0
 const GRAIN_MAX_PX := 2048
+## The ways debug_test can draw a board.
+const DEBUG_TESTS := ["normal", "no shadows", "no sparkles", "flat gems", "no gems", "MSAA 2x", "MSAA off",
+		"half resolution"]
 ## The studio map's size (px a side): gems look the studio up in it
 ## (studio_map.gdshader), rendered again whenever the lights move.
 const STUDIO_MAP_PX := 512
@@ -147,6 +150,10 @@ var stroke_filter := Callable()
 var render_count := 0
 ## Gems look the studio up in a map rendered once a frame (on) or work it
 ## out for every pixel (off: sharper, far slower; for comparing).
+## Debug builds: draws boards built from now on with one part left out or
+## cheapened (one of DEBUG_TESTS), to measure what costs what on a phone
+## with PerfReadout. Settings → Testing sets it.
+static var debug_test := "normal"
 var studio_map := true:
 	set(value):
 		studio_map = value
@@ -737,6 +744,32 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 		_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
 	update_light()
 	reset_view()
+	_apply_debug_test()
+
+
+## Leaves out or cheapens one part of the board, as debug_test says.
+func _apply_debug_test() -> void:
+	_viewport.msaa_3d = Viewport.MSAA_4X
+	stretch_shrink = 1
+	if debug_test == "normal":
+		return
+	var flat := ShaderMaterial.new()
+	flat.shader = Shader.new()
+	flat.shader.code = "shader_type spatial;\nrender_mode unshaded, cull_disabled;\nvoid fragment() { ALBEDO = COLOR.rgb; }\n"
+	for layer: Array in _layer_slots:
+		var drawn: MultiMeshInstance3D = layer[3]
+		match [debug_test, layer[1]]:
+			["no shadows", "shadow"], ["no sparkles", "sparkle"], ["no gems", "gem"]:
+				drawn.visible = false
+			["flat gems", "gem"]:
+				drawn.material_override = flat
+	match debug_test:
+		"MSAA 2x":
+			_viewport.msaa_3d = Viewport.MSAA_2X
+		"MSAA off":
+			_viewport.msaa_3d = Viewport.MSAA_DISABLED
+		"half resolution":
+			stretch_shrink = 2
 
 
 ## One MultiMesh: `mesh` for the given slots, as gems, shadows or sparkles.
