@@ -145,7 +145,7 @@ static func button(text: String, primary := false) -> Button:
 	var button_node := Button.new()
 	button_node.text = text
 	button_node.icon = icon(glyph_for(text))
-	button_node.expand_icon = true
+	button_node.expand_icon = false
 	button_node.custom_minimum_size.y = TAP_HEIGHT
 	if primary:
 		button_node.theme_type_variation = "PrimaryButton"

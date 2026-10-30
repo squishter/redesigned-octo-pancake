@@ -25,6 +25,7 @@ func _ready() -> void:
 	_backdrop = MenuBackdrop.new()
 	add_child(_backdrop)
 	_veil = ColorRect.new()
+	_veil.z_index = 1000
 	_veil.color = Color(GameTheme.BG, 0.0)
 	_veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_veil.hide()

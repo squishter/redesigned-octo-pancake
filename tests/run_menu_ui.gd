@@ -125,6 +125,8 @@ func _test_purchases() -> void:
 	screen._open("colors", true)
 	_check(Packs.picks(screen.profile) == 1, "Repeated opening spends a single pick")
 	_check(screen.profile["unlocks"]["colors"].size() == before + 1, "Exactly one reward is granted")
+	var pack_layers := screen._carousel._hangers.map(func(hanger: Control) -> int: return hanger.z_index)
+	_check(screen._opening.z_index > int(pack_layers.max()), "Opening overlay draws above every carousel hanger")
 	var saved := SaveStore.load_profile()
 	_check(Packs.picks(saved) == 1 and saved["unlocks"]["colors"].size() == before + 1,
 		"Reward and payment are saved before the animation")
