@@ -38,6 +38,12 @@ func _init() -> void:
 	test_json_round_trip()
 	test_game_puzzles()
 	test_saves()
+	test_packs()
+	test_catalog_complete()
+	test_old_profiles()
+	test_photo_orientation()
+	test_photo_edges()
+	test_kit_puzzles()
 
 	print("\n%s (%d failures). Previews in %s" % ["FAILED" if failures else "PASSED", failures,
 			ProjectSettings.globalize_path(out_dir)])
@@ -761,6 +767,350 @@ func test_game_puzzles() -> void:
 	for s in restricted:
 		check(s["shape"] == "round" and s["size"] == s["width"], "restrict gave %s %.1f x %.1f" % [s["shape"], s["size"],
 				s["width"]])
+
+
+## Packs give only new things, sell out once empty, take a pick or coins;
+## daily picks come once a day and puzzle coins once per puzzle.
+func test_packs() -> void:
+	print("Packs")
+	var profile := {"unlocks": GemCatalog.default_unlocks(), "wallet": {"coins": 0, "picks": 0},
+			"daily": {"opened": "", "completed": ""}, "powers": {}}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	check(Packs.open(profile, "colors", true, rng).is_empty(), "opened a pack with no picks")
+	# Themes come with their colors, never from a pack.
+	check(not Packs.PACKS.has("themes"), "there's still a theme pack")
+	var before: Dictionary = profile["unlocks"].duplicate(true)
+	for gem: String in GemCatalog.THEMES["reds"]["gems"]:
+		Unlockables.grant(profile, {"kind": "color", "id": gem})
+	check(Unlockables.themes_gained(before, profile["unlocks"]).has("reds"), "the reds didn't bring Ruby Reds")
+	check(Packs.daily_open(profile) and not Packs.daily_open(profile), "daily pick not exactly once a day")
+	var got := Packs.open(profile, "colors", true, rng)
+	check(got.get("kind") == "color" and Packs.picks(profile) == 0, "free pick didn't open a color pack")
+	var meta := {}
+	var r1 := Packs.puzzle_finished(profile, meta, false)
+	var r2 := Packs.puzzle_finished(profile, meta, false)
+	check(r1["coins"] == Packs.COINS_PER_PUZZLE and r1["pick"] and r2["coins"] == 0, "puzzle rewards %s then %s" % [r1, r2])
+	check(Packs.puzzle_finished(profile, {}, true)["coins"] == 2 * Packs.COINS_PER_PUZZLE, "double coins didn't double")
+	# Every 3 puzzles pay for a pack.
+	check(Packs.PACK_PRICE == 3 * Packs.COINS_PER_PUZZLE, "a pack isn't 3 puzzles' coins")
+	# Open every category until it sells out: never a repeat, and it all ends up unlocked.
+	for pack: String in Packs.PACKS:
+		if pack in ["powers", "all"]:
+			continue
+		var seen := {}
+		var guard := 0
+		while not Packs.sold_out(pack, profile) and guard < 200:
+			guard += 1
+			profile["wallet"]["coins"] = 1000
+			var item := Packs.open(profile, pack, false, rng)
+			check(not seen.has(item["id"]), "%s pack repeated %s" % [pack, item["id"]])
+			seen[item["id"]] = true
+		check(Packs.sold_out(pack, profile), "%s pack never sold out" % pack)
+	var unlocks: Dictionary = profile["unlocks"]
+	check(unlocks["colors"].size() == GemCatalog.all_colors().size(), "not every color unlocked")
+	check(GemCatalog.unlocked_themes(unlocks).size() == GemCatalog.THEMES.size(), "all colors didn't bring every theme")
+	check(unlocks["shapes"].size() == GemCatalog.ALL_SHAPES.size(), "not every shape unlocked")
+	for pair: Array in GemCatalog.all_cuts():
+		check(GemCatalog.has_cut(unlocks, pair[0], pair[1]), "cut %s not unlocked" % [pair])
+	# With everything else out, the Everything and power-up packs still give charges.
+	profile["wallet"]["coins"] = 1000
+	var power := Packs.open(profile, "all", false, rng)
+	check(power.get("kind") == "power" and Packs.charges(profile, power["id"]) > 0, "everything pack gave %s" % power)
+	check(Packs.spend(profile, power["id"]), "couldn't spend a power-up charge")
+
+
+## Everything a catalog lists is complete and handled, so adding an item
+## (or a kind) halfway fails here instead of quietly never showing up.
+func test_catalog_complete() -> void:
+	print("Catalog complete")
+	var families: Array = GemVariety.ROUND_FAMILY + GemVariety.LONG_FAMILY + GemVariety.BOX_FAMILY
+	check(GemCuts.BY_SHAPE.keys().size() == GemCatalog.ALL_SHAPES.size(), "GemCuts.BY_SHAPE and ALL_SHAPES differ")
+	for shape: String in GemCatalog.ALL_SHAPES:
+		check(GemCuts.BY_SHAPE.has(shape), "shape %s has no cuts" % shape)
+		check(shape in families, "shape %s is in no GemVariety family, so no puzzle would use it" % shape)
+		for cut: String in GemCuts.for_shape(shape):
+			check(GemCuts.SHADER_STYLE.has(cut), "cut %s has no shader style" % cut)
+	for t: String in GemCatalog.THEMES:
+		for gem: String in GemCatalog.THEMES[t]["gems"]:
+			check(GemCatalog.all_colors().any(func(g: Dictionary) -> bool: return g["id"] == gem),
+					"theme %s uses unknown gem %s" % [t, gem])
+	for id: String in GemCatalog.PUZZLES:
+		check(GemCatalog.PUZZLES[id]["variant"] in MandalaGenerator.VARIANTS, "puzzle %s has an unknown variant" % id)
+	var handled := {
+		"feature": PuzzleMaker.FEATURES,
+		"animation": load("res://scenes/game/play_screen.gd").FILL_STYLES,
+		"finale": GemBoard3D.FINALES,
+		"power": load("res://scenes/game/play_screen.gd").POWER_EFFECTS,
+	}
+	for kind: String in Unlockables.KINDS:
+		var info: Dictionary = Unlockables.KINDS[kind]
+		check(info["pack"] == "" or Packs.PACKS.has(info["pack"]), "kind %s comes from unknown pack %s" % [kind,
+				info["pack"]])
+		var ids := {}
+		for item: Dictionary in Unlockables.items(kind):
+			check(not ids.has(item["id"]), "%s id %s is listed twice" % [kind, item["id"]])
+			ids[item["id"]] = true
+			check(str(item.get("name", "")) != "" and str(item.get("about", "")) != "", "%s %s lacks a name or about" % [
+					kind, item["id"]])
+			if handled.has(kind):
+				check(item["id"] in handled[kind], "%s %s isn't handled by the game" % [kind, item["id"]])
+		for id in Unlockables.starting(kind):
+			check(ids.has(id), "starting %s %s isn't in its catalog" % [kind, id])
+	# At least 10 colors of every hue, and a theme mostly of each.
+	for hue: String in GemCatalog.HUE_ORDER:
+		var n := GemCatalog.all_colors().filter(func(g: Dictionary) -> bool: return g["hue"] == hue).size()
+		check(n >= 10, "only %d %s colors" % [n, hue])
+	for g in GemCatalog.all_colors():
+		check(g["hue"] in GemCatalog.HUE_ORDER, "color %s has unknown hue %s" % [g["id"], g["hue"]])
+	# Starting themes must come with the starting colors.
+	for t: String in GemCatalog.STARTING_THEMES:
+		check(GemCatalog.has_theme({"colors": GemCatalog.STARTING_COLORS}, t), "starting theme %s needs locked colors" % t)
+	for pack: String in Packs.PACKS:
+		if pack != "all":
+			check(Unlockables.KINDS.values().any(func(k: Dictionary) -> bool: return k["pack"] == pack),
+					"pack %s offers no kind" % pack)
+
+
+## Profiles saved by earlier versions load with nothing lost: unlocks only
+## grow (new starting items arrive, ids from a newer version stay), starting
+## power-ups aren't given twice, and loading again changes nothing.
+func test_old_profiles() -> void:
+	print("Old profiles")
+	# As version 0.3 saved it (profile version 1, no ledger), after a few packs.
+	var v1 := {"version": 1.0, "unlocks": {"colors": ["ruby", "snow", "future_gem"], "shapes": {"round": ["brilliant",
+			"rose"], "kite": ["brilliant"]}, "themes": ["rainbow"], "puzzles": ["mandala", "kit"], "features": [],
+			"animations": ["pop", "fly", "spin"], "finales": ["ripple"], "stickers": ["star"]},
+			"settings": {"fill_animation": "spin"}, "wallet": {"coins": 40.0, "picks": 1.0},
+			"daily": {"opened": "2026-10-28"}, "powers": {"finder": 0.0, "finish_gem": 3.0},
+			"puzzles": [{"id": "p1", "type": "mandala", "seed": 5.0, "total": 900.0, "filled": 12.0, "done": false}]}
+	var before: Dictionary = JSON.parse_string(JSON.stringify(v1))
+	var p := SaveStore.upgrade(JSON.parse_string(JSON.stringify(v1)))
+	var u: Dictionary = p["unlocks"]
+	for key: String in before["unlocks"]:
+		var old: Variant = before["unlocks"][key]
+		if old is Array:
+			for id in old:
+				check(id in u[key], "lost %s %s" % [key, id])
+		else:
+			for shape: String in old:
+				for cut in old[shape]:
+					check(cut in u["shapes"][shape], "lost cut %s|%s" % [shape, cut])
+	for id: String in GemCatalog.STARTING_COLORS:
+		check(id in u["colors"], "starting color %s didn't reach an old profile" % id)
+	check(u["shapes"].has("oval"), "starting shape didn't reach an old profile")
+	check(p["powers"]["finder"] == 0 and p["powers"]["finish_gem"] == 3, "starting power-ups given again: %s" % p["powers"])
+	check(p["wallet"]["coins"] == 40 and p["settings"]["fill_animation"] == "spin", "old wallet or settings changed")
+	check(p["puzzles"][0]["seed"] is int and p["puzzles"][0]["rewarded"] == false, "old puzzle meta not upgraded")
+	var again := SaveStore.upgrade(JSON.parse_string(JSON.stringify(p)))
+	check(JSON.stringify(again) == JSON.stringify(p), "upgrading twice changed the profile")
+	# A brand-new player gets the starting charges, once.
+	var fresh := SaveStore.upgrade({})
+	check(fresh["powers"] == GemCatalog.STARTING_POWERS, "new player's power-ups %s" % fresh["powers"])
+	check(SaveStore.upgrade(fresh)["powers"] == GemCatalog.STARTING_POWERS, "starting power-ups given twice")
+	# Shader styles of the original cuts never move.
+	check(GemCuts.SHADER_STYLE == {"brilliant": 0, "step": 1, "rose": 2, "checker": 3, "cabochon": 4},
+			"cut shader styles changed: old gems would light differently")
+
+
+## Photos load the right way up: a JPEG carrying each EXIF orientation (in
+## either byte order) comes back turned or mirrored to match.
+func test_photo_orientation() -> void:
+	print("Photo orientation")
+	# A 4x2 picture, as it should look: red top-left, green top-right, blue bottom-left.
+	var want := Image.create(40, 20, false, Image.FORMAT_RGB8)
+	want.fill(Color.WHITE)
+	want.fill_rect(Rect2i(0, 0, 10, 10), Color.RED)
+	want.fill_rect(Rect2i(30, 0, 10, 10), Color.GREEN)
+	want.fill_rect(Rect2i(0, 10, 10, 10), Color.BLUE)
+	for o in range(1, 9):
+		for little in [true, false]:
+			# Store it as the camera would: the inverse of what orientation o fixes.
+			var stored := want.duplicate() as Image
+			match o:
+				2:
+					stored.flip_x()
+				3:
+					stored.rotate_180()
+				4:
+					stored.flip_y()
+				5:
+					stored.flip_x()
+					stored.rotate_90(COUNTERCLOCKWISE)
+				6:
+					stored.rotate_90(COUNTERCLOCKWISE)
+				7:
+					stored.flip_x()
+					stored.rotate_90(CLOCKWISE)
+				8:
+					stored.rotate_90(CLOCKWISE)
+			var jpg := _with_exif(stored.save_jpg_to_buffer(0.95), o, little)
+			check(PhotoLoader.orientation(jpg) == o, "orientation %d read as %d" % [o, PhotoLoader.orientation(jpg)])
+			var got := PhotoLoader.from_bytes(jpg)
+			var ok := got != null and got.get_size() == want.get_size()
+			if ok:
+				for spot: Vector2i in [Vector2i(5, 5), Vector2i(35, 5), Vector2i(5, 15), Vector2i(35, 15)]:
+					var a := got.get_pixelv(spot)
+					var b := want.get_pixelv(spot)
+					if absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) > 0.3:
+						ok = false
+			check(ok, "orientation %d (%s) not upright" % [o, "II" if little else "MM"])
+	check(PhotoLoader.orientation(want.save_png_to_buffer()) == 1, "a PNG has an orientation")
+
+
+## Photo collages from edges: a clear subject on a plain background is cut
+## out alone (and every region is closed), a landscape keeps the whole
+## picture, and asking for either always gets it.
+func test_photo_edges() -> void:
+	print("Photo edges")
+	var subject := Image.create(480, 360, false, Image.FORMAT_RGB8)
+	var scenery := Image.create(480, 360, false, Image.FORMAT_RGB8)
+	for y in 360:
+		for x in 480:
+			var t := float(y) / 360.0
+			# A pale wall and table, with a bright flower-ish thing in front.
+			var c := Color(0.82 - 0.1 * t, 0.8 - 0.1 * t, 0.76 - 0.05 * t)
+			var d := Vector2(x, y).distance_to(Vector2(240, 180))
+			var a := Vector2(x - 240, y - 180).angle()
+			if d < 95.0 + 18.0 * sin(a * 6.0):
+				c = Color(0.85, 0.2, 0.3) if d > 40.0 else Color(0.98, 0.8, 0.15)
+			subject.set_pixel(x, y, c)
+			# Sky, hills and water, each running edge to edge.
+			var hill := 200.0 - 50.0 * absf(sin(x / 70.0))
+			var s := Color(0.55, 0.72, 0.95).lerp(Color(0.8, 0.88, 1.0), t)
+			if y > hill:
+				s = Color(0.3, 0.55, 0.3)
+			if y > 290:
+				s = Color(0.25, 0.45, 0.7)
+			scenery.set_pixel(x, y, s)
+	var art := PhotoEdges.line_art(subject)
+	check(art["subject"], "no subject found on a plain background: %s" % art.get("scores"))
+	check(art["width"] < 480 and art["height"] < 360, "the subject wasn't cropped around")
+	var map := RegionMap.build(art["mask"], art["width"], art["height"], 0)
+	check(map.regions.size() >= 2, "subject line art has %d closed regions" % map.regions.size())
+	var land := PhotoEdges.line_art(scenery)
+	check(not land["subject"], "a landscape was cut down to a subject: %s" % land.get("scores"))
+	check(not PhotoEdges.line_art(subject, {"subject": "off"})["subject"], "subject off still cut one out")
+	check(PhotoEdges.line_art(scenery, {"subject": "on"})["subject"], "subject on found none")
+
+
+## A JPEG with an EXIF block holding just an Orientation tag, put after SOI.
+func _with_exif(jpg: PackedByteArray, o: int, little: bool) -> PackedByteArray:
+	var tiff := PackedByteArray()
+	var u16 := func(v: int) -> PackedByteArray:
+		return PackedByteArray([v & 0xFF, v >> 8]) if little else PackedByteArray([v >> 8, v & 0xFF])
+	var u32 := func(v: int) -> PackedByteArray:
+		var b := PackedByteArray([v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, v >> 24])
+		if not little:
+			b.reverse()
+		return b
+	tiff.append_array("II".to_ascii_buffer() if little else "MM".to_ascii_buffer())
+	tiff.append_array(u16.call(42))
+	tiff.append_array(u32.call(8))
+	tiff.append_array(u16.call(1))
+	tiff.append_array(u16.call(0x0112))
+	tiff.append_array(u16.call(3))
+	tiff.append_array(u32.call(1))
+	tiff.append_array(u16.call(o))
+	tiff.append_array(u16.call(0))
+	tiff.append_array(u32.call(0))
+	var payload := "Exif".to_ascii_buffer()
+	payload.append_array(PackedByteArray([0, 0]))
+	payload.append_array(tiff)
+	var seg := PackedByteArray([0xFF, 0xE1, (payload.size() + 2) >> 8, (payload.size() + 2) & 0xFF])
+	seg.append_array(payload)
+	var out := jpg.slice(0, 2)
+	out.append_array(seg)
+	out.append_array(jpg.slice(2))
+	return out
+
+
+## Kits and unlocked picture features: a kit uses only unlocked colors and
+## drills, and unlocked frames show up. Photos make collages and kits.
+func test_kit_puzzles() -> void:
+	print("Kit puzzles")
+	var unlocks := GemCatalog.default_unlocks()
+	var colors := {}
+	for g in GemCatalog.unlocked_gems(unlocks):
+		colors[g["id"]] = true
+	var kit := PuzzleMaker.make({"type": "kit", "seed": 12, "pattern_seed": 3, "theme": "ocean"}, unlocks)
+	check(kit.get("kind") == "kit" and kit["slots"].size() >= 2000, "kit has %d slots" % kit["slots"].size())
+	var bad := 0
+	for s in kit["slots"]:
+		if not s["shape"] in ["round", "square"] or not colors.has(str(s["target_gem"])):
+			bad += 1
+	check(bad == 0, "kit: %d drills in locked shapes or colors" % bad)
+	var framed := 0
+	unlocks["features"] = ["frames", "backgrounds"]
+	for seed_value in [1, 2, 3, 4]:
+		var p := PuzzleMaker.make({"type": "flower", "seed": seed_value, "pattern_seed": 1, "theme": "garden"}, unlocks)
+		if p["source"].has("frame"):
+			framed += 1
+	check(framed > 0, "no frames with frames unlocked")
+	# Photo puzzles: a made-up photo becomes a collage and a kit, in unlocked colors only.
+	var photo := Image.create(400, 300, false, Image.FORMAT_RGB8)
+	for y in 300:
+		for x in 400:
+			var c := Color.from_hsv(fposmod(x / 400.0 + 0.3 * sin(y / 40.0), 1.0), 0.7, 0.4 + 0.5 * float(y) / 300.0)
+			if Vector2(x, y).distance_to(Vector2(200, 150)) < 70:
+				c = Color("#f7e04a")
+			photo.set_pixel(x, y, c)
+	for kind: String in GemCatalog.PHOTO_MODES:
+		var req := PuzzleMaker.new_request(kind, "")
+		req["photo"] = photo
+		var p := PuzzleMaker.make(req, GemCatalog.default_unlocks())
+		var off := 0
+		for s in p["slots"]:
+			if not colors.has(str(s["target_gem"])):
+				off += 1
+		check(p["slots"].size() >= 300 and off == 0, "%s: %d slots, %d in locked colors" % [kind, p["slots"].size(), off])
+		check(not p["puzzle"].has("photo"), "%s keeps the photo in its request" % kind)
+		check(PatternIO.from_json(PatternIO.to_json(p))["slots"].size() == p["slots"].size(), "%s didn't save" % kind)
+	# A photo kit in the photo's own colors: that many at most, exact, no gem ids.
+	var own := PuzzleMaker.new_request("photo_kit", "")
+	own["photo"] = photo
+	own["kit_colors"] = 12
+	var kit_own := PuzzleMaker.make(own, GemCatalog.default_unlocks())
+	var hexes := {}
+	var with_gem := 0
+	for s in kit_own["slots"]:
+		hexes[(s["target_color"] as Color).to_html(false)] = true
+		if s["target_gem"] != null:
+			with_gem += 1
+	check(hexes.size() <= 12 and hexes.size() >= 6 and with_gem == 0, "own-color kit: %d colors, %d with gems" % [
+			hexes.size(), with_gem])
+	# Kit sizes: the longer side is the size's drills, the other follows the picture.
+	var wide := Image.create(300, 200, false, Image.FORMAT_RGB8)
+	check(KitGenerator.board_long(wide, 250) == Vector2i(250, 167), "x-large board %s" % KitGenerator.board_long(wide, 250))
+	var tall := Image.create(200, 300, false, Image.FORMAT_RGB8)
+	check(KitGenerator.board_long(tall, 90) == Vector2i(60, 90), "medium tall board %s" % KitGenerator.board_long(tall, 90))
+	var xl := PuzzleMaker.new_request("photo_kit", "")
+	xl["photo"] = photo
+	xl["kit_size"] = "xlarge"
+	var big := PuzzleMaker.make(xl, GemCatalog.default_unlocks())
+	var grid: Dictionary = big["kit_grid"]
+	check(grid["cols"] == 250 and grid["rows"] == 188 and big["slots"].size() == 250 * 188, "x-large photo kit %dx%d" % [
+			grid["cols"], grid["rows"]])
+	# Kits save as their grid and come back slot for slot.
+	var compact := big.duplicate()
+	compact.erase("slots")
+	var text := PatternIO.to_json(compact)
+	check(text.length() < 200000, "x-large kit saves as %d KB" % (text.length() / 1024))
+	var again := PatternIO.from_json(text)
+	again["slots"] = PuzzleMaker.kit_slots(again)
+	var same: bool = again["slots"].size() == big["slots"].size()
+	for k in [0, 1234, big["slots"].size() - 1]:
+		var a: Dictionary = again["slots"][k]
+		var b: Dictionary = big["slots"][k]
+		same = same and a["x"] == b["x"] and a["y"] == b["y"] and a["target_gem"] == b["target_gem"] and \
+				(a["target_color"] as Color).to_html() == (b["target_color"] as Color).to_html()
+	check(same, "kit grid didn't come back as the same slots")
+	var mk := PuzzleMaker.make({"type": "kit", "seed": 9, "pattern_seed": 2, "theme": "rainbow", "kit_size": "small"},
+			GemCatalog.default_unlocks())
+	check(mk["kit_grid"]["cols"] == 50 and mk["kit_grid"]["rows"] == 50, "small diamond kit %dx%d" % [
+			mk["kit_grid"]["cols"], mk["kit_grid"]["rows"]])
+	var back := PatternIO.from_json(PatternIO.to_json(kit_own))
+	check(back["slots"][0]["target_gem"] == null and back["slots"][0]["target_color"] is Color, "own-color kit didn't save")
 
 
 ## Progress saves bit by bit and comes back the same.

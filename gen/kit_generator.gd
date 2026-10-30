@@ -29,6 +29,14 @@ const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 ##   drill: "round" | "square"                                       (default "round")
 ##   cleanup: re-color isolated cells                                 (default true)
 ##   seed: int                                                         (default 1)
+##   direct: map each cell straight to its nearest gem (no k-means
+##           first, so no colors averaged away), for photos     (default false)
+##   exact: with direct, the palette is the picture's own `colors` colors
+##          (k-means in Lab), not gem colors: entries have no gem id (default false)
+##   dither: 0..1, with direct: how much of each cell's leftover color
+##           carries on to its neighbors (Floyd-Steinberg in Lab, back and
+##           forth), so two gems side by side read as the color between
+##           them                                                      (default 0)
 static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var size_opt: Variant = options.get("size", "small")
 	var board: Vector2i = size_opt if size_opt is Vector2i else BOARD_SIZES.get(size_opt, BOARD_SIZES["small"])
@@ -47,6 +55,12 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	for y in board.y:
 		for x in board.x:
 			pixels[y * board.x + x] = img.get_pixel(x, y)
+	if options.get("direct", false):
+		var palette := gems
+		if options.get("exact", false):
+			palette = own_colors(pixels, n_colors, options.get("seed", 1))
+		var direct := map_direct(pixels, board.x, board.y, palette, options.get("dither", 0.0))
+		return _build_pattern(direct["cells"], direct["entries"], board, options.get("drill", "round"))
 	var q := ColorQuantizer.quantize(pixels, n_colors, options.get("seed", 1))
 	var centers: PackedVector3Array = q["centers"]
 	var labels: PackedInt32Array = q["labels"]
@@ -77,6 +91,95 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 			cells = clean_isolated(cells, board.x, board.y)
 
 	return _build_pattern(cells, entries, board, options.get("drill", "round"))
+
+
+## Most a cell's carried-over color may be off (Lab units), so a run of
+## colors no gem is near doesn't snowball into streaks.
+const MAX_CARRY := 28.0
+
+
+## Each cell to the gem nearest its color (Lab), with `dither` of the
+## leftover color passed on to the cells after it (Floyd-Steinberg, rows
+## back and forth). Returns {cells, entries}.
+static func map_direct(pixels: PackedColorArray, w: int, h: int, gems: Array, dither: float) -> Dictionary:
+	var gem_lab := PackedVector3Array()
+	for g in gems:
+		gem_lab.append(LabColor.from_color(g["color"]))
+	var lab := PackedVector3Array()
+	lab.resize(pixels.size())
+	for i in pixels.size():
+		lab[i] = LabColor.from_color(pixels[i])
+	var picked := PackedInt32Array()
+	picked.resize(pixels.size())
+	for y in h:
+		var back := y % 2 == 1
+		for k in w:
+			var x := w - 1 - k if back else k
+			var i := y * w + x
+			var want := lab[i]
+			var gi := LabColor.nearest(want, gem_lab)
+			picked[i] = gi
+			if dither <= 0.0:
+				continue
+			var err := want - gem_lab[gi]
+			if err.length() > MAX_CARRY:
+				err = err.normalized() * MAX_CARRY
+			err *= dither
+			var ahead := -1 if back else 1
+			_carry(lab, w, h, x + ahead, y, err * (7.0 / 16.0))
+			_carry(lab, w, h, x - ahead, y + 1, err * (3.0 / 16.0))
+			_carry(lab, w, h, x, y + 1, err * (5.0 / 16.0))
+			_carry(lab, w, h, x + ahead, y + 1, err * (1.0 / 16.0))
+	# Palette entries are the gems used, in the order first used.
+	var entries := []
+	var entry_of := {}
+	var cells := PackedInt32Array()
+	cells.resize(pixels.size())
+	for i in picked.size():
+		var gi := picked[i]
+		if not entry_of.has(gi):
+			entry_of[gi] = entries.size()
+			entries.append({"color": gems[gi]["color"], "gem_id": gems[gi]["id"]})
+		cells[i] = entry_of[gi]
+	return {"cells": cells, "entries": entries}
+
+
+static func _carry(lab: PackedVector3Array, w: int, h: int, x: int, y: int, err: Vector3) -> void:
+	if x >= 0 and x < w and y < h:
+		lab[y * w + x] += err
+
+
+## The picture's own `n` colors (k-means in Lab), as a palette of
+## {id: null, color}.
+static func own_colors(pixels: PackedColorArray, n: int, seed_value: int) -> Array:
+	var centers: PackedVector3Array = ColorQuantizer.quantize(pixels, n, seed_value)["centers"]
+	var out := []
+	for c in centers:
+		out.append({"id": null, "color": LabColor.to_color(c)})
+	return out
+
+
+## Kit sizes for the game, by the drills on the board's longer side; the
+## shorter side follows the picture's shape.
+const LONG_SIDES := {"small": 50, "medium": 90, "large": 130, "xlarge": 250}
+
+
+## A board `long_side` cells along the picture's longer side, the other side
+## scaled to its shape.
+static func board_long(img: Image, long_side: int) -> Vector2i:
+	var iw := float(img.get_width())
+	var ih := float(img.get_height())
+	if iw >= ih:
+		return Vector2i(long_side, maxi(10, int(round(long_side * ih / iw))))
+	return Vector2i(maxi(10, int(round(long_side * iw / ih))), long_side)
+
+
+## A board about `cells` cells big in the photo's own shape, so nothing is
+## cropped away.
+static func board_for(img: Image, cells: int) -> Vector2i:
+	var aspect := float(img.get_width()) / maxf(img.get_height(), 1.0)
+	var rows := maxi(10, int(round(sqrt(cells / aspect))))
+	return Vector2i(maxi(10, int(round(rows * aspect))), rows)
 
 
 ## Crops to the target aspect (width / height). `crop` is an optional Rect2 in

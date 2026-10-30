@@ -7,8 +7,10 @@ extends Control
 ## slot is too small to hold them.
 ##
 ## Outlines are drawn once in board units into a child node that only moves
-## and scales with the view; they are rebuilt per gem type, and only for the
-## types whose slots changed. Also finds the open slot of a type under a point.
+## and scales with the view. Each gem type's outlines (and the selected
+## type's tint) are built once; filling a slot just collapses its own piece
+## of them in place, so placing gems stays quick on boards of tens of
+## thousands of drills. Also finds the open slot of a type under a point.
 
 const OUTLINE := Color(0.33, 0.28, 0.4, 0.38)
 const OUTLINE_SELECTED := Color(0.13, 0.08, 0.2, 0.95)
@@ -19,6 +21,10 @@ const TINT_ALPHA := 0.32
 ## about half of it, up to MAX_FONT).
 const MIN_LABEL_PX := 44.0
 const MAX_FONT := 72
+## Outline points per round slot, and fewer on very big boards.
+const SEGMENTS := 16
+const FEW_SEGMENTS := 8
+const MANY_SLOTS := 20000
 
 var board: GemBoard3D
 var slots: Array = []
@@ -45,6 +51,15 @@ var _of_type: Array[Array] = []
 var _dirty := {}
 var _tint: ArrayMesh
 var _tint_dirty := true
+## Where each slot's outline starts in its type's segments, and its tint in
+## the tint's vertices (-1: not there); slots placed since the last frame,
+## whose pieces still need collapsing, by type; and the tint's arrays.
+var _seg_at := PackedInt32Array()
+var _tint_at := PackedInt32Array()
+var _collapse := {}
+var _tint_collapse := []
+var _tint_verts := PackedVector2Array()
+var _tint_index := PackedInt32Array()
 ## Slots by grid cell: every cell a slot's box touches, and only the cell
 ## of its center (for labels).
 var _grid := {}
@@ -77,9 +92,14 @@ func setup(picture: Dictionary, types: PackedInt32Array, colors: PackedColorArra
 	_by_center.clear()
 	_max_minor = 0.0
 	_cell = maxf(float(picture.get("unit", 6.0)) * 4.0, 8.0)
+	var segments := FEW_SEGMENTS if slots.size() > MANY_SLOTS else SEGMENTS
+	_seg_at.resize(slots.size())
+	_seg_at.fill(-1)
+	_tint_at.resize(slots.size())
+	_tint_at.fill(-1)
 	for i in slots.size():
 		var s: Dictionary = slots[i]
-		_polys.append(GemShapes.slot_polygon(s, 16))
+		_polys.append(GemShapes.slot_polygon(s, segments))
 		var c := Vector2(s["x"], s["y"])
 		var reach := maxf(s["size"], s["width"]) / 2.0
 		var lo := Vector2i(((c - Vector2(reach, reach)) / _cell).floor())
@@ -106,14 +126,15 @@ func setup(picture: Dictionary, types: PackedInt32Array, colors: PackedColorArra
 ## Marks a slot placed; its outline and number go.
 func place(i: int) -> void:
 	placed[i] = 1
-	_dirty[type_of[i]] = true
+	_collapse.get_or_add(type_of[i], []).append(i)
 	if type_of[i] == selected:
-		_tint_dirty = true
+		_tint_collapse.append(i)
 	_labels.queue_redraw()
 
 
-## The open slot of `gem_type` under board point `at` (within `tolerance`
-## board units of its outline), nearest its center first; -1 if none.
+## The open slot of `gem_type` (-1: any) under board point `at` (within
+## `tolerance` board units of its outline), nearest its center first; -1 if
+## none.
 func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
 	var cell := Vector2i((at / _cell).floor())
 	var best := -1
@@ -121,7 +142,7 @@ func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
 	for gy in range(cell.y - 1, cell.y + 2):
 		for gx in range(cell.x - 1, cell.x + 2):
 			for i: int in _grid.get(Vector2i(gx, gy), []):
-				if placed[i] != 0 or type_of[i] != gem_type:
+				if placed[i] != 0 or (gem_type >= 0 and type_of[i] != gem_type):
 					continue
 				var s: Dictionary = slots[i]
 				var d := (at - Vector2(s["x"], s["y"])).rotated(-float(s["rotation"]))
@@ -134,15 +155,61 @@ func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
 	return best
 
 
+## Every open slot of `gem_type` (-1: any) whose center is within `radius`
+## board units of `at`.
+func slots_near(at: Vector2, gem_type: int, radius: float) -> Array:
+	var out := []
+	var lo := Vector2i(((at - Vector2(radius, radius)) / _cell).floor())
+	var hi := Vector2i(((at + Vector2(radius, radius)) / _cell).floor())
+	for gy in range(lo.y, hi.y + 1):
+		for gx in range(lo.x, hi.x + 1):
+			for i: int in _by_center.get(Vector2i(gx, gy), []):
+				if placed[i] != 0 or (gem_type >= 0 and type_of[i] != gem_type):
+					continue
+				var s: Dictionary = slots[i]
+				if Vector2(s["x"], s["y"]).distance_to(at) <= radius:
+					out.append(i)
+	return out
+
+
+## The open slots of a gem type.
+func open_of_type(gem_type: int) -> Array:
+	return _of_type[gem_type].filter(func(i: int) -> bool: return placed[i] == 0)
+
+
 func _process(_delta: float) -> void:
-	if _dirty.is_empty() and not _tint_dirty:
+	if _dirty.is_empty() and not _tint_dirty and _collapse.is_empty() and _tint_collapse.is_empty():
 		return
 	for t: int in _dirty:
 		_rebuild_type(t)
+		_collapse.erase(t)
 	_dirty.clear()
 	if _tint_dirty:
 		_tint_dirty = false
+		_tint_collapse.clear()
 		_rebuild_tint()
+	# Newly placed slots: their outline (and tint) pieces shrink to a point.
+	for t: int in _collapse:
+		var segs := _lines[t]
+		for i: int in _collapse[t]:
+			var at := _seg_at[i]
+			if at < 0:
+				continue
+			var dot := _polys[i][0]
+			for k in _polys[i].size() * 2:
+				segs[at + k] = dot
+		_lines[t] = segs
+	_collapse.clear()
+	if not _tint_collapse.is_empty():
+		for i: int in _tint_collapse:
+			var at := _tint_at[i]
+			if at < 0:
+				continue
+			var dot := _polys[i][0]
+			for k in _polys[i].size():
+				_tint_verts[at + k] = dot
+		_tint_collapse.clear()
+		_upload_tint()
 	_shapes.queue_redraw()
 
 
@@ -150,7 +217,9 @@ func _rebuild_type(t: int) -> void:
 	var segs := PackedVector2Array()
 	for i in _of_type[t]:
 		if placed[i] != 0:
+			_seg_at[i] = -1
 			continue
+		_seg_at[i] = segs.size()
 		var poly := _polys[i]
 		var n := poly.size()
 		for j in n:
@@ -162,6 +231,9 @@ func _rebuild_type(t: int) -> void:
 ## One mesh of the selected type's open slots, to tint them.
 func _rebuild_tint() -> void:
 	_tint = null
+	_tint_at.fill(-1)
+	_tint_verts = PackedVector2Array()
+	_tint_index = PackedInt32Array()
 	if selected < 0:
 		return
 	var verts := PackedVector2Array()
@@ -172,16 +244,29 @@ func _rebuild_tint() -> void:
 		var poly := _polys[i]
 		var tris := Geometry2D.triangulate_polygon(poly)
 		var base := verts.size()
+		_tint_at[i] = base
 		verts.append_array(poly)
 		for k in tris:
 			index.append(base + k)
 	if index.is_empty():
 		return
+	_tint_verts = verts
+	_tint_index = index
+	_upload_tint()
+
+
+## (Re)makes the tint mesh from its arrays.
+func _upload_tint() -> void:
+	if _tint_index.is_empty():
+		_tint = null
+		return
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = verts
-	arrays[Mesh.ARRAY_INDEX] = index
-	_tint = ArrayMesh.new()
+	arrays[Mesh.ARRAY_VERTEX] = _tint_verts
+	arrays[Mesh.ARRAY_INDEX] = _tint_index
+	if _tint == null:
+		_tint = ArrayMesh.new()
+	_tint.clear_surfaces()
 	_tint.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 

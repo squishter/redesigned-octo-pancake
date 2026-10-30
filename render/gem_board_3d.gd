@@ -48,7 +48,8 @@ const LAND_TIME := 0.18
 const OVERSHOOT := 1.70158
 ## Gem colors cut as opaque polished stones rather than see-through ones,
 ## so white reads apart from clear diamond.
-const OPAQUE_GEMS := ["snow"]
+## Only ever add to it: changing a color already in use would change old puzzles.
+const OPAQUE_GEMS := ["snow", "pearl", "ivory", "cream", "jade", "turquoise"]
 ## A stone's girdle stands this high above the paper, and its crown rises
 ## about this much above that, in its half-widths.
 const GIRDLE_HEIGHT := 0.45
@@ -109,6 +110,8 @@ var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
 var _paper := MeshInstance3D.new()
 var _env := Environment.new()
+## Draw star flares (off on transparent boards).
+var _flares := true
 var _layers := Node3D.new()
 var _gem_material := ShaderMaterial.new()
 var _shadow_material := ShaderMaterial.new()
@@ -288,27 +291,50 @@ func land_slot(i: int) -> void:
 
 
 ## Draws only the stones, no paper, over a transparent background (for
-## icons and stones flying over the screen).
+## icons and stones flying over the screen). Star flares are left out: their
+## additive planes would write solid black squares into the transparency,
+## reaching past their stone into its neighbors' icons. Call it before
+## show_collage().
 func set_transparent() -> void:
+	_flares = false
 	_viewport.transparent_bg = true
 	_env.background_mode = Environment.BG_CLEAR_COLOR
 	_env.glow_enabled = false
 	_paper.visible = false
 
 
-## A wave of pulses through every stone, outward from board point `from`,
-## while the light sweeps over them. Returns how long it lasts (seconds).
-func celebrate(from: Vector2) -> float:
-	var far := 1.0
+## Finale styles celebrate() knows (GemCatalog.FINALES must be among them).
+const FINALES := ["ripple", "spiral", "sweep", "shimmer"]
+
+
+## A wave of pulses through every stone while the light sweeps over them,
+## timed by `style`: "ripple" outward from board point `from`, "spiral"
+## round it, "sweep" from left to right, "shimmer" at random. Returns how
+## long it lasts (seconds).
+func celebrate(from: Vector2, style := "ripple") -> float:
+	var far := 0.0
 	var at := []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
 	for refs: Array in _refs:
 		if refs.is_empty():
 			at.append(0.0)
 			continue
 		var o: Vector3 = refs[0][2].origin
-		var d := Vector2(o.x, o.z).distance_to(from)
-		at.append(d)
-		far = maxf(far, d)
+		var p := Vector2(o.x, o.z)
+		var t: float
+		match style:
+			"spiral":
+				t = fposmod((p - from).angle() + PI / 2.0, TAU) / TAU + p.distance_to(from) / _board.length() * 0.3
+			"sweep":
+				t = p.x / maxf(_board.x, 1.0)
+			"shimmer":
+				t = rng.randf()
+			_:
+				t = p.distance_to(from)
+		at.append(t)
+		far = maxf(far, t)
+	far = maxf(far, 1e-6)
 	for i in _refs.size():
 		_anims[i] = [_clock + at[i] / far * CELEBRATE_TIME, 1]
 	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
@@ -360,6 +386,17 @@ func get_view_texture() -> ViewportTexture:
 ## Keeps rendering while off screen.
 func set_always_render() -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+
+## Zooms and pans to show board rect `area` (with some room around it).
+func focus_on(area: Rect2) -> void:
+	var view := Vector2(maxf(size.x, 1.0), maxf(size.y, 1.0))
+	var fit := minf(view.x / (_board.x * (1.0 + margin * 2.0)), view.y / (_board.y * (1.0 + margin * 2.0)))
+	var room := area.grow(maxf(area.size.x, area.size.y) * 0.25 + 20.0)
+	var want := minf(view.x / maxf(room.size.x, 1.0), view.y / maxf(room.size.y, 1.0))
+	_zoom = clampf(want / fit, 1.0, MAX_ZOOM)
+	_center = area.get_center()
+	_apply_view()
 
 
 ## Board units to this control's px, as the view stands.
@@ -431,20 +468,21 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	for key: String in by_mesh:
 		var parts := key.split("|")
 		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, by_mesh[key], "gem",
-				GemCuts.ALL.find(parts[1]))
+				GemCuts.SHADER_STYLE.get(parts[1], 0))
 	var all := range(slots.size())
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
 	_add_layer(shadow_plane, _shadow_material, slots, all, "shadow")
-	var sparkle_plane := PlaneMesh.new()
-	sparkle_plane.size = Vector2(2.0, 2.0)
-	_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
+	if _flares:
+		var sparkle_plane := PlaneMesh.new()
+		sparkle_plane.size = Vector2(2.0, 2.0)
+		_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
 	update_light()
 	reset_view()
 
 
 ## One MultiMesh: `mesh` for the given slots, as gems, shadows or sparkles.
-## For gems, `cut` is the cut's index in GemCuts.ALL.
+## For gems, `cut` is the cut's shader style (GemCuts.SHADER_STYLE).
 func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array, kind: String, cut := 0) -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D

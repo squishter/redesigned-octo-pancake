@@ -1,9 +1,11 @@
 class_name SaveStore
 extends RefCounted
 ## Her saved games, under user://saves:
-##   profile.json: {version, unlocks (see GemCatalog), settings, puzzles: [meta]},
-##     where each meta is {id, type, seed, pattern_seed, theme, created,
-##     updated, total, filled, done}, newest first;
+##   profile.json: {version, unlocks (see GemCatalog), settings, wallet
+##     {coins, picks}, daily {opened, completed}, powers {power: charges}
+##     (see Packs), puzzles: [meta]}, where each meta is {id, type, seed,
+##     pattern_seed, theme, created, updated, total, filled, done, rewarded,
+##     powers (the whole-puzzle power-ups on for it)}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
 ##   <id>.progress: which stones are placed, one bit per slot;
 ##   <id>.png: a small thumbnail for the menu.
@@ -12,11 +14,13 @@ extends RefCounted
 ## so a crash mid-write leaves the old file whole.
 
 const DIR := "user://saves"
-const VERSION := 1
-## Her settings and their defaults. fill_animation: how a placed gem goes
-## in, "fly" (from the gem row into the slot) or "pop" (grows in place).
-const DEFAULT_SETTINGS := {"fill_animation": "fly"}
-const FILL_ANIMATIONS := {"fly": "Fly in from the gem row", "pop": "Pop in place"}
+## Profile format: 2 added the `granted` ledger (see Unlockables.normalize).
+## Loading brings any older profile up to date; fields it doesn't know (from
+## a newer version) are kept as they are.
+const VERSION := 2
+## Her settings and their defaults: how a placed gem goes in and the
+## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES).
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
 
 
 static func load_profile() -> Dictionary:
@@ -26,22 +30,40 @@ static func load_profile() -> Dictionary:
 		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if data is Dictionary:
 			profile = data
-	profile["version"] = VERSION
-	var unlocks: Dictionary = profile.get("unlocks", {})
-	var defaults := GemCatalog.default_unlocks()
-	for key: String in defaults:
-		if not unlocks.has(key):
-			unlocks[key] = defaults[key]
-	profile["unlocks"] = unlocks
+	return upgrade(profile)
+
+
+## A profile as loaded from JSON (any version, or {} for a new player),
+## brought up to date: missing parts get their defaults, numbers come back
+## as ints, unlocks get anything new they should have (see
+## Unlockables.normalize). Nothing she has is lost.
+static func upgrade(profile: Dictionary) -> Dictionary:
+	profile["version"] = maxi(int(profile.get("version", 1)), VERSION)
+	var powers: Dictionary = profile.get("powers", {})
+	for key: String in powers:
+		powers[key] = int(powers[key])
+	profile["powers"] = powers
+	Unlockables.normalize(profile)
 	var settings: Dictionary = profile.get("settings", {})
 	for key: String in DEFAULT_SETTINGS:
 		if not settings.has(key):
 			settings[key] = DEFAULT_SETTINGS[key]
 	profile["settings"] = settings
+	var wallet: Dictionary = profile.get("wallet", {})
+	for key in ["coins", "picks"]:
+		wallet[key] = int(wallet.get(key, 0))
+	profile["wallet"] = wallet
+	var daily: Dictionary = profile.get("daily", {})
+	for key in ["opened", "completed"]:
+		daily[key] = str(daily.get(key, ""))
+	profile["daily"] = daily
 	var puzzles: Array = profile.get("puzzles", [])
 	for meta: Dictionary in puzzles:
 		for key in ["seed", "pattern_seed", "created", "updated", "total", "filled"]:
 			meta[key] = int(meta.get(key, 0))
+		meta["done"] = bool(meta.get("done", false))
+		meta["rewarded"] = bool(meta.get("rewarded", false))
+		meta["powers"] = meta.get("powers", [])
 	profile["puzzles"] = puzzles
 	return profile
 
@@ -61,14 +83,20 @@ static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
 		"type": request.get("type", "mandala"),
 		"seed": int(request.get("seed", 0)),
 		"pattern_seed": int(request.get("pattern_seed", 0)),
-		"theme": request.get("theme", "rainbow"),
+		"theme": request.get("theme", ""),
+		"kit_size": request.get("kit_size", ""),
 		"created": now,
 		"updated": now,
 		"total": picture["slots"].size(),
 		"filled": 0,
 		"done": false,
 	}
-	_write(_path(id, "json"), PatternIO.to_json(picture).to_utf8_buffer())
+	# Kits save as their grid, not their (many) slots.
+	var kept := picture
+	if picture.has("kit_grid"):
+		kept = picture.duplicate()
+		kept.erase("slots")
+	_write(_path(id, "json"), PatternIO.to_json(kept).to_utf8_buffer())
 	save_progress(id, PackedByteArray())
 	(profile["puzzles"] as Array).push_front(meta)
 	save_profile(profile)
@@ -95,7 +123,10 @@ static func delete_puzzle(profile: Dictionary, id: String) -> void:
 
 
 static func load_picture(id: String) -> Dictionary:
-	return PatternIO.load_file(_path(id, "json"))
+	var picture := PatternIO.load_file(_path(id, "json"))
+	if picture.has("kit_grid") and not picture.has("slots"):
+		picture["slots"] = PuzzleMaker.kit_slots(picture)
+	return picture
 
 
 ## Placed stones as one byte per slot (1 placed), `count` long.

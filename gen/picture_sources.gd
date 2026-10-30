@@ -73,7 +73,8 @@ static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dict
 	var h: int = lines["height"]
 	var symmetry: String = lines["mandala"]["symmetry"]
 	var map := RegionMap.build(lines["mask"], w, h, 0)
-	var palette := Palettes.theme_colors(options.get("theme", "sunset"))
+	var palette: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
+			else Palettes.theme_colors(options.get("theme", "sunset")))
 	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value)
 	var background: Color = options.get("background", BACKGROUND)
 	var plan := DesignPlan.make(map, RegionPaint.symmetry_groups(map, symmetry), options, seed_value)
@@ -90,12 +91,17 @@ static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dict
 ## A Collage puzzle from a photo: photo -> line art, region colors sampled
 ## from the photo. Options: detail (0..1), max_size, plus CollageGenerator's.
 ## Pass `art` (PhotoLineArt.generate of the same photo and options) to reuse it.
+## `method`: "edges" (PhotoEdges: edge detection, then the subject alone
+## when it has a clear one; see its `subject` option) or "areas"
+## (PhotoLineArt: lines between color areas; the default, for the lab).
 static func photo_collage(photo: Image, options: Dictionary = {}, art: Dictionary = {}) -> Dictionary:
+	var method: String = options.get("method", "areas")
 	if art.is_empty():
-		art = PhotoLineArt.generate(photo, options)
+		art = PhotoEdges.line_art(photo, options) if method == "edges" else PhotoLineArt.generate(photo, options)
 	var opts := options.duplicate()
 	opts["colors_image"] = art["image"]
-	opts["source"] = {"kind": "photo", "detail": options.get("detail", 0.5)}
+	opts["source"] = {"kind": "photo", "detail": options.get("detail", 0.5), "method": method,
+			"subject": art.get("subject", false)}
 	return CollageGenerator.generate(art["mask"], art["width"], art["height"], opts)
 
 

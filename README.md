@@ -25,8 +25,73 @@ mode for trying out new pattern generation.
   (ruby, tangerine, sunflower, leaf, sapphire, indigo and amethyst, plus
   black onyx, white and clear diamond), six themes made of those colors
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
-  mandala collages, with no frames or collars. Nothing unlocks more yet;
-  the profile keeps the lists, so it only needs adding to them.
+  mandala collages, with no frames or collars, placing gems with Pop or
+  Fly and the Ripple finale. Everything else comes from packs.
+- **Colors and themes.** 105 gem colors, at least 10 of each hue (red,
+  orange, yellow, green, teal, blue, purple, pink, brown and neutrals; some,
+  like pearl, ivory, jade and turquoise, are opaque stones), and 33 themes:
+  one per hue, the starting rainbow ones and mixes like Tropical, Galaxy and
+  Seaside. A theme is hers as soon as she has all its colors; themes don't
+  come from packs. Collection shows a locked theme's colors she has found so far.
+- **Photos.** *Photo collage…* and *Photo kit…* in the New puzzle panel pick
+  one of her photos (the phone's own picker; turned upright by its EXIF orientation, see `game/photo_loader.gd`) and turn it into a collage
+  or a kit of drills, in her unlocked colors. Photo puzzles can't be
+  recolored: their colors come from the photo.
+  - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
+    edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
+    edge detector over Lab, thin ridges, thresholds from the photo with a
+    floor, short specks dropped, loose ends reaching on to close shapes),
+    then become a collage like any line art, with every area filled. If the
+    photo has a clear subject (boundary connectivity saliency: sky, ground
+    and walls connect to the photo's border, a subject hardly does; it must
+    be compact, stand out clearly and not run edge to edge), only the
+    subject becomes line art, cropped around it, with the rest left as
+    background. The panel's *Photo collage* choice can also ask for the
+    subject only or the whole photo.
+  - *Photo kits* keep the photo's own shape (about 6000 drills, nothing
+    cropped) and map each cell straight to the nearest unlocked gem in Lab,
+    carrying 85% of the leftover color on to its neighbors (Floyd-Steinberg,
+    back and forth, capped), so neighboring gems blend into the colors in
+    between. Against the photo, seen from a little way off, that cut the
+    average color error by a half to two thirds (with the 10 starting colors
+    on sample photos, 18-30 ΔE down to 8-21). The panel's *Photo kit colors*
+    can instead use the photo's own 12, 20 or 30 colors (k-means in Lab,
+    exact colors that aren't her gems, 50% carried on): 2-4 ΔE on the same
+    photos with 12.
+- **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,
+  Shape, Facet, Picture, Flourish, Sparkle) gives one thing she
+  doesn't have yet from its category, never a repeat, and is sold out once
+  she has it all; the Everything pack picks a category with something left
+  (each as likely) and gives something from it; the Power-up pack gives
+  charges. Every pack costs 30 coins (power-ups 10) or a free pick. She gets
+  a free pick the first time she opens the game each day and another for
+  her first finished puzzle each day; every finished puzzle pays 10 coins
+  (once per puzzle, so restarting one doesn't pay again), so every 3
+  puzzles buy a pack. Opening one pops up what came out, rendered. *Collection*: every
+  gem color and every shape in every cut as real rendered gems, then
+  themes, picture types (collages and Diamond kits), flourishes (frames,
+  frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
+  place gems (Pop, Fly, Drop, Spin, Twinkle, and ones that read even zoomed
+  far out: Bounce, Comet, Firework, Beam, Halo), finales (Ripple, Spiral,
+  Sweep, Shimmer) and power-up charges. Locked things stay a mystery: gems
+  show only as flat silhouettes of their outline, and names, theme colors
+  and descriptions stay hidden.
+- **Power-ups**, spent from *Power-ups* while playing. For the whole puzzle:
+  Big brush (fills every matching slot under a wide brush), Tidy up (gems
+  with fewer than 10 slots left finish themselves), Free hand (tap any open
+  slot to fill it with its own gem) and Double coins. Once per charge:
+  Finish gem, Sweep (the picked gem's slots on screen), Finder (zooms to
+  the picked gem's slots) and Sprinkle (40 gems anywhere). She starts with
+  a Finish gem and two Finders.
+- **Diamond kits**: a mandala painted with the theme, turned into a grid of
+  round or square drills (whichever are unlocked), played like a collage.
+  *Kit size* in the New puzzle panel (for photo kits too) sets the drills
+  on the longer side: Small 50, Medium 90, Large 130 or X-large 250; the
+  shorter side follows the picture's shape (an X-large kit can have 62,500
+  drills). Kits save as their grid of colors (82 KB for an X-large one,
+  where every drill as a slot would be 11 MB) and turn back into drills on
+  loading; filling a drill only collapses its own outline, so big boards
+  stay quick.
 - **Menu.** *New puzzle* picks an unlocked type and theme and makes a fresh
   one (on a worker thread). Every puzzle keeps its own save, so starting a
   new one never touches the others. Each saved puzzle shows a thumbnail and
@@ -44,8 +109,9 @@ mode for trying out new pattern generation.
   (darker outlines over a tint of its color). The row scrolls with a drag
   (flinging on), and a tap picks a gem or lets it go; picking never scrolls it. Tap a slot, or drag
   across many: each gem flies from its card (even one scrolled out of view) into the slot with a
-  trail of tiny sparkles and a little burst as it lands, or (in *Settings*
-  on the menu) pops in place, either way with a tiny buzz. A drag that doesn't start
+  trail of tiny sparkles and a little burst as it lands, or in another
+  unlocked style chosen in *Settings* on the menu (where the finale is
+  chosen too), always with a tiny buzz. A drag that doesn't start
   on the selected gem's slot pans instead, and two fingers pinch. When the
   last stone is in, a wave ripples out from the middle while the light
   sweeps over the gems, and the picture is left to look at, zoomed and
@@ -55,14 +121,49 @@ mode for trying out new pattern generation.
 | File | What it does |
 | --- | --- |
 | `game/gem_catalog.gd` | `GemCatalog`: every unlockable (gem colors, shapes and cuts, themes as gem colors, puzzle types) and what she starts with. |
+| `game/unlockables.gd` | `Unlockables`: the table of every kind of unlockable, its items, starting items, and granting and upgrading profiles. |
+| `game/packs.gd` | `Packs`: what each pack can still give, opening packs with picks or coins, daily picks, puzzle rewards and power-up charges. |
 | `game/puzzle_maker.gd` | `PuzzleMaker`: a puzzle request (type, seed, pattern seed, theme) → a collage made from her unlocks only. Safe on worker threads. |
 | `game/save_store.gd` | `SaveStore`: her profile (unlocks, settings and puzzle list) and each puzzle's picture, progress (one bit per slot) and thumbnail under `user://saves`, written via a temporary file. |
 | `game/thumbnail.gd` | Small flat pictures for the menu: placed stones in color, open slots as pale dots. |
 | `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
+| `scenes/game/collection_screen.gd` | Collection & packs: pack cards, opening and revealing, and everything unlocked or still hidden. |
+| `scenes/game/drag_scroll.gd` | `DragScroll`: makes a list scroll (and fling) wherever a drag starts, buttons included, without pressing them. |
+| `scenes/game/gem_icons.gd` | `GemIcons`: single gems laid out on an icon sheet, sized to stay inside their own cell. |
 | `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
 | `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
+
+### Adding unlockables
+
+Every kind of unlockable (colors, shapes, cuts, themes, picture types,
+flourishes, placement styles, finales, power-ups) is a row in
+`Unlockables.KINDS`, and packs, Collection and profiles all work from that
+table, so additions never touch old puzzles or what she has:
+
+- **A new item:** add it to its catalog in `GemCatalog` (cuts go in
+  `GemCuts.BY_SHAPE`, with a `GemCuts.SHADER_STYLE`). Packs offer it at once,
+  and a sold-out pack comes back in stock. New placement styles, finales,
+  flourishes and power-ups also need their code (and an entry in
+  `PlayScreen.FILL_STYLES` / `POWER_EFFECTS`, `GemBoard3D.FINALES` or
+  `PuzzleMaker.FEATURES`); new shapes need a `GemShapes` outline and a
+  `GemVariety` family. The *Catalog complete* check fails until all of
+  that is in place.
+- **A new starting item:** add it to its `STARTING_` list. Existing players
+  get it the next time the game starts. Starting power-up charges are given
+  only once, ever, through the profile's `granted` ledger.
+- **A new kind:** add a row to `Unlockables.KINDS` (its unlock list and its
+  pack), its items to `Unlockables.items()`, and the pack to `Packs.PACKS`.
+- **Ids are forever:** saves keep ids, never positions or names, so never
+  rename or reuse one (map an old id to a new one in `Unlockables.RENAMED`
+  if you must).
+
+Saved puzzles keep their whole picture (every stone's shape, cut and color),
+so they look and play the same whatever is added later. A profile from any
+earlier version loads through `SaveStore.upgrade()`, which only adds things
+and keeps anything it doesn't recognize; the *Old profiles* check covers
+this.
 
 Buzzes need the `VIBRATE` permission in the Android export preset
 (*Permissions → Vibrate*).
@@ -185,8 +286,9 @@ hold still when it does.
   following a phone held still or tilted, crossing over the stones when it
   is tilted 30° either way flat or turned 30° either way upright, and
   staying overhead however it's held, kits at every size (owned colors only), photo line art, a JSON
-  round trip, game puzzles using only the starting unlocks (and keeping their lines when recolored)
-  and progress saves:
+  round trip, game puzzles using only the starting unlocks (and keeping their lines when recolored),
+  progress saves, packs (never a repeat, selling out, paying with picks or coins, daily picks and
+  puzzle coins once each) and kit puzzles (only unlocked colors and drills):
 
   ```sh
   godot --headless --import
