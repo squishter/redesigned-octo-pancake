@@ -33,6 +33,9 @@ mode for trying out new pattern generation.
   uses illustrated mode cards and a color-story preview. Dialogs scroll on
   smaller screens, keep their actions visible and contain keyboard focus;
   the board ignores touches while a power-up or reward dialog is open.
+- **Stones per gesture.** A button at the top of the play screen steps
+  through 1×, 3×, 5× and ∞: how many stones one tap or drag may place
+  (Big brush included). It starts at ∞ and is kept in the settings.
 - **Completion rewards.** The finale's waves repeat, while she pinches and
   pans around the picture, until she taps *End finale* (or presses back);
   then a framed dialog shows the
@@ -125,7 +128,7 @@ mode for trying out new pattern generation.
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
   place gems (Pop, Fly, Drop, Spin, Twinkle, and ones that read even zoomed
   far out: Bounce, Comet, Firework, Beam, Halo), finales (Ripple, Spiral,
-  Sweep, Shimmer) and power-up charges. Locked things stay a mystery: gems
+  Sweep, Shimmer, Light ripple: a ring of light instead of swelling gems) and power-up charges. Locked things stay a mystery: gems
   show only as flat silhouettes of their outline, and names, theme colors
   and descriptions stay hidden.
 - **Power-ups**, spent from *Power-ups* while playing. For the whole puzzle:
@@ -170,9 +173,11 @@ mode for trying out new pattern generation.
   Debug builds (the editor and `tools/build_apk.sh` APKs, not release
   exports) add *Unlock everything* to Settings, for testing: while it's on,
   every color, shape, cut, theme, picture type, flourish, placement style
-  and finale is hers. Her own unlocks are what's saved and come back when
-  it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
-  and power-up charges are real.
+  and finale is hers, and every power-up has unlimited charges (shown as ∞)
+  that cost nothing to use. Her own unlocks are what's saved and come back
+  when it's off; anything a pack or reward unlocks meanwhile isn't kept,
+  but coins and power-up charges from packs are real, and her own charges
+  are left as they were.
   The same debug Settings section offers *Free purchases*: open any available
   pack without spending coins or free picks, even with an empty wallet.
   Pack purchases show *Open free (debug)* while it is on. The toggle persists
@@ -185,7 +190,7 @@ mode for trying out new pattern generation.
   on the game board, including completed pictures. Placement animations,
   the grand finale and the FPS cap share one dialog; changes save immediately,
   and placement changes take effect on the active puzzle. The FPS cap is
-  available in release builds: 30 (the default), 60, 90, 120 or Unlimited.
+  available in release builds: 30 (the default), 45, 60, 90, 120 or Unlimited.
   Lower caps save battery; higher caps allow smoother movement up to the
   screen's refresh rate. Existing profiles without a cap also start at 30 FPS.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
@@ -356,15 +361,43 @@ light over the stones from one side to the other, while it always stays
 generally overhead (at least 40° above the paper). The camera never moves. Caustics depend on the light's direction only, so they
 hold still when it does.
 
+The game defaults to 30 frames a second (`application/run/max_fps` in
+`project.godot`); the player's saved FPS cap in Settings overrides that default.
+The board's SubViewport only
+renders when a frame is due: every frame while something moves (a touch, a
+pan or pinch, a glide, stones popping in or pulsing, the finale's sweep, the
+phone turning), and 30 times a second (`GemBoard3D.IDLE_FPS`) while only the
+light's slow drift changes it. The off-screen icon sheets that the gem row
+and the Collection cut their icons from render 10 times a second
+(`set_always_render(GemIcons.FPS)`). `render_count` counts a board's renders.
+
+For judging speed on a phone there is a performance readout
+(`scenes/game/perf_readout.gd`, off by default). In debug builds, Settings →
+*Testing* has *Performance readout* (On/Off) and *Board test*, which draws puzzles opened
+from then on with one part left out or cheapened (no shadows, no
+sparkles, flat-colored gems, no gems, MSAA 2× or off, half resolution, no impostors for tiny stones;
+`GemBoard3D.DEBUG_TESTS`) to see what costs what on a phone, all saved. Holding the progress line
+("12 / 340 gems") on the play screen for a moment also turns the readout on
+or off, as does *Readout* in the generator lab's Options. It shows frames
+a second, frame time and the last frame's process time; the board's renders
+a second and GPU time per render (and the whole screen's); and the
+triangles and draw calls of the board's last render and of the whole last
+frame.
+
 | File | What it does |
 | --- | --- |
-| `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). For play, stones can start hidden, pop in when placed (`fill_slot`) and pulse in waves when the picture is done (`celebrate`, repeating until `end_celebration`); a `stroke_filter` turns touches into strokes instead of pans, and `view_transform()` maps the board onto the screen for drawing over it. White stones are opaque, with a soft glaze, so they read apart from clear diamonds. Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
-| `gem_mesh.gd` | Builds a stone's crown in 3D from its outline: the girdle resampled so corners stay sharp, then rings of points pulled in and raised (every 1st, 2nd or 4th point, half a step apart for brilliants) zipped into flat triangular facets up to a table or a point. Cached per shape and cut. |
-| `gem.gdshader` | Facets mirror a small studio (a key softbox with window bars, a fill, a ring of low lamps, the paper below); light also refracts in, bounces off two pavilion facets (sectors under a brilliant, nested rectangles under a step cut), comes back out tinted by the gem and split a little per color for fire, with soft light playing through the body (shifting as the light moves) and a darker rim. Cabochons glow smoothly toward the light. |
-| `gem_shadow.gdshader` | Each stone's soft shadow on the paper (lighter under the tiniest stones), cast away from the light by how high it stands, with the colored caustic light it focuses inside it, shifting as the light moves; both fade out before the edge of their plane. The caustics follow the stone's tilt (below); the shadow follows the true light. |
+| `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). For play, stones can start hidden, pop in when placed (`fill_slot`) and pulse in waves when the picture is done (`celebrate`, repeating until `end_celebration`; the shaders do the pulsing, from each stone's delay in the wave and the time since it started, so a finale costs no CPU time per frame however many stones there are); a `stroke_filter` turns touches into strokes instead of pans, and `view_transform()` maps the board onto the screen for drawing over it. White stones are opaque, with a soft glaze, so they read apart from clear diamonds. Stones of one shape, cut and size (in powers of 2) share a mesh and draw as one `MultiMesh`, which draws its stones as flat outlines lit from facet pictures while they are tiny on screen (`IMPOSTOR_PX`), with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
+| `gem_mesh.gd` | Builds a stone's crown in 3D from its outline: the girdle resampled so corners stay sharp, then rings of points pulled in and raised (every 1st, 2nd or 4th point, half a step apart for brilliants) zipped into flat triangular facets up to a table or a point. Cached per shape and cut. For tiny stones (under 10 px across on screen, back to the mesh above 12 px), `get_outline_mesh` gives a flat outline (a quarter of the girdle points, corners kept: 6 triangles for a round stone instead of 64) and `get_facets` a 64 px picture of the stone from above (each texel's facet normal and whether it's covered), which `gem_impostor.gdshader` lights. |
+| `gem_impostor.gdshader` | Tiny stones as a flat outline each, their facets read from the board's facet pictures and lit by the same code as the mesh (`gem_body.gdshaderinc`), at two points per pixel so a stone a few px across mixes its facets as MSAA mixes the mesh's (without splitting the light through it per color, too fine to see at that size). An X-large kit fitted on screen draws about 375k triangles instead of 1.75M. *Board test* → *no impostors* in debug Settings draws the meshes instead, for comparing. |
+| `gem.gdshader` | A stone drawn from its own mesh; the look is in `gem_body.gdshaderinc`, shared with the impostors: facets mirror a small studio (a key softbox with window bars, a fill, a ring of low lamps, the paper below), looked up in the studio map; light also refracts in, bounces off two pavilion facets (sectors under a brilliant, nested rectangles under a step cut), comes back out tinted by the gem and split a little per color for fire, with soft light playing through the body (shifting as the light moves) and a darker rim. Cabochons glow smoothly toward the light. |
+| `gem_shadow.gdshader` | Each stone's soft shadow on the paper (lighter under the tiniest stones), cast away from the light by how high it stands, with the colored caustic light it focuses inside it, shifting as the light moves; both fade out before the edge of their plane, which moves toward where they fall so it can stay small (`SHADOW_SPAN`, worked out for the lowest light and the most tilt). Both fade out as their stone shrinks on screen, from 12 px across to gone at 6 px (`SHADOW_FADE_PX`, `SHADOW_GONE_PX`); when every stone is that small, as on a fitted X-large kit, the shadows aren't drawn at all. The caustics follow the stone's tilt (below); the shadow follows the true light. |
 | `gem_sparkle.gdshader` | Four-point star flares when one of a stone's two brightest facets turns a light straight up at the viewer; planes for unlit stones collapse to nothing. Every stone sits up to 15° tilted in its own direction (as the glue and board leave real stones), and its flares see the lights and viewer through that tilt, so a board of stones doesn't all flash alike. The stones themselves are drawn flat. |
 | `paper.gdshader` | The paper's faint grain, lit by the key; metal-setting lines as gold ridges that shine toward the light. |
-| `gem_light.gdshaderinc` | The light and studio shared by all of them, and `as_tilted`, which turns a direction into a tilted stone's frame. |
+| `paper_grain.gdshader` | The grain itself (value noise in board units), rendered once per board into a texture (at most 2 texels per board unit and 2048 on a side; filtering fills in the rest) that `paper.gdshader` samples, instead of being worked out for every pixel every frame. |
+| `facet_atlas.gd` | `FacetAtlas`: a board's facet pictures (`GemMesh.get_facets`) gathered into one texture for its tiny stones, a tile per shape and cut the first time one is needed. |
+| `studio_map.gd` | `StudioMap`: the viewport a board renders its studio map in (below), only again when the lights have moved. |
+| `studio_map.gdshader` | The studio as a picture: every direction octahedrally mapped onto a 512 px HDR square (`oct_decode`), rendered by the board along with any frame where the lights have moved, so gems look a direction up instead of working the studio out four times a pixel. `studio_map = false` on the board (or *Studio* in the lab's Options) works it out per pixel instead, for comparing. |
+| `gem_light.gdshaderinc` | The light and studio shared by all of them, `as_tilted`, which turns a direction into a tilted stone's frame, `oct_encode`/`oct_decode` for the studio map, and `wave_scale`, how far the finale's wave swells a stone just now. |
 
 ## Trying it
 

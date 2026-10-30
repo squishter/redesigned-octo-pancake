@@ -20,13 +20,15 @@ const DIR := "user://saves"
 const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
 ## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES), and frame cap.
-const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple", "fps_cap": 30}
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple", "fps_cap": 30, "stroke_limit": 0}
 ## Player frame caps, with 0 leaving the rate uncapped by the engine.
-const FPS_CAPS := [30, 60, 90, 120, 0]
+const FPS_CAPS := [30, 45, 60, 90, 120, 0]
 ## Debug builds only: the setting that lends her everything for testing.
 ## While it's on, the profile's `unlocks` hold every item and her own are
-## kept aside under REAL_UNLOCKS, which is what save_profile writes. Turned
-## off (or in a release build) she has exactly what she had.
+## kept aside under REAL_UNLOCKS, which is what save_profile writes; every
+## power-up has unlimited charges that cost nothing to use (Packs.charges),
+## her own left as they are. Turned off (or in a release build) she has
+## exactly what she had.
 const UNLOCK_ALL := "debug_unlock_all"
 const REAL_UNLOCKS := "_real_unlocks"
 ## Debug purchases never spend the player's actual coins or free picks.
@@ -90,6 +92,10 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 	profile["powers"] = powers
 	Unlockables.normalize(profile)
 	var settings: Dictionary = profile.get("settings", {})
+	# Keep an old debug frame-cap choice when moving to the shared player setting.
+	if not settings.has("fps_cap") and OS.is_debug_build() and settings.has(PerfReadout.CAP_KEY):
+		settings["fps_cap"] = settings[PerfReadout.CAP_KEY]
+	settings.erase(PerfReadout.CAP_KEY)
 	for key: String in DEFAULT_SETTINGS:
 		if not settings.has(key):
 			settings[key] = DEFAULT_SETTINGS[key]

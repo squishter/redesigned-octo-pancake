@@ -32,6 +32,7 @@ func _ready() -> void:
 	add_child(_veil)
 	profile = SaveStore.load_profile()
 	SaveStore.apply_settings(profile)
+	PerfReadout.apply_settings(profile["settings"])
 	_show_menu()
 
 

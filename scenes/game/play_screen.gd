@@ -19,6 +19,9 @@ extends Control
 ## Hint (see Hints) glides the board to the selected gem's open slot nearest
 ## the middle of the view and rings it; the button fills quietly as the next
 ## hint comes closer.
+##
+## The stones button up top sets how many stones one tap or drag can place:
+## 1, 3, 5 or any number (see STROKE_LIMITS); it's kept in the settings.
 
 signal back_requested
 signal collection_requested
@@ -61,8 +64,14 @@ const FLING_DECAY := 4.0
 const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle", "bounce", "comet", "firework", "beam", "halo"]
 const POWER_EFFECTS := ["big_brush", "auto_finish", "free_hand", "double_coins", "finish_gem", "sweep", "finder",
 		"sprinkle"]
+## How many stones one gesture may place, in the order the stones button
+## steps through them; 0 is no limit.
+const STROKE_LIMITS := [1, 3, 5, 0]
 ## The finished bar's words once the finale is over.
 const DONE_TEXT := "Beautifully finished. Pinch and pan to admire your work."
+## Holding the progress line this long (seconds) shows or hides the
+## performance readout.
+const READOUT_PRESS := 0.8
 
 ## Set before adding to the tree.
 var puzzle_id := ""
@@ -121,6 +130,10 @@ var _area: Control
 var _selected := -1
 ## The gem type the current stroke fills.
 var _stroke_type := -1
+## Stones the current stroke may place (0: any number), and has placed.
+var _stroke_limit := 0
+var _stroke_placed := 0
+var _stroke_button: Button
 var _done := false
 var _dirty := false
 var _since_save := 0.0
@@ -132,6 +145,8 @@ var _hint_carry := 0.0
 var _ring: Control
 var _ring_slot := -1
 var _ring_time := 0.0
+var _perf: PerfReadout
+var _perf_press: Timer
 
 
 func _ready() -> void:
@@ -147,6 +162,13 @@ func _ready() -> void:
 	var heading := UI.label("YOUR CREATIVE STUDIO", 28, GameTheme.MINT, true)
 	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	top.add_child(heading)
+	_stroke_limit = int(profile.get("settings", {}).get("stroke_limit", 0))
+	if not _stroke_limit in STROKE_LIMITS:
+		_stroke_limit = 0
+	_stroke_button = _button(top, "", _next_stroke_limit)
+	_stroke_button.theme_type_variation = "QuietButton"
+	_stroke_button.icon = GameTheme.icon("gem")
+	_show_stroke_limit()
 	_button(top, "Fit", func() -> void: _board.reset_view()).theme_type_variation = "QuietButton"
 	var settings := _button(top, "", _open_settings)
 	settings.name = "SettingsButton"
@@ -164,6 +186,21 @@ func _ready() -> void:
 	controls.add_child(progress_copy)
 	_progress = UI.label("", 30, GameTheme.TEXT)
 	progress_copy.add_child(_progress)
+	_progress.mouse_filter = Control.MOUSE_FILTER_STOP
+	_perf_press = Timer.new()
+	_perf_press.one_shot = true
+	_perf_press.wait_time = READOUT_PRESS
+	_perf_press.timeout.connect(func() -> void:
+		_perf.toggle()
+		profile["settings"][PerfReadout.SHOWN_KEY] = PerfReadout.shown
+		SaveStore.save_profile(profile))
+	add_child(_perf_press)
+	_progress.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_perf_press.start()
+			else:
+				_perf_press.stop())
 	_progress_track = UI.progress(0)
 	progress_copy.add_child(_progress_track)
 	_hint = HintButton.new()
@@ -230,6 +267,10 @@ func _ready() -> void:
 	_ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ring.draw.connect(_draw_ring)
 	_area.add_child(_ring)
+	_perf = PerfReadout.new()
+	_perf.board = _board
+	_perf.position = Vector2(16.0, 16.0)
+	_area.add_child(_perf)
 	_board.stroke_filter = _can_stroke
 	_board.stroke_started.connect(_on_stroke_started)
 	_board.stroke_moved.connect(_on_stroke_moved)
@@ -332,7 +373,7 @@ func _build_icons() -> void:
 	_icons.position = Vector2(-100000.0, 0.0)
 	_icons.size = Vector2(cols, rows) * ICON_PX
 	add_child(_icons)
-	_icons.set_always_render()
+	_icons.set_always_render(GemIcons.FPS)
 	_icons.show_collage({"width": cols * ICON_CELL, "height": rows * ICON_CELL, "slots": stones})
 	for t in n:
 		var icon := AtlasTexture.new()
@@ -514,6 +555,7 @@ func _can_stroke(at: Vector2) -> bool:
 
 func _on_stroke_started(at: Vector2) -> void:
 	_stroke_type = _stroke_gem(at)
+	_stroke_placed = 0
 	_fill_at(at, TAP_SLOP)
 
 
@@ -532,11 +574,32 @@ func _fill_at(at: Vector2, slop: float) -> void:
 		return
 	if _has_power("big_brush"):
 		for i: int in _overlay.slots_near(at, _stroke_type, BRUSH_PX / _board.scale_px()):
-			_fill(i)
+			_stroke_fill(i)
 		return
 	var i := _overlay.slot_at(at, _stroke_type, slop / _board.scale_px())
 	if i >= 0:
-		_fill(i)
+		_stroke_fill(i)
+
+
+## Fills slot i for the current stroke, unless it has placed all it may.
+func _stroke_fill(i: int) -> void:
+	if _overlay.placed[i] != 0 or (_stroke_limit > 0 and _stroke_placed >= _stroke_limit):
+		return
+	_stroke_placed += 1
+	_fill(i)
+
+
+## The stones button: steps to the next limit and keeps it.
+func _next_stroke_limit() -> void:
+	_stroke_limit = STROKE_LIMITS[(STROKE_LIMITS.find(_stroke_limit) + 1) % STROKE_LIMITS.size()]
+	_show_stroke_limit()
+	profile["settings"]["stroke_limit"] = _stroke_limit
+	SaveStore.save_profile(profile)
+
+
+func _show_stroke_limit() -> void:
+	_stroke_button.text = "%s×" % _stroke_limit if _stroke_limit > 0 else "∞"
+	_stroke_button.tooltip_text = "Stones per tap or drag"
 
 
 func _fill(i: int) -> void:
@@ -652,7 +715,7 @@ func _refresh_powers() -> void:
 		if n <= 0 and not on:
 			continue
 		any = true
-		var text := UI.item(_powers_list, "%s  ×%d" % [info["name"], n],
+		var text := UI.item(_powers_list, "%s  ×%s" % [info["name"], Packs.charges_text(profile, power)],
 			info["about"] + (" · For this whole picture" if info["kind"] == "puzzle" else ""), "power")
 		var about := text.get_child(1) as Label
 		var use := _button(text.get_parent(), "Active" if on else "Use", func() -> void: _use_power(power))

@@ -1,38 +1,56 @@
 // Under each stone, on the paper: its soft shadow, cast away from the key
 // light by how high the stone stands, and inside it the colored light the
 // stone focuses (caustics), shifting as the light moves. Drawn on a plane
-// SPAN stone half-sizes across (the board scales each plane to its stone's
-// half-length and half-width), so local units are the stone's own. With
-// shadow_strength 0 only the light is left.
+// GemBoard3D.SHADOW_SPAN stone half-sizes each way (the board scales each
+// plane to its stone's half-length and half-width), so local units are the
+// stone's own; the plane moves toward where the shade and light fall, just
+// far enough that it always holds them. With shadow_strength 0 only the
+// light is left.
 shader_type spatial;
 render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled;
 
 #include "res://render/gem_light.gdshaderinc"
 
 uniform float shadow_strength = 1.0;
-// Half the plane's width, in stone half-sizes: everything fades out before
-// its edge, so no shadow is ever cut square.
-uniform float span = 2.2;
+// Shadows (and their light) fade out as their stone shrinks on screen,
+// from fade_from px across to gone at fade_to (GemBoard3D.SHADOW_FADE_PX).
+uniform float fade_from = 12.0;
+uniform float fade_to = 6.0;
+// How far from the stone everything has faded out, in stone half-sizes
+// (GemBoard3D.SHADOW_FADE), so no shadow is ever cut square.
+uniform float span = 2.6;
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y height of its top above the
 // paper (board units), zw the xz of its tilted top's normal (see as_tilted).
-// COLOR is the gem color. The shadow falls from the true light; the light
-// the stone focuses goes where its tilt sends it.
+// COLOR is the gem color, its alpha the stone's finale delay (see
+// wave_scale). The shadow falls from the true light; the light the stone
+// focuses goes where its tilt sends it.
 varying vec2 off;
 varying vec2 focus_off;
 varying vec3 key_tilted;
 varying vec2 lp;
 varying vec4 stone;
+// The light ripple passing (0..1): the light the stone focuses brightens.
+varying float shine;
 
 void vertex() {
 	stone = INSTANCE_CUSTOM;
-	lp = VERTEX.xz;
-	mat3 to_local = inverse(mat3(MODEL_MATRIX));
+	// A finale's pulse scales the stone, but not how far its shadow falls.
+	float f = wave_scale(COLOR.a);
+	shine = wave_pulse(COLOR.a) * wave_light;
+	mat3 to_local = inverse(mat3(MODEL_MATRIX)) / f;
 	vec3 lean = -vec3(key_dir.x, 0.0, key_dir.z) / max(key_dir.y, 0.25) * stone.y;
 	off = (to_local * lean).xz;
 	key_tilted = as_tilted(key_dir, stone.zw);
 	vec3 bend = -vec3(key_tilted.x, 0.0, key_tilted.z) / max(key_tilted.y, 0.25) * stone.y;
 	focus_off = (to_local * bend).xz;
+	// Centered here, a plane SHADOW_SPAN each way holds the shade and the
+	// focused light for any light and tilt; lp stays relative to the stone.
+	VERTEX.xz += off * 1.15;
+	lp = VERTEX.xz;
+	if (f != 1.0) {
+		VERTEX = scaled_about_paper(VERTEX, f, MODEL_MATRIX);
+	}
 }
 
 void fragment() {
@@ -43,16 +61,22 @@ void fragment() {
 	// The light the stone gathers lands in the far half of its shadow.
 	float focus = 1.0 - smoothstep(0.05, 0.85, length(lp - focus_off * 1.25));
 	float edge = 1.0 - smoothstep(span * 0.7, span * 0.97, max(abs(lp.x), abs(lp.y)));
+	// The stone's length on screen (px): two of its half-sizes.
+	float across = 2.0 / max(min(fwidth(lp.x), fwidth(lp.y)), 1e-6);
+	edge *= smoothstep(fade_to, fade_from, across);
 	shade *= edge;
 	focus *= edge;
+	// Nothing to add here: written fully clear rather than discarded, which
+	// would keep phones from skipping the pixels hidden under stones.
 	if (shade < 0.004 && focus <= 0.0) {
-		discard;
+		shade = 0.0;
 	}
 	vec3 light = vec3(0.0);
 	if (focus > 0.0) {
 		float web = caustic(lp * 0.42 + stone.x * 7.0 + light_shift_of(key_tilted) * 0.25,
 				light_phase_of(key_tilted) + stone.x * 9.0);
-		light = pow(COLOR.rgb, vec3(2.2)) * paper_color * focus * (0.18 + 0.9 * web) * light_strength;
+		light = pow(COLOR.rgb, vec3(2.2)) * paper_color * focus * (0.18 + 0.9 * web) * light_strength
+				* (1.0 + 1.5 * shine);
 	}
 	ALBEDO = light;
 	ALPHA = shade;

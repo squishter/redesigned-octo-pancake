@@ -9,7 +9,8 @@ render_mode unshaded, blend_add, depth_draw_never, depth_test_disabled, cull_dis
 #include "res://render/gem_light.gdshaderinc"
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, yz the xz of its tilted top's
-// normal (see as_tilted). COLOR is the gem color.
+// normal (see as_tilted), w its finale delay (see wave_scale). COLOR is the
+// gem color.
 varying float glint;
 varying vec2 lp;
 
@@ -29,9 +30,15 @@ void vertex() {
 	vec3 fill = as_tilted(fill_dir, tilt);
 	vec3 eye = as_tilted(vec3(0.0, 1.0, 0.0), tilt);
 	glint = max(flare(r, 0.0, key, fill, eye), flare(r, 1.0, key, fill, eye)) * light_strength;
+	// The light ripple flares about half the stones it passes.
+	glint = max(glint, wave_pulse(INSTANCE_CUSTOM.w) * wave_light * step(0.5, fract(r * 13.7)));
 	lp = VERTEX.xz;
 	// On a facet, not dead center.
 	VERTEX.xz += vec2(cos(r * 91.0), sin(r * 91.0)) * 0.22;
+	float f = wave_scale(INSTANCE_CUSTOM.w);
+	if (f != 1.0) {
+		VERTEX = scaled_about_paper(VERTEX, f, MODEL_MATRIX);
+	}
 	if (glint < 0.03) {
 		VERTEX = vec3(0.0);
 	}
