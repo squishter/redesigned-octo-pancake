@@ -399,7 +399,34 @@ hold still when it does.
   skipping mid-flip and long summaries. The render workflow captures the
   actual multi-card reveal and full reward summary as well as single packs.
 
+- Placement animation regressions compare movement, size/rotation easing and
+  landing times against main at `7f17c8c`, including panning during a flight.
+  They also cover rapid strokes, effect cleanup, leaving mid-flight, saved
+  progress and completion rewards. The CI job runs them with real Vulkan
+  shader compilation as well as the menu and pack checks.
+
+  ```sh
+  python3 tests/prepare_placement_baseline.py
+  XDG_DATA_HOME=/tmp/paint-with-gems-placement-tests godot --headless -s res://tests/run_placements.gd
+  ```
+
 Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen game scenes tests`.
+
+### Placement effects
+
+Beam uses the Soft column treatment: feathered light advances down from above,
+with a bright core and a small contact flare. Halo closes with a fine rim and
+orbiting glints; Comet keeps its skyward origin and gains a continuous tapered
+trail; Firework keeps its rising spark and finishes with a coherent radial
+burst. Pop, Fly, Drop, Spin, Twinkle and Bounce retain their original motion
+with lighter trails and precise landing glints. All existing style ids,
+placement durations, trajectories and size/rotation easing are preserved.
+
+`GemFlights` owns timing and emits one landing event per gem. The visual helper
+`scenes/game/gem_placement_fx.gd` draws the effects; Beam's feathered shaft uses
+one shader quad. Landing glints last 0.4 s, follow the board during pans and are
+capped at 96 independently of the existing 48-flight limit. They never delay
+puzzle completion. Particle cleanup disconnects safely when leaving a board.
 
 ## Building an APK
 

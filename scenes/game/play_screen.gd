@@ -545,6 +545,7 @@ func _fill(i: int) -> void:
 	if not moved:
 		if _fill_animation != "twinkle":
 			_board.fill_slot(i)
+			_flights.burst(Vector2(s["x"], s["y"]), s["size"], _types[t]["color"])
 		_buzz()
 	_filled += 1
 	_types[t]["left"] -= 1
