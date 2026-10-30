@@ -15,7 +15,7 @@ signal play_requested(id: String)
 signal lab_requested
 signal collection_requested
 
-const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const GameTheme := preload("res://scenes/game/game_theme.gd")
 const THUMB_PX := 220
 ## Restart and Delete ask again; a second tap within this long confirms.
 const CONFIRM_MS := 3000
@@ -23,6 +23,7 @@ const CONFIRM_MS := 3000
 ## The player's profile (SaveStore), shared with the app; set before adding.
 var profile: Dictionary = {}
 
+var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
 var _new_panel: Control
 var _settings_panel: Control
@@ -52,33 +53,64 @@ var _result: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_menu_scroll = ScrollContainer.new()
+	_menu_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 40)
+	_menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(_menu_scroll)
+	SafeArea.apply(_menu_scroll)
+	DragScroll.attach(_menu_scroll)
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 32)
-	add_child(root)
-	SafeArea.apply(root)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 28)
+	_menu_scroll.add_child(root)
+	var eyebrow := Label.new()
+	eyebrow.text = "A LITTLE SPARKLE. A LITTLE YOU."
+	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	eyebrow.add_theme_font_size_override("font_size", 27)
+	eyebrow.add_theme_color_override("font_color", GameTheme.MINT)
+	root.add_child(eyebrow)
+	var illustration := TextureRect.new()
+	illustration.texture = load("res://assets/ui/hero.svg")
+	illustration.custom_minimum_size.y = 260
+	illustration.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	illustration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	illustration.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(illustration)
 
 	var title := Label.new()
 	title.text = "Paint With Gems"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 84)
-	title.add_theme_color_override("font_color", LabTheme.GOLD)
+	title.add_theme_font_size_override("font_size", 78)
+	title.add_theme_color_override("font_color", GameTheme.GOLD)
 	root.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "Make something beautiful, one gem at a time."
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtitle.add_theme_font_size_override("font_size", 32)
+	subtitle.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
+	root.add_child(subtitle)
 
 	var new_button := _button(root, "New puzzle", func() -> void: _open_new({}))
-	new_button.custom_minimum_size.y = LabTheme.TAP_HEIGHT * 1.3
+	new_button.custom_minimum_size.y = 156
+	new_button.theme_type_variation = "PrimaryButton"
 
-	var wallet := HBoxContainer.new()
+	var wallet := VBoxContainer.new()
 	root.add_child(wallet)
 	var coins := Label.new()
 	coins.text = "%d coins · %d free pick%s" % [Packs.coins(profile), Packs.picks(profile),
 			"" if Packs.picks(profile) == 1 else "s"]
 	coins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	coins.add_theme_color_override("font_color", LabTheme.GOLD)
+	coins.add_theme_color_override("font_color", GameTheme.GOLD)
+	coins.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coins.add_theme_font_size_override("font_size", 30)
 	wallet.add_child(coins)
 	var packs := _button(wallet, "Collection & packs", func() -> void: collection_requested.emit())
 	if Packs.picks(profile) > 0:
-		packs.text = "Collection & packs (%d free!)" % Packs.picks(profile)
-		packs.add_theme_color_override("font_color", LabTheme.GOLD)
+		packs.text = "Collection & packs · %d free pick%s" % [Packs.picks(profile), "" if Packs.picks(profile) == 1 else "s"]
+		packs.add_theme_color_override("font_color", GameTheme.GOLD)
+	packs.add_theme_font_size_override("font_size", 36)
 
 	# Choosing what to make: hidden until asked for.
 	var panel := PanelContainer.new()
@@ -122,8 +154,8 @@ func _ready() -> void:
 	_kit_size.select(1)
 	_about = Label.new()
 	_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_about.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	_about.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	_about.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
+	_about.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	form.add_child(_about)
 	var actions := HBoxContainer.new()
 	form.add_child(actions)
@@ -144,9 +176,11 @@ func _ready() -> void:
 
 	var saved := Label.new()
 	saved.text = "Your puzzles"
-	saved.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	saved.add_theme_color_override("font_color", GameTheme.GOLD)
+	saved.add_theme_font_size_override("font_size", 48)
 	root.add_child(saved)
 	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = 470
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(scroll)
@@ -168,15 +202,19 @@ func _ready() -> void:
 	var footer := HBoxContainer.new()
 	root.add_child(footer)
 	var settings_button := _small_button(footer, "Settings", func() -> void:
-		_settings_panel.visible = not _settings_panel.visible)
-	settings_button.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+		if _settings_panel.visible:
+			_settings_panel.hide()
+		else:
+			GameTheme.appear(_settings_panel)
+			_menu_scroll.ensure_control_visible.call_deferred(_settings_panel))
+	settings_button.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	var lab := _small_button(footer, "Generator lab (debug)", func() -> void: lab_requested.emit())
 	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lab.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	lab.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 
 	# Covers the menu while a puzzle is being made.
 	_busy = ColorRect.new()
-	(_busy as ColorRect).color = Color(LabTheme.BG, 0.85)
+	(_busy as ColorRect).color = Color(GameTheme.BG, 0.85)
 	_busy.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_busy.mouse_filter = Control.MOUSE_FILTER_STOP
 	_busy.visible = false
@@ -185,7 +223,7 @@ func _ready() -> void:
 	_busy_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_busy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_busy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_busy_label.add_theme_color_override("font_color", LabTheme.GOLD)
+	_busy_label.add_theme_color_override("font_color", GameTheme.GOLD)
 	_busy.add_child(_busy_label)
 
 	_camera = CameraCapture.new()
@@ -222,7 +260,8 @@ func _open_new(recolor: Dictionary) -> void:
 	_source.disabled = not recolor.is_empty()
 	_new_title.text = "Recolor this picture" if not recolor.is_empty() else "A new puzzle"
 	_refresh_new()
-	_new_panel.visible = true
+	GameTheme.appear(_new_panel)
+	_menu_scroll.ensure_control_visible.call_deferred(_new_panel)
 
 
 ## The sources for the chosen kind: her unlocked picture types of that kind,
@@ -376,10 +415,31 @@ func _refresh_list() -> void:
 		child.queue_free()
 	var puzzles: Array = profile["puzzles"]
 	if puzzles.is_empty():
+		var welcome := PanelContainer.new()
+		welcome.custom_minimum_size.y = 310
+		_list.add_child(welcome)
+		var box := VBoxContainer.new()
+		box.alignment = BoxContainer.ALIGNMENT_CENTER
+		welcome.add_child(box)
+		var art := TextureRect.new()
+		art.texture = GameTheme.icon("picture")
+		art.custom_minimum_size.y = 100
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		box.add_child(art)
 		var none := Label.new()
-		none.text = "No puzzles yet. Start one above!"
-		none.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-		_list.add_child(none)
+		none.text = "Your next beautiful thing starts here."
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		none.add_theme_font_size_override("font_size", 36)
+		box.add_child(none)
+		var tip := Label.new()
+		tip.text = "Start a puzzle above. Come back whenever you like."
+		tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.add_theme_font_size_override("font_size", 28)
+		tip.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
+		box.add_child(tip)
 		return
 	for meta: Dictionary in puzzles:
 		_list.add_child(_card(meta))
@@ -409,8 +469,8 @@ func _card(meta: Dictionary) -> Control:
 			meta["theme"])
 	detail.text = "%s · %s · %s" % [colors, state, _ago(meta["updated"])]
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	detail.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	detail.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
+	detail.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	info.add_child(detail)
 	var buttons := HFlowContainer.new()
 	info.add_child(buttons)
@@ -491,7 +551,7 @@ func _options(parent: Control, label: String) -> OptionButton:
 	parent.add_child(l)
 	var ob := OptionButton.new()
 	ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ob.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	ob.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	ob.fit_to_longest_item = false
 	ob.set_meta("label", l)
 	parent.add_child(ob)
@@ -504,9 +564,8 @@ func _show_row(c: Control, on: bool) -> void:
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	var b := GameTheme.button(text)
+	b.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	if action.is_valid():
 		b.pressed.connect(action)
 	parent.add_child(b)
@@ -515,5 +574,5 @@ func _button(parent: Control, text: String, action: Callable) -> Button:
 
 func _small_button(parent: Control, text: String, action: Callable) -> Button:
 	var b := _button(parent, text, action)
-	b.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	b.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
 	return b

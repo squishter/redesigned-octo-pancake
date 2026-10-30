@@ -85,7 +85,14 @@ mode for trying out new pattern generation.
   a free pick the first time she opens the game each day and another for
   her first finished puzzle each day; every finished puzzle pays 10 coins
   (once per puzzle, so restarting one doesn't pay again), so every 3
-  puzzles buy a pack. Opening one pops up what came out, rendered. *Collection*: every
+  puzzles buy a pack. Swipe left or right through a circular hanging display
+  (or use its arrows, keyboard arrows or mouse wheel). Packs have depth and
+  swing on damped springs as the display rotates; the front pack's details
+  and payment buttons appear below it. Opening a pack flexes the foil,
+  tears away its crimped top and lifts out a collectible card, which flips
+  over amid confetti and glints. The reward is saved before the animation;
+  *Skip animation* or Back reveals it immediately, and Back again dismisses
+  it. *Collection*: every
   gem color and every shape in every cut as real rendered gems, then
   themes, picture types (collages and Diamond kits), flourishes (frames,
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
@@ -156,7 +163,10 @@ mode for trying out new pattern generation.
 | `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
-| `scenes/game/collection_screen.gd` | Collection & packs: pack cards, opening and revealing, and everything unlocked or still hidden. |
+| `scenes/game/collection_screen.gd` | Collection & packs: the selected pack's stock and payment controls, and everything unlocked or still hidden. |
+| `scenes/game/game_theme.gd`, `assets/ui/` | The player UI: original illustrated buttons, icons, foil packs, colors and press/fade animations. The lab retains its own theme. |
+| `scenes/game/pack_carousel.gd` | `PackCarousel`: a circular hanging display with swipe momentum, snapping, depth and pendulum motion. |
+| `scenes/game/pack_visual.gd`, `scenes/game/pack_opening.gd` | A foil wrapper with a detachable top and a skippable tear, card rise, flip and celebration sequence. |
 | `scenes/game/drag_scroll.gd` | `DragScroll`: makes a list scroll (and fling) wherever a drag starts, buttons included, without pressing them. |
 | `scenes/game/gem_icons.gd` | `GemIcons`: single gems laid out on an icon sheet, sized to stay inside their own cell. |
 | `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
@@ -330,6 +340,15 @@ hold still when it does.
 
   ```sh
   godot --headless -s res://tests/collage_sheet.gd -- --out=/tmp/sheet --seeds=1000,1003 --patterns=3
+  ```
+
+- Menu and pack interaction checks (Godot 4.7). These exercise saved purchases,
+  repeated presses, every reward kind, skip/back behavior, carousel wrapping
+  and swipes, spring settling, layouts, and menu/board transitions. Keep their
+  save files separate from your own profile:
+
+  ```sh
+  XDG_DATA_HOME=/tmp/paint-with-gems-ui-tests godot --headless -s res://tests/run_menu_ui.gd
   ```
 
 Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen game scenes tests`.

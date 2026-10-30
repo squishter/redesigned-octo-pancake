@@ -1,7 +1,7 @@
 extends Control
 ## Collection & packs: what she has unlocked, and packs to open for more.
 ##
-## Packs: every pack (see Packs) with what it gives, how much is left in it,
+## Packs: a swipeable hanging display with what each pack gives, its stock,
 ## and buttons to open it with a free pick or coins; opening one shows what
 ## came out. Collection: every gem color and every shape in every cut as
 ## real rendered gems (cut from one off-screen GemBoard3D, like the play
@@ -12,7 +12,7 @@ extends Control
 
 signal back_requested
 
-const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const GameTheme := preload("res://scenes/game/game_theme.gd")
 const ICON_PX := 128
 const ICON_CELL := 100.0
 const ICON_COLUMNS := 10
@@ -55,6 +55,14 @@ var _sheet: GemBoard3D
 ## Icon of each color id and of each "shape|cut", cut from the sheet.
 var _icons := {}
 var _rng := RandomNumberGenerator.new()
+var _carousel: PackCarousel
+var _pack_title: Label
+var _pack_about: Label
+var _pack_stock: Label
+var _pack_index: Label
+var _free: Button
+var _buy: Button
+var _opening: PackOpening
 
 
 func _ready() -> void:
@@ -68,11 +76,11 @@ func _ready() -> void:
 
 	var top := HBoxContainer.new()
 	root.add_child(top)
-	_button(top, "‹ Menu", func() -> void: back_requested.emit())
+	_button(top, "Menu", go_back)
 	_wallet = Label.new()
 	_wallet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_wallet.add_theme_color_override("font_color", LabTheme.GOLD)
+	_wallet.add_theme_color_override("font_color", GameTheme.GOLD)
 	top.add_child(_wallet)
 
 	var tabs := HBoxContainer.new()
@@ -95,66 +103,106 @@ func _ready() -> void:
 
 ## Android's back button.
 func go_back() -> void:
-	back_requested.emit()
+	if is_instance_valid(_opening):
+		_opening.advance_or_close()
+	else:
+		back_requested.emit()
 
 
 func _show_tab(packs: bool) -> void:
 	_packs_view.visible = packs
 	_collection_view.visible = not packs
+	GameTheme.appear(_packs_view if packs else _collection_view)
 	_tab_packs.set_pressed_no_signal(packs)
 	_tab_collection.set_pressed_no_signal(not packs)
+	_carousel.set_process(packs)
 
 
 func _refresh() -> void:
 	_wallet.text = "%d coins · %d free pick%s" % [Packs.coins(profile), Packs.picks(profile),
 			"" if Packs.picks(profile) == 1 else "s"]
-	_fill_packs()
+	if _carousel == null:
+		_fill_packs()
+	else:
+		_update_pack(_carousel.current_pack())
 	_fill_collection()
 
 
 # --- packs -------------------------------------------------------------------
 
 func _fill_packs() -> void:
-	_clear(_packs_list)
-	_note(_packs_list, ("Free picks: one for opening the game each day, and one for your first finished puzzle "
-			+ "each day. Each finished puzzle also pays %d coins, so every 3 puzzles buy a pack.") % Packs.COINS_PER_PUZZLE)
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_packs_list.add_child(grid)
-	for pack: String in Packs.PACKS:
-		grid.add_child(_pack_card(pack))
-
-
-func _pack_card(pack: String) -> Control:
-	var info: Dictionary = Packs.PACKS[pack]
-	var card := PanelContainer.new()
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var heading := Label.new()
+	heading.text = "A little wonder, wrapped"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 56)
+	heading.add_theme_color_override("font_color", GameTheme.GOLD)
+	_packs_list.add_child(heading)
+	var hint := _note(_packs_list, "Spin the display. Find your next little discovery.")
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_carousel = PackCarousel.new()
+	_carousel.selected.connect(_update_pack)
+	_packs_list.add_child(_carousel)
+	var navigation := HBoxContainer.new()
+	navigation.alignment = BoxContainer.ALIGNMENT_CENTER
+	_packs_list.add_child(navigation)
+	var previous := _button(navigation, "", func() -> void: _carousel.rotate_by(-1))
+	previous.icon = GameTheme.icon("back")
+	previous.custom_minimum_size.x = 120
+	previous.tooltip_text = "Previous pack"
+	_pack_index = Label.new()
+	_pack_index.custom_minimum_size.x = 400
+	_pack_index.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pack_index.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_pack_index.add_theme_font_size_override("font_size", 28)
+	navigation.add_child(_pack_index)
+	var next := _button(navigation, "", func() -> void: _carousel.rotate_by(1))
+	next.icon = GameTheme.icon("next")
+	next.custom_minimum_size.x = 120
+	next.tooltip_text = "Next pack"
+	var details := PanelContainer.new()
+	_packs_list.add_child(details)
 	var box := VBoxContainer.new()
-	card.add_child(box)
-	var title := Label.new()
-	title.text = info["name"]
-	title.add_theme_color_override("font_color", LabTheme.GOLD)
-	box.add_child(title)
-	var about := _note(box, info["about"])
-	about.custom_minimum_size.y = 80
+	details.add_child(box)
+	_pack_title = Label.new()
+	_pack_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pack_title.add_theme_font_size_override("font_size", 52)
+	_pack_title.add_theme_color_override("font_color", GameTheme.GOLD)
+	box.add_child(_pack_title)
+	_pack_about = _note(box, "")
+	_pack_about.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pack_stock = _note(box, "")
+	_pack_stock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var actions := HBoxContainer.new()
+	box.add_child(actions)
+	_free = _button(actions, "Use a free pick", func() -> void: _open(_carousel.current_pack(), true))
+	_free.theme_type_variation = "PrimaryButton"
+	_buy = _button(actions, "", func() -> void: _open(_carousel.current_pack(), false))
+	_buy.icon = GameTheme.icon("coin")
+	for button: Button in [_free, _buy]:
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 34)
+	var note := _note(_packs_list, "A free pick every day you visit, and another for your first finished picture. "
+		+ "Finish pictures to earn coins. Every discovery is yours to keep.")
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_update_pack(_carousel.current_pack())
+
+
+func _update_pack(pack: String) -> void:
+	var info: Dictionary = Packs.PACKS[pack]
+	_pack_title.text = info["name"]
+	_pack_about.text = info["about"]
 	var left := Packs.pool(pack, profile).size()
-	var out := left == 0
-	var stock := _note(box, "Sold out: you have it all!" if out else (
-			"Always in stock" if pack in ["powers", "all"] else "%d left to find" % left))
-	stock.add_theme_color_override("font_color", LabTheme.GOLD.darkened(0.2) if out else LabTheme.TEXT_DIM)
-	var free := _button(box, "Use a free pick", func() -> void: _open(pack, true))
-	free.disabled = out or Packs.picks(profile) <= 0
-	var buy := _button(box, "%d coins" % Packs.price(pack), func() -> void: _open(pack, false))
-	buy.disabled = out or Packs.coins(profile) < Packs.price(pack)
-	for b: Button in [free, buy]:
-		b.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	if out:
-		card.modulate = Color(1, 1, 1, 0.55)
-	return card
+	_pack_stock.text = "Collection complete — you found them all!" if left == 0 else (
+		"Always a little more magic" if pack in ["powers", "all"] else "%d discoveries still to find" % left)
+	_pack_index.text = "SWIPE TO SPIN   ·   %02d / %02d" % [Packs.PACKS.keys().find(pack) + 1, Packs.PACKS.size()]
+	_free.disabled = left == 0 or Packs.picks(profile) <= 0
+	_buy.disabled = left == 0 or Packs.coins(profile) < Packs.price(pack)
+	_buy.text = "%d coins" % Packs.price(pack)
 
 
 func _open(pack: String, with_pick: bool) -> void:
+	if is_instance_valid(_opening):
+		return
 	var before: Dictionary = (profile["unlocks"] as Dictionary).duplicate(true)
 	var item := Packs.open(profile, pack, with_pick, _rng)
 	if item.is_empty():
@@ -165,72 +213,21 @@ func _open(pack: String, with_pick: bool) -> void:
 	var themes := Unlockables.themes_gained(before, profile["unlocks"])
 	if not themes.is_empty():
 		item["themes"] = themes
-	_reveal(item)
+	_reveal(pack, item)
 
 
-## Shows what came out of a pack: a card that pops up with a burst of sparkles.
-func _reveal(item: Dictionary) -> void:
-	var shade := ColorRect.new()
-	shade.color = Color(LabTheme.BG, 0.88)
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(shade)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.add_child(center)
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(760, 0)
-	center.add_child(card)
-	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	card.add_child(box)
-	var kind := Label.new()
-	kind.text = _kind_name(item)
-	kind.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	kind.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
-	box.add_child(kind)
-	var picture := _item_picture(item, 300.0)
-	if picture != null:
-		var holder := CenterContainer.new()
-		holder.add_child(picture)
-		box.add_child(holder)
-	var title := Label.new()
-	title.text = item["name"] + (" ×%d" % item["charges"] if item["kind"] == "power" else "")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)
-	title.add_theme_color_override("font_color", LabTheme.GOLD)
-	box.add_child(title)
-	var about := _note(box, item.get("about", ""))
-	about.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	for t: String in item.get("themes", []):
-		var done := Label.new()
-		done.text = "Completes the %s theme!" % GemCatalog.theme_name(t)
-		done.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		done.add_theme_color_override("font_color", LabTheme.GOLD)
-		box.add_child(done)
-		var holder := CenterContainer.new()
-		holder.add_child(_swatches(t, 44.0))
-		box.add_child(holder)
-	var ok := _button(box, "Lovely!", func() -> void: shade.queue_free())
-	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	ok.custom_minimum_size.x = 360
-	# Pop in, with sparkles behind.
-	var sparkles := _sparkles()
-	sparkles.position = size / 2.0
-	shade.add_child(sparkles)
-	shade.move_child(sparkles, 0)
-	sparkles.emitting = true
-	card.resized.connect(func() -> void: card.pivot_offset = card.size / 2.0)
-	card.scale = Vector2(0.4, 0.4)
-	card.modulate.a = 0.0
-	var tw := create_tween()
-	tw.tween_property(card, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(card, "modulate:a", 1.0, 0.25)
-	Input.vibrate_handheld(40, 0.6)
-
-
-func _kind_name(item: Dictionary) -> String:
-	return Unlockables.KINDS.get(item["kind"], {}).get("found", "New!")
+## The paid reward is already saved; the opening scene only presents it.
+func _reveal(pack: String, item: Dictionary) -> void:
+	_opening = PackOpening.new()
+	_opening.pack = pack
+	_opening.item = item
+	_opening.picture = _item_picture(item, 300.0)
+	_opening.dismissed.connect(func() -> void:
+		_opening = null
+		_carousel.set_process(true)
+		_free.grab_focus())
+	_carousel.set_process(false)
+	add_child(_opening)
 
 
 ## A picture of an item: the rendered gem for colors, shapes and cuts, a
@@ -252,27 +249,6 @@ func _item_picture(item: Dictionary, px: float) -> Control:
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	return icon
-
-
-func _sparkles() -> CPUParticles2D:
-	var p := CPUParticles2D.new()
-	p.amount = 60
-	p.lifetime = 1.4
-	p.one_shot = true
-	p.explosiveness = 0.9
-	p.spread = 180.0
-	p.gravity = Vector2(0, 120)
-	p.initial_velocity_min = 300.0
-	p.initial_velocity_max = 900.0
-	p.damping_min = 200.0
-	p.damping_max = 400.0
-	p.scale_amount_min = 6.0
-	p.scale_amount_max = 14.0
-	var ramp := Gradient.new()
-	ramp.set_color(0, LabTheme.GOLD.lightened(0.3))
-	ramp.set_color(1, Color(LabTheme.GOLD, 0.0))
-	p.color_ramp = ramp
-	return p
 
 
 # --- collection --------------------------------------------------------------
@@ -363,7 +339,7 @@ func _fill_collection() -> void:
 		var found := gems.filter(func(g: String) -> bool: return g in unlocks["colors"]).size()
 		name_label.text = GemCatalog.theme_name(t) if have else "?  (%d / %d colors)" % [found, gems.size()]
 		name_label.custom_minimum_size.x = 400
-		name_label.add_theme_color_override("font_color", LabTheme.TEXT if have else LabTheme.TEXT_DIM)
+		name_label.add_theme_color_override("font_color", GameTheme.TEXT if have else GameTheme.TEXT_DIM)
 		row.add_child(name_label)
 		row.add_child(_swatches(t, 48.0, not have, unlocks["colors"]))
 
@@ -412,8 +388,8 @@ func _gem_cell(key: String, caption: String, have: bool) -> Control:
 	label.text = caption
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE - 6)
-	label.add_theme_color_override("font_color", LabTheme.TEXT if have else LabTheme.TEXT_DIM)
+	label.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE - 6)
+	label.add_theme_color_override("font_color", GameTheme.TEXT if have else GameTheme.TEXT_DIM)
 	box.add_child(label)
 	return box
 
@@ -436,15 +412,15 @@ func _heading(parent: Control, text: String, have: int, total: int) -> void:
 	var l := Label.new()
 	l.text = text if total < 0 else "%s  %d / %d" % [text, have, total]
 	l.add_theme_font_size_override("font_size", 48)
-	l.add_theme_color_override("font_color", LabTheme.GOLD)
+	l.add_theme_color_override("font_color", GameTheme.GOLD)
 	parent.add_child(l)
 
 
 func _subheading(parent: Control, text: String, bright := true) -> void:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	l.add_theme_color_override("font_color", LabTheme.TEXT if bright else LabTheme.TEXT_DIM)
+	l.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
+	l.add_theme_color_override("font_color", GameTheme.TEXT if bright else GameTheme.TEXT_DIM)
 	parent.add_child(l)
 
 
@@ -454,7 +430,7 @@ func _item_row(parent: Control, title: String, about: String, have: bool) -> voi
 	parent.add_child(box)
 	var t := Label.new()
 	t.text = title
-	t.add_theme_color_override("font_color", LabTheme.TEXT if have else LabTheme.TEXT_DIM)
+	t.add_theme_color_override("font_color", GameTheme.TEXT if have else GameTheme.TEXT_DIM)
 	box.add_child(t)
 	var a := _note(box, about)
 	if not have:
@@ -492,16 +468,15 @@ func _note(parent: Control, text: String) -> Label:
 	l.text = text
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size.x = 100
-	l.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	l.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	l.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
+	l.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	parent.add_child(l)
 	return l
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	var b := GameTheme.button(text)
+	b.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	b.pressed.connect(action)
 	parent.add_child(b)
 	return b

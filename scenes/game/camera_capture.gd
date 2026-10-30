@@ -276,6 +276,11 @@ func _check_chroma() -> void:
 	_material.set_shader_parameter("chroma_interleaved", _chroma == "interleaved")
 
 
+## Android may expose alternating Cb/Cr bytes as a single-channel texture.
+static func chroma_layout(chroma: Image) -> String:
+	return "interleaved" if chroma.get_format() in [Image.FORMAT_R8, Image.FORMAT_L8] else "paired"
+
+
 ## A CbCr plane as RG8 (R: Cb, G: Cr), whichever layout it came in.
 static func chroma_pairs(chroma: Image) -> Image:
 	match chroma_layout(chroma):

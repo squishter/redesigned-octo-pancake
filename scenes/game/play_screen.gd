@@ -18,7 +18,7 @@ extends Control
 
 signal back_requested
 
-const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const GameTheme := preload("res://scenes/game/game_theme.gd")
 ## The icon board: px per icon, its cells in board units, and icons per row.
 const ICON_PX := 150
 const ICON_CELL := 100.0
@@ -112,11 +112,11 @@ func _ready() -> void:
 
 	var top := HBoxContainer.new()
 	root.add_child(top)
-	_button(top, "‹ Menu", _leave)
+	_button(top, "Menu", _leave)
 	_progress = Label.new()
 	_progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_progress.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	_progress.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	top.add_child(_progress)
 	_button(top, "Power-ups", _toggle_powers)
 	_button(top, "Fit", func() -> void: _board.reset_view())
@@ -132,8 +132,8 @@ func _ready() -> void:
 	_row.add_theme_constant_override("separation", 14)
 	_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_palette.add_child(_row)
-	_card_style = _card(LabTheme.FIELD, Color.TRANSPARENT)
-	_picked_style = _card(LabTheme.FIELD_PRESSED, LabTheme.GOLD)
+	_card_style = _card(GameTheme.FIELD, Color.TRANSPARENT)
+	_picked_style = _card(GameTheme.FIELD_PRESSED, GameTheme.GOLD)
 	_fill_animation = profile.get("settings", {}).get("fill_animation", "fly")
 	if not _fill_animation in profile["unlocks"].get("animations", ["pop"]):
 		_fill_animation = "pop"
@@ -162,7 +162,7 @@ func _ready() -> void:
 	done_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	done_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	done_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	done_label.add_theme_color_override("font_color", LabTheme.GOLD)
+	done_label.add_theme_color_override("font_color", GameTheme.GOLD)
 	_done_bar.add_child(done_label)
 
 	_area = Control.new()
@@ -317,8 +317,8 @@ func _make_item(t: int) -> PanelContainer:
 	var left := Label.new()
 	left.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE - 4)
-	left.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	left.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE - 4)
+	left.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 	box.add_child(left)
 	_items[t] = b
 	_item_icons[t] = icon
@@ -571,8 +571,8 @@ func _refresh_powers() -> void:
 		var about := Label.new()
 		about.text = info["about"] + (" (for this whole puzzle)" if info["kind"] == "puzzle" else "")
 		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		about.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-		about.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+		about.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
+		about.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
 		text.add_child(about)
 		var use := _button(row, "On" if on else "Use", func() -> void: _use_power(power))
 		var needs_gem: bool = power in ["finish_gem", "sweep", "finder"]
@@ -701,8 +701,8 @@ func _finish(celebrate: bool) -> void:
 	var banner := Label.new()
 	banner.text = "Finished!" + ("\n" + paid if paid != "" else "")
 	banner.add_theme_font_size_override("font_size", 120)
-	banner.add_theme_color_override("font_color", LabTheme.GOLD)
-	banner.add_theme_color_override("font_outline_color", LabTheme.BG)
+	banner.add_theme_color_override("font_color", GameTheme.GOLD)
+	banner.add_theme_color_override("font_outline_color", GameTheme.BG)
 	banner.add_theme_constant_override("outline_size", 24)
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -770,9 +770,9 @@ func _notification(what: int) -> void:
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	var b := GameTheme.button(text)
+	b.custom_minimum_size.y = GameTheme.TAP_HEIGHT
 	b.pressed.connect(action)
+	b.add_theme_font_size_override("font_size", 32)
 	parent.add_child(b)
 	return b
