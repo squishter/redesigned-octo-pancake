@@ -17,6 +17,10 @@ func _init() -> void:
 
 
 func _run() -> void:
+	# The headless display reports a square physical window. Test the actual
+	# phone layout instead of expanding that square to a 2400-pixel-wide canvas.
+	root.content_scale_size = Vector2i(1080, 2400)
+	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
 	root.theme = GameTheme.build()
 	await _test_menu_layout()
 	await _test_creation_choices()
@@ -51,6 +55,14 @@ func _check_button_widths(node: Node, width: float) -> void:
 		_check_button_widths(child, width)
 
 
+func _check_dialog(dialog: GameDialog) -> void:
+	var rect := dialog.card.get_global_rect()
+	_check(rect.position.y >= 0 and rect.end.y <= dialog.size.y,
+		"Dialog stays within the portrait screen: %s" % dialog.title_label.text)
+	var actions := dialog.actions.get_global_rect()
+	_check(actions.end.y <= dialog.size.y, "Dialog actions remain on screen")
+
+
 func _test_menu_layout() -> void:
 	print("Menu layouts")
 	var menu := MainMenu.new()
@@ -61,6 +73,7 @@ func _test_menu_layout() -> void:
 	menu._open_new({})
 	await _layout_frames()
 	_check(menu._new_panel.visible, "New-puzzle form opens")
+	_check_dialog(menu._new_panel)
 	_check_button_widths(menu, menu.size.x)
 	menu.go_back()
 	_check(not menu._new_panel.visible, "Back closes the new-puzzle form")
@@ -77,6 +90,7 @@ func _test_creation_choices() -> void:
 	menu._open_new({})
 	await _layout_frames()
 	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_DISABLED, "Workshop freezes the background menu")
+	_check_dialog(menu._new_panel)
 	menu._mode_buttons[1].pressed.emit()
 	_check(menu._is_kit(), "Diamond kit card changes the puzzle mode")
 	_check((menu._kit_size.get_meta("row") as Control).is_visible_in_tree(), "Kits offer picture size")
@@ -96,6 +110,7 @@ func _test_creation_choices() -> void:
 	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_INHERIT, "Closing a dialog restores menu input")
 	menu._settings_panel.open()
 	await _layout_frames()
+	_check_dialog(menu._settings_panel)
 	_check_button_widths(menu, menu.size.x)
 	menu.go_back()
 	_check(not menu._settings_panel.visible, "Back closes settings")
@@ -289,6 +304,7 @@ func _test_completion_rewards() -> void:
 	play._toggle_powers()
 	await _layout_frames()
 	_check(not play._board.input_enabled, "Power-up dialog blocks board input")
+	_check_dialog(play._powers_panel)
 	_check_button_widths(play, play.size.x)
 	play.go_back()
 	_check(not play._powers_panel.visible and play._board.input_enabled, "Back closes power-ups and restores the board")
@@ -301,6 +317,7 @@ func _test_completion_rewards() -> void:
 	var saved := SaveStore.load_profile()
 	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Double coins and the daily pick are saved before the dialog")
 	_check(play._reward_dialog.visible and not play._board.input_enabled, "Completion dialog blocks board input")
+	_check_dialog(play._reward_dialog)
 	_check_button_widths(play, play.size.x)
 	var texts := []
 	for label: Label in play._reward_dialog.find_children("*", "Label", true, false):

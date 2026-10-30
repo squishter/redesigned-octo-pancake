@@ -453,6 +453,7 @@ func _heading(parent: Control, text: String, have: int, total: int) -> void:
 	row.add_child(UI.label(text, 44, GameTheme.GOLD))
 	if total >= 0:
 		var count := UI.label("%d / %d" % [have, total], 30, GameTheme.MINT)
+		count.autowrap_mode = TextServer.AUTOWRAP_OFF
 		count.size_flags_horizontal = Control.SIZE_SHRINK_END
 		row.add_child(count)
 		parent.add_child(UI.progress(float(have) / maxi(1, total)))

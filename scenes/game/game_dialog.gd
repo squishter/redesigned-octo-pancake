@@ -62,12 +62,17 @@ func _init(title := "", subtitle := "", glyph := "sparkle") -> void:
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	resized.connect(_layout)
+	# Text measures itself again after the first container layout. Refit when
+	# that minimum changes, so a narrow initial label cannot make a tall dialog.
+	card.minimum_size_changed.connect(func() -> void: _layout.call_deferred())
 	_layout()
+	_layout.call_deferred()
 
 
 func _layout() -> void:
 	card.size = Vector2(minf(980, maxf(0, size.x - 72)), minf(preferred_height, maxf(0, size.y - 160)))
 	card.position = (size - card.size) / 2.0
+	card.pivot_offset = card.size / 2.0
 
 
 func open() -> void:
