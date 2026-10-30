@@ -42,6 +42,8 @@ const MARGIN := 0.03
 const POP_TIME := 0.32
 const PULSE_TIME := 0.6
 const CELEBRATE_TIME := 1.4
+## A finale's waves repeat, resting this long between them, until it ends.
+const FINALE_REST := 0.6
 ## A stone that flew in settles from a little too big over this long.
 const LAND_TIME := 0.18
 ## How far a pop overshoots (the usual "back" easing constant).
@@ -150,6 +152,11 @@ var _clock := 0.0
 ## The light drifts faster until then (on _clock), sweeping glints over a
 ## finished picture.
 var _sweep_until := 0.0
+## The finale playing ("" none), where its waves start and when the next
+## one does (on _clock).
+var _finale := ""
+var _finale_from := Vector2.ZERO
+var _next_wave := 0.0
 
 
 func _init() -> void:
@@ -199,6 +206,8 @@ func _process(delta: float) -> void:
 	if animate:
 		var sweep := clampf((_sweep_until - _clock) / CELEBRATE_TIME, 0.0, 1.0)
 		light_time += delta * (1.0 + 5.0 * sin(PI * sweep))
+	if _finale != "" and _clock >= _next_wave:
+		_finale_wave()
 	if not _anims.is_empty():
 		_step_anims()
 	if use_sensor:
@@ -314,11 +323,28 @@ func set_transparent() -> void:
 const FINALES := ["ripple", "spiral", "sweep", "shimmer"]
 
 
-## A wave of pulses through every stone while the light sweeps over them,
+## Waves of pulses through every stone while the light sweeps over them,
 ## timed by `style`: "ripple" outward from board point `from`, "spiral"
-## round it, "sweep" from left to right, "shimmer" at random. Returns how
-## long it lasts (seconds).
-func celebrate(from: Vector2, style := "ripple") -> float:
+## round it, "sweep" from left to right, "shimmer" at random. They repeat
+## until end_celebration().
+func celebrate(from: Vector2, style := "ripple") -> void:
+	_finale = style
+	_finale_from = from
+	_finale_wave()
+
+
+## Lets the wave under way finish, then starts no more.
+func end_celebration() -> void:
+	_finale = ""
+
+
+func is_celebrating() -> bool:
+	return _finale != ""
+
+
+func _finale_wave() -> void:
+	var from := _finale_from
+	var style := _finale
 	var far := 0.0
 	var at := []
 	var rng := RandomNumberGenerator.new()
@@ -345,7 +371,7 @@ func celebrate(from: Vector2, style := "ripple") -> float:
 	for i in _refs.size():
 		_anims[i] = [_clock + at[i] / far * CELEBRATE_TIME, 1]
 	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
-	return CELEBRATE_TIME + PULSE_TIME
+	_next_wave = _sweep_until + FINALE_REST
 
 
 ## Moves animating stones along: pops ease out with an overshoot, pulses
