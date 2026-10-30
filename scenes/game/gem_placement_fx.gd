@@ -100,10 +100,12 @@ static func _draw_halo(canvas: CanvasItem, to: Vector2, u: float, slot_px: float
 	var e := u * u * (3.0 - 2.0 * u)
 	var radius := lerpf(maxf(HALO_START, slot_px * 4.0), slot_px * 0.55, e)
 	var alpha := (0.65 + 0.35 * sin(PI * u)) * (1.0 - smoothstep(0.84, 1.0, u))
-	canvas.draw_arc(to, radius, 0, TAU, 96, Color(color, alpha * 0.14), 13.0, true)
-	canvas.draw_arc(to, radius, 0, TAU, 96, Color(color, alpha * 0.8), 3.5, true)
-	canvas.draw_arc(to, maxf(radius - 2.0, 0.25), 0, TAU, 96, Color(color.lightened(0.7), alpha), 1.5, true)
-	canvas.draw_arc(to, radius * 0.86, 0, TAU, 96, Color(color, alpha * 0.3), 1.0, true)
+	# About one segment per 4 px of rim: a closing ring needs fewer as it shrinks.
+	var segments := clampi(ceili(radius * TAU / 4.0), 16, 96)
+	canvas.draw_arc(to, radius, 0, TAU, segments, Color(color, alpha * 0.14), 13.0, true)
+	canvas.draw_arc(to, radius, 0, TAU, segments, Color(color, alpha * 0.8), 3.5, true)
+	canvas.draw_arc(to, maxf(radius - 2.0, 0.25), 0, TAU, segments, Color(color.lightened(0.7), alpha), 1.5, true)
+	canvas.draw_arc(to, radius * 0.86, 0, TAU, segments, Color(color, alpha * 0.3), 1.0, true)
 	for i in 4:
 		var angle := i * TAU / 4.0 + u * 0.55
 		_glint(canvas, to + Vector2.from_angle(angle) * radius, 5.0 * alpha, Color(color.lightened(0.6), alpha))
@@ -134,12 +136,13 @@ static func _ribbon(canvas: CanvasItem, from: Vector2, to: Vector2, width: float
 		PackedColorArray([Color(color, 0), color, color]))
 
 
-static func draw_impact(canvas: CanvasItem, impact: Dictionary, to: Vector2, slot_px: float) -> void:
+## A landing glint; `sparse` (many on screen at once) draws fewer sparks.
+static func draw_impact(canvas: CanvasItem, impact: Dictionary, to: Vector2, slot_px: float, sparse := false) -> void:
 	var u: float = clampf(impact["age"] / IMPACT_TIME, 0, 1)
 	var color: Color = impact["color"]
 	var large: bool = impact["big"]
 	var px := maxf(12.0, slot_px)
-	var count := 14 if large else 6
+	var count := (7 if large else 3) if sparse else (14 if large else 6)
 	var reach := maxf(78.0, px * 1.8) if large else clampf(px * 0.8, 15, 40)
 	var alpha := pow(1.0 - u, 1.4)
 	for i in count:
@@ -153,8 +156,10 @@ static func draw_impact(canvas: CanvasItem, impact: Dictionary, to: Vector2, slo
 		_glint(canvas, to, px * 0.45 * (1.0 - u / 0.32), Color(color.lightened(0.65), 1.0 - u / 0.32))
 
 
+## Below half a px a glint can't be seen, and its tiny diamond fails to
+## triangulate.
 static func _glint(canvas: CanvasItem, at: Vector2, radius: float, color: Color) -> void:
-	if radius <= 0.1:
+	if radius < 0.5:
 		return
 	canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(-radius, 0), at + Vector2(0, -radius * 1.6),
 		at + Vector2(radius, 0), at + Vector2(0, radius * 1.6)]), color)
