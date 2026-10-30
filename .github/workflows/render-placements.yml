@@ -1,0 +1,60 @@
+name: Render placement animation studies
+
+on:
+  push:
+    branches: [preview/placement-animations]
+    paths:
+      - .github/workflows/render-placements.yml
+      - tests/previews/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  studies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native rendering and encoding tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth mesa-vulkan-drivers libvulkan1 ffmpeg fonts-dejavu-core
+          python3 -m pip install Pillow
+      - name: Install Godot 4.7.2
+        run: |
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip \
+            -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+      - name: Render the real current animations and isolated proposals
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          XDG_DATA_HOME: /tmp/gem-placement-data
+          XDG_CONFIG_HOME: /tmp/gem-placement-config
+          XDG_CACHE_HOME: /tmp/gem-placement-cache
+        run: |
+          set -euo pipefail
+          godot="$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+          "$godot" --headless --editor --import --quit --path .
+          "$godot" --headless --path . -s res://tools/check_scripts.gd
+          export VK_ICD_FILENAMES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*' | head -n 1)"
+          xvfb-run -a -s '-screen 0 1440x1080x24' "$godot" \
+            --path . --resolution 1440x1080 --audio-driver Dummy --fixed-fps 30 \
+            --rendering-method mobile --rendering-driver vulkan \
+            -s res://tests/previews/render_placements.gd 2>&1 | tee "$RUNNER_TEMP/placement-render.log"
+          if rg -q 'SCRIPT ERROR:|ERROR:' "$RUNNER_TEMP/placement-render.log"; then exit 1; fi
+          python3 tests/previews/encode_placements.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gem-placement-studies
+          path: |
+            build/placement-previews/*.gif
+            build/placement-previews/*.mp4
+            build/placement-previews/*.png
+            build/placement-previews/*.html
+            build/placement-previews/*.json
+          if-no-files-found: error
+          retention-days: 14
