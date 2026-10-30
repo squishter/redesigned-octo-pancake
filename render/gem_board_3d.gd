@@ -33,6 +33,7 @@ const SHADOW_SHADER := preload("res://render/gem_shadow.gdshader")
 const SPARKLE_SHADER := preload("res://render/gem_sparkle.gdshader")
 const PAPER_SHADER := preload("res://render/paper.gdshader")
 const GRAIN_SHADER := preload("res://render/paper_grain.gdshader")
+const STUDIO_SHADER := preload("res://render/studio_map.gdshader")
 const BACKGROUND := Color("#2a1f3d")
 const MAX_ZOOM := 40.0
 const DOUBLE_TAP_MS := 300
@@ -86,6 +87,9 @@ const KIT_DRILL := 0.98
 ## board unit and this many on a side (it is very soft; filtering fills in).
 const GRAIN_DENSITY := 2.0
 const GRAIN_MAX_PX := 2048
+## The studio map's size (px a side): gems look the studio up in it
+## (studio_map.gdshader), rendered again whenever the lights move.
+const STUDIO_MAP_PX := 512
 ## The key light: where it hangs when the picture appears (azimuth in the
 ## board's xz plane, toward the picture's top left; elevation above the
 ## paper) and how far it drifts. Radians.
@@ -141,6 +145,13 @@ var input_enabled := true
 var stroke_filter := Callable()
 ## How many frames the board has rendered (for performance readouts).
 var render_count := 0
+## Gems look the studio up in a map rendered once a frame (on) or work it
+## out for every pixel (off: sharper, far slower; for comparing).
+var studio_map := true:
+	set(value):
+		studio_map = value
+		_gem_material.set_shader_parameter("use_studio_map", value)
+		_redraw()
 
 var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
@@ -156,6 +167,12 @@ var _paper_material := ShaderMaterial.new()
 ## Renders the paper's grain once per board (see _bake_grain).
 var _grain := SubViewport.new()
 var _grain_rect := ColorRect.new()
+## Renders the studio map (see STUDIO_MAP_PX), and the lights it last
+## rendered with.
+var _studio := SubViewport.new()
+var _studio_material := ShaderMaterial.new()
+var _studio_key := Vector3.ZERO
+var _studio_fill := Vector3.ZERO
 ## Picture size in board units (picture pixels, or kit cells x KIT_CELL).
 var _board := Vector2(1.0, 1.0)
 var _zoom := 1.0
@@ -259,6 +276,18 @@ func _init() -> void:
 	_grain.add_child(_grain_rect)
 	_viewport.add_child(_grain)
 	_paper_material.set_shader_parameter("grain_tex", _grain.get_texture())
+	_studio.disable_3d = true
+	_studio.gui_disable_input = true
+	_studio.use_hdr_2d = true
+	_studio.size = Vector2i(STUDIO_MAP_PX, STUDIO_MAP_PX)
+	_studio.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_studio_material.shader = STUDIO_SHADER
+	var studio_rect := ColorRect.new()
+	studio_rect.material = _studio_material
+	studio_rect.size = Vector2(STUDIO_MAP_PX, STUDIO_MAP_PX)
+	_studio.add_child(studio_rect)
+	_viewport.add_child(_studio)
+	_gem_material.set_shader_parameter("studio_map", _studio.get_texture())
 	_viewport.add_child(_layers)
 	resized.connect(_apply_view)
 	visibility_changed.connect(_redraw)
@@ -296,6 +325,7 @@ func _schedule(delta: float) -> void:
 	if _drawn_frame == Engine.get_process_frames():
 		_drawn_key = key_dir
 		_drawn_fill = fill_dir
+		_sync_studio()
 
 
 ## Something changed (the view, a stone, visibility): render this frame.
@@ -310,10 +340,21 @@ func _render() -> void:
 		return
 	_dirty = false
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_sync_studio()
 	if _drawn_frame != Engine.get_process_frames():
 		_drawn_frame = Engine.get_process_frames()
 		render_count += 1
 		_due = fmod(maxf(_due - 1.0, 0.0), 1.0)
+
+
+## Renders the studio map along with the board when the lights have moved
+## since it last did (it renders first, being inside the board's viewport).
+func _sync_studio() -> void:
+	if key_dir == _studio_key and fill_dir == _studio_fill:
+		return
+	_studio_key = key_dir
+	_studio_fill = fill_dir
+	_studio.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 ## Follows the phone's orientation, each sensor for one thing so they never
@@ -354,7 +395,7 @@ func update_light(delta := 0.0) -> void:
 	key_dir = key_dir.slerp(key, k).normalized()
 	fill_dir = fill_dir.slerp(fill, k).normalized()
 	_settle = true
-	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
+	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material, _studio_material]:
 		m.set_shader_parameter("key_dir", key_dir)
 		m.set_shader_parameter("fill_dir", fill_dir)
 

@@ -13,6 +13,19 @@ render_mode unshaded, cull_disabled;
 
 #include "res://render/gem_light.gdshaderinc"
 
+// The studio as GemBoard3D last rendered it (studio_map.gdshader); off, it
+// is worked out here instead (the same, sharper, but far slower).
+uniform sampler2D studio_map : filter_linear, repeat_disable;
+uniform bool use_studio_map = true;
+
+// What a facet sees in direction d (see studio()).
+vec3 studio_at(vec3 d) {
+	if (use_studio_map) {
+		return textureLod(studio_map, oct_encode(d) * 0.5 + 0.5, 0.0).rgb;
+	}
+	return studio(d);
+}
+
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y refractive index,
 // z dispersion, w cut (its style, GemCuts.SHADER_STYLE) plus half its
 // finale delay (see wave_scale). COLOR is the gem color; its alpha is 0 for
@@ -99,7 +112,7 @@ void fragment() {
 	float cut = stone.w;
 	float f0 = pow((ior - 1.0) / (ior + 1.0), 2.0);
 	float fres = f0 + (1.0 - f0) * pow(1.0 - max(n.y, 0.0), 5.0);
-	vec3 refl = studio(reflect(-v, n)) * 1.4;
+	vec3 refl = studio_at(reflect(-v, n)) * 1.4;
 
 	vec2 p = l_pos.xz;
 	float rim = 1.0 - smoothstep(0.62, 1.02, length(p));
@@ -112,9 +125,9 @@ void fragment() {
 	} else {
 		vec3 pav = pavilion(p, n, cut, stone.x);
 		vec3 body;
-		body.r = studio(through(n, pav, ior - disp)).r;
-		body.g = studio(through(n, pav, ior)).g;
-		body.b = studio(through(n, pav, ior + disp)).b;
+		body.r = studio_at(through(n, pav, ior - disp)).r;
+		body.g = studio_at(through(n, pav, ior)).g;
+		body.b = studio_at(through(n, pav, ior + disp)).b;
 		// Colored stones soak up light on the way through, deepest in the middle.
 		float depth = 1.0 + 0.7 * rim;
 		vec3 absorb = pow(max(tint, vec3(0.001)), vec3(depth));

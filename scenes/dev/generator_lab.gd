@@ -141,6 +141,13 @@ func _ready() -> void:
 	shadows.toggled.connect(func(on: bool) -> void: _board.shadows = on)
 	_fill_row(shadows)
 	controls.add_child(shadows)
+	_label(controls, "Studio")
+	var studio := CheckBox.new()
+	studio.text = "From a map (off: per pixel)"
+	studio.button_pressed = true
+	studio.toggled.connect(func(on: bool) -> void: _board.studio_map = on)
+	_fill_row(studio)
+	controls.add_child(studio)
 	_label(controls, "Readout")
 	var readout := CheckBox.new()
 	readout.text = "Performance"

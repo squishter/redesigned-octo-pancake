@@ -73,6 +73,29 @@ vec3 studio(vec3 d) {
 	return c;
 }
 
+// Directions on a square, for the studio map (studio_map.gdshader): the
+// octahedral mapping, up (y) in the middle, the horizon on the diamond
+// between the edges' midpoints and down at the corners. p and the result
+// of oct_encode are in -1..1.
+vec3 oct_decode(vec2 p) {
+	vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
+	if (d.y < 0.0) {
+		vec2 side = vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+		d.xz = (1.0 - abs(d.zx)) * side;
+	}
+	return normalize(d);
+}
+
+vec2 oct_encode(vec3 d) {
+	d /= abs(d.x) + abs(d.y) + abs(d.z);
+	vec2 p = d.xz;
+	if (d.y < 0.0) {
+		vec2 side = vec2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+		p = (1.0 - abs(p.yx)) * side;
+	}
+	return p;
+}
+
 // How far the key light has moved the caustics: their offset and their
 // phase (smooth in the light's direction, so they shift as it moves).
 vec2 light_shift_of(vec3 k) {
