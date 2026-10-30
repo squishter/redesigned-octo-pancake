@@ -42,6 +42,7 @@ func _init() -> void:
 	test_catalog_complete()
 	test_old_profiles()
 	test_photo_orientation()
+	test_photo_edges()
 	test_kit_puzzles()
 
 	print("\n%s (%d failures). Previews in %s" % ["FAILED" if failures else "PASSED", failures,
@@ -955,6 +956,42 @@ func test_photo_orientation() -> void:
 						ok = false
 			check(ok, "orientation %d (%s) not upright" % [o, "II" if little else "MM"])
 	check(PhotoLoader.orientation(want.save_png_to_buffer()) == 1, "a PNG has an orientation")
+
+
+## Photo collages from edges: a clear subject on a plain background is cut
+## out alone (and every region is closed), a landscape keeps the whole
+## picture, and asking for either always gets it.
+func test_photo_edges() -> void:
+	print("Photo edges")
+	var subject := Image.create(480, 360, false, Image.FORMAT_RGB8)
+	var scenery := Image.create(480, 360, false, Image.FORMAT_RGB8)
+	for y in 360:
+		for x in 480:
+			var t := float(y) / 360.0
+			# A pale wall and table, with a bright flower-ish thing in front.
+			var c := Color(0.82 - 0.1 * t, 0.8 - 0.1 * t, 0.76 - 0.05 * t)
+			var d := Vector2(x, y).distance_to(Vector2(240, 180))
+			var a := Vector2(x - 240, y - 180).angle()
+			if d < 95.0 + 18.0 * sin(a * 6.0):
+				c = Color(0.85, 0.2, 0.3) if d > 40.0 else Color(0.98, 0.8, 0.15)
+			subject.set_pixel(x, y, c)
+			# Sky, hills and water, each running edge to edge.
+			var hill := 200.0 - 50.0 * absf(sin(x / 70.0))
+			var s := Color(0.55, 0.72, 0.95).lerp(Color(0.8, 0.88, 1.0), t)
+			if y > hill:
+				s = Color(0.3, 0.55, 0.3)
+			if y > 290:
+				s = Color(0.25, 0.45, 0.7)
+			scenery.set_pixel(x, y, s)
+	var art := PhotoEdges.line_art(subject)
+	check(art["subject"], "no subject found on a plain background: %s" % art.get("scores"))
+	check(art["width"] < 480 and art["height"] < 360, "the subject wasn't cropped around")
+	var map := RegionMap.build(art["mask"], art["width"], art["height"], 0)
+	check(map.regions.size() >= 2, "subject line art has %d closed regions" % map.regions.size())
+	var land := PhotoEdges.line_art(scenery)
+	check(not land["subject"], "a landscape was cut down to a subject: %s" % land.get("scores"))
+	check(not PhotoEdges.line_art(subject, {"subject": "off"})["subject"], "subject off still cut one out")
+	check(PhotoEdges.line_art(scenery, {"subject": "on"})["subject"], "subject on found none")
 
 
 ## A JPEG with an EXIF block holding just an Orientation tag, put after SOI.

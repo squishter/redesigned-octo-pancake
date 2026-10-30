@@ -28,6 +28,7 @@ var _theme: OptionButton
 var _start: Button
 var _new_title: Label
 var _photo_row: Control
+var _subject: OptionButton
 var _photo_dialog: FileDialog
 ## Which photo puzzle the picker is choosing a photo for.
 var _photo_kind := ""
@@ -91,10 +92,20 @@ func _ready() -> void:
 	_button(actions, "Cancel", func() -> void: _new_panel.visible = false)
 	# Or from one of her photos: colors come from the photo (snapped to her
 	# gem colors), so there's no theme to pick.
-	_photo_row = HBoxContainer.new()
+	_photo_row = VBoxContainer.new()
 	form.add_child(_photo_row)
+	var photo_grid := GridContainer.new()
+	photo_grid.columns = 2
+	_photo_row.add_child(photo_grid)
+	# Photo collages: the subject alone (when there is a clear one), or the whole photo.
+	_subject = _options(photo_grid, "Photo collage")
+	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
+		_subject.add_item(pair[1])
+		_subject.set_item_metadata(_subject.item_count - 1, pair[0])
+	var photo_buttons := HBoxContainer.new()
+	_photo_row.add_child(photo_buttons)
 	for kind: String in GemCatalog.PHOTO_MODES:
-		var b := _button(_photo_row, GemCatalog.PHOTO_MODES[kind]["name"] + "…", func() -> void: _pick_photo(kind))
+		var b := _button(photo_buttons, GemCatalog.PHOTO_MODES[kind]["name"] + "…", func() -> void: _pick_photo(kind))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_photo_dialog = FileDialog.new()
 	_photo_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -226,6 +237,7 @@ func _start_photo(photo: Image, kind: String) -> void:
 		photo.resize(maxi(1, int(photo.get_width() * k)), maxi(1, int(photo.get_height() * k)), Image.INTERPOLATE_LANCZOS)
 	_request = PuzzleMaker.new_request(kind, "")
 	_request["photo"] = photo
+	_request["subject"] = _subject.get_item_metadata(maxi(_subject.selected, 0))
 	_new_panel.visible = false
 	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(kind).to_lower()
 	_busy.visible = true

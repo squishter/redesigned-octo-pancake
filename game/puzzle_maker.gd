@@ -19,6 +19,12 @@ const SQUARE_DRILL_CHANCE := 0.4
 const MEDIUM_KIT_CHANCE := 0.4
 ## Photos are shrunk to at most this many px on their longest side first.
 const PHOTO_MAX := 1024
+## Photo kits: about this many drills, in the photo's own shape, each the
+## gem nearest its color with this much of the difference carried on to its
+## neighbors (see KitGenerator.map_direct): near 1 is most true to the photo
+## (from a little way off), lower scatters fewer odd drills.
+const PHOTO_KIT_CELLS := 6000
+const PHOTO_DITHER := 0.85
 ## Picture features make() knows (GemCatalog.FEATURES must be among them).
 const FEATURES := ["frames", "backgrounds", "collars", "zoom", "wobble"]
 
@@ -32,7 +38,8 @@ static func new_request(type_id: String, theme_id: String) -> Dictionary:
 ## its colors, shapes and cuts, and only the picture features unlocked.
 ##
 ## Photo puzzles (GemCatalog.PHOTO_MODES) take `photo` (an Image) in the
-## request instead of a theme; it isn't kept in the puzzle's request.
+## request instead of a theme (and photo collages `subject`, see
+## PhotoEdges); the photo isn't kept in the puzzle's request.
 static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 	if request.get("photo") is Image:
 		return _photo(request, unlocks)
@@ -83,6 +90,12 @@ static func _photo(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		"pattern_seed": request["pattern_seed"],
 		"seed": seed_value,
 		"detail": 0.5,
+		# Edge detection, then the subject alone when the photo has a clear one
+		# ("on": always the likeliest subject, "off": the whole photo).
+		"method": "edges",
+		"subject": request.get("subject", "auto"),
+		# Every area filled: sparse designs make a photo hard to read.
+		"sparsity": 0.0,
 	}
 	var picture: Dictionary
 	if request["type"] == "photo_kit":
@@ -109,11 +122,16 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 	if shapes.has("square") and (not shapes.has("round") or rng.randf() < SQUARE_DRILL_CHANCE):
 		drill = "square"
 	var cut: String = shapes.get(drill, [GemCuts.for_shape(drill)[0]])[0]
-	var size := "medium" if rng.randf() < MEDIUM_KIT_CHANCE else "small"
+	var size: Variant = "medium" if rng.randf() < MEDIUM_KIT_CHANCE else "small"
+	var kit_options := {"size": size, "colors": clampi(gems.size(), 6, 20), "gems": gems, "drill": drill,
+			"seed": seed_value}
 	if image == null:
 		image = PictureSources.mandala_image(seed_value, opts)
-	var kit := KitGenerator.generate(image, {"size": size, "colors": clampi(gems.size(), 6, 20), "gems": gems,
-			"drill": drill, "seed": seed_value})
+	else:
+		# A photo: every gem she has, straight from each cell's color, no crop.
+		size = KitGenerator.board_for(image, PHOTO_KIT_CELLS)
+		kit_options.merge({"size": size, "direct": true, "dither": PHOTO_DITHER, "cleanup": false}, true)
+	var kit := KitGenerator.generate(image, kit_options)
 	var w: int = kit["width"]
 	var h: int = kit["height"]
 	var cells: PackedByteArray = kit["cells"]
@@ -135,7 +153,7 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 		"unit": d / 2.0,
 		"symmetry": "none",
 		"drill": drill,
-		"kit_size": size,
+		"kit_size": size if size is String else "%dx%d" % [size.x, size.y],
 		"source": {"kind": "mandala", "seed": seed_value, "theme": opts.get("theme", "")},
 		"lines": PackedByteArray(),
 		"lines_visible": PackedByteArray(),

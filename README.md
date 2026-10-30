@@ -35,8 +35,26 @@ mode for trying out new pattern generation.
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Photos.** *Photo collage…* and *Photo kit…* in the New puzzle panel pick
   one of her photos (the phone's own picker; turned upright by its EXIF orientation, see `game/photo_loader.gd`) and turn it into a collage
-  (traced into line art) or a kit of drills, in her unlocked colors. Photo
-  puzzles can't be recolored: their colors come from the photo.
+  or a kit of drills, in her unlocked colors. Photo puzzles can't be
+  recolored: their colors come from the photo.
+  - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
+    edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
+    edge detector over Lab, thin ridges, thresholds from the photo with a
+    floor, short specks dropped, loose ends reaching on to close shapes),
+    then become a collage like any line art, with every area filled. If the
+    photo has a clear subject (boundary connectivity saliency: sky, ground
+    and walls connect to the photo's border, a subject hardly does; it must
+    be compact, stand out clearly and not run edge to edge), only the
+    subject becomes line art, cropped around it, with the rest left as
+    background. The panel's *Photo collage* choice can also ask for the
+    subject only or the whole photo.
+  - *Photo kits* keep the photo's own shape (about 6000 drills, nothing
+    cropped) and map each cell straight to the nearest unlocked gem in Lab,
+    carrying 85% of the leftover color on to its neighbors (Floyd-Steinberg,
+    back and forth, capped), so neighboring gems blend into the colors in
+    between. Against the photo, seen from a little way off, that cut the
+    average color error by a half to two thirds (with the 10 starting colors
+    on sample photos, 18-30 ΔE down to 8-21).
 - **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,
   Shape, Facet, Picture, Flourish, Sparkle) gives one thing she
   doesn't have yet from its category, never a repeat, and is sold out once
