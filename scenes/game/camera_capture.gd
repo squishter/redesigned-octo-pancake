@@ -206,6 +206,11 @@ func _activate(feed: CameraFeed) -> void:
 	feed.feed_is_active = true
 	_main_tex.camera_feed_id = feed.get_id()
 	_cbcr_tex.camera_feed_id = feed.get_id()
+	# A material keeps the texture it was handed, and before a feed is set a
+	# CameraTexture is only a placeholder: hand it over again now, or the
+	# shader reads the placeholder as CbCr (everything goes green and blue).
+	_material.set_shader_parameter("cbcr_tex", null)
+	_material.set_shader_parameter("cbcr_tex", _cbcr_tex)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	# The format (and the CbCr layout, once seen) helps tell camera problems apart.
 	_feed_text = "%s (%d of %d)%s" % [feed.get_name(), _feed_index + 1, _feeds.size(), format]

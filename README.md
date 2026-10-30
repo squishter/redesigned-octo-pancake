@@ -48,7 +48,10 @@ mode for trying out new pattern generation.
   twice as wide (Cb, Cr, Cb, Cr...) instead of two channels; read as two,
   that turns everything green and blue with no red. The panel reads the
   plane back once when the feed starts, picks the layout from its bytes per
-  pixel, and decodes either. The status line names the camera format and,
+  pixel, and decodes either. The shader gets its CbCr texture again
+  whenever a camera starts: a material keeps the texture it was handed, and
+  a CameraTexture with no feed yet is only a placeholder, which read as CbCr
+  turns the preview green and blue. The status line names the camera format and,
   after that check, the CbCr plane's format, size, layout and its Cb and Cr
   values (both near 128 in an ordinary scene). The main back camera (the
   lowest id, "0" on Android) opens first; higher ids are extra lenses. Photo puzzles can't be
