@@ -8,6 +8,25 @@ uniform vec3 key_dir = vec3(-0.45, 0.62, -0.64);
 uniform vec3 fill_dir = vec3(0.7, 0.5, 0.5);
 uniform float light_strength = 1.0;
 uniform vec3 paper_color = vec3(0.86, 0.84, 0.8);
+// The finale's waves (GemBoard3D.celebrate): every stone swells and settles
+// once a wave, over pulse_time seconds, starting its `delay` (0..1, kept
+// per stone) times wave_spread seconds after the wave does. wave_time is
+// the seconds since the wave started (negative: none yet).
+uniform float wave_time = -1.0;
+uniform float wave_spread = 1.4;
+uniform float pulse_time = 0.6;
+
+// How much the finale's wave scales a stone with this delay just now.
+float wave_scale(float delay) {
+	float u = (wave_time - delay * wave_spread) / pulse_time;
+	return u > 0.0 && u < 1.0 ? 1.0 + 0.3 * sin(PI * u) : 1.0;
+}
+
+// Local vertex v of a stone scaled by f about its place on the paper, its
+// height above the paper too, as if its whole transform (`model`) were.
+vec3 scaled_about_paper(vec3 v, float f, mat4 model) {
+	return v * f + inverse(mat3(model)) * vec3(0.0, (f - 1.0) * model[3].y, 0.0);
+}
 
 // What a facet sees in direction d (unit): a dark room with faint bands
 // around its walls, a key softbox (crossed by window bars), a weaker fill, a

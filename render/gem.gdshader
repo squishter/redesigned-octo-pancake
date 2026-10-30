@@ -14,8 +14,9 @@ render_mode unshaded, cull_disabled;
 #include "res://render/gem_light.gdshaderinc"
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y refractive index,
-// z dispersion, w cut (its style, GemCuts.SHADER_STYLE). COLOR is the gem color;
-// its alpha is 0 for opaque stones.
+// z dispersion, w cut (its style, GemCuts.SHADER_STYLE) plus half its
+// finale delay (see wave_scale). COLOR is the gem color; its alpha is 0 for
+// opaque stones.
 varying vec3 w_normal;
 varying vec3 l_pos;
 varying vec4 stone;
@@ -23,7 +24,12 @@ varying vec4 stone;
 void vertex() {
 	w_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	l_pos = VERTEX;
-	stone = INSTANCE_CUSTOM;
+	float cut = floor(INSTANCE_CUSTOM.w + 0.01);
+	stone = vec4(INSTANCE_CUSTOM.xyz, cut);
+	float f = wave_scale((INSTANCE_CUSTOM.w - cut) * 2.0);
+	if (f != 1.0) {
+		VERTEX = scaled_about_paper(VERTEX, f, MODEL_MATRIX);
+	}
 }
 
 float hash12(vec2 p) {

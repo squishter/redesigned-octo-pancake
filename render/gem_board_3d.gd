@@ -168,9 +168,11 @@ var _last_tap_ms := -DOUBLE_TAP_MS
 var _last_tap_pos := Vector2.ZERO
 ## The touch drawing a stroke, or -1.
 var _stroke := -1
-## Each slot's instances in every layer: [MultiMesh, index, full transform].
+## Each slot's instances in every layer: [MultiMesh, index, full transform,
+## "gem", "shadow" or "sparkle"].
 var _refs: Array = []
-## Slots animating: slot -> [start (on _clock), 0 pop in, 1 pulse or 2 land].
+## Slots animating: slot -> [start (on _clock), 0 pop in or 1 land]. The
+## finale's pulses run in the shaders instead (see _finale_wave).
 var _anims := {}
 var _clock := 0.0
 ## The light drifts faster until then (on _clock), sweeping glints over a
@@ -181,6 +183,14 @@ var _sweep_until := 0.0
 var _finale := ""
 var _finale_from := Vector2.ZERO
 var _next_wave := 0.0
+## When the finale's current wave started (on _clock; NAN: none yet), and
+## what the stones' delays in it were worked out for ([style, from]; see
+## _write_delays).
+var _wave_at := NAN
+var _wave_for := []
+## Each MultiMesh layer: [MultiMesh, "gem", "shadow" or "sparkle", its
+## instances' slots].
+var _layer_slots := []
 ## Rendering (see IDLE_FPS): render this frame regardless; how much of an
 ## idle frame has come due; the process frame last rendered, and the lights
 ## it rendered with; a fixed rate instead (set_always_render), or 0.
@@ -223,6 +233,9 @@ func _init() -> void:
 	_shadow_material.set_shader_parameter("span", SHADOW_FADE)
 	_sparkle_material.shader = SPARKLE_SHADER
 	_sparkle_material.render_priority = 1
+	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material]:
+		m.set_shader_parameter("wave_spread", CELEBRATE_TIME)
+		m.set_shader_parameter("pulse_time", PULSE_TIME)
 	_paper_material.shader = PAPER_SHADER
 	_paper.material_override = _paper_material
 	_viewport.add_child(_paper)
@@ -249,6 +262,8 @@ func _process(delta: float) -> void:
 		light_time += delta * (1.0 + 5.0 * sin(PI * sweep))
 	if _finale != "" and _clock >= _next_wave:
 		_finale_wave()
+	if not is_nan(_wave_at):
+		_set_wave_time(_clock - _wave_at)
 	if not _anims.is_empty():
 		_step_anims()
 	if use_sensor:
@@ -377,7 +392,7 @@ func fill_slot(i: int) -> void:
 
 ## Shows one stone that has just flown in, settling into place.
 func land_slot(i: int) -> void:
-	_anims[i] = [_clock, 2]
+	_anims[i] = [_clock, 1]
 	_step_anims()
 
 
@@ -419,6 +434,14 @@ func is_celebrating() -> bool:
 
 
 func _finale_wave() -> void:
+	# The shaders pulse each stone from here (wave_scale in gem_light.gdshaderinc).
+	_wave_at = _clock
+	_set_wave_time(0.0)
+	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
+	_next_wave = _sweep_until + FINALE_REST
+	if _wave_for == [_finale, _finale_from]:
+		return  # the stones already hold this wave's delays
+	_wave_for = [_finale, _finale_from]
 	var from := _finale_from
 	var style := _finale
 	var far := 0.0
@@ -444,14 +467,42 @@ func _finale_wave() -> void:
 		at.append(t)
 		far = maxf(far, t)
 	far = maxf(far, 1e-6)
-	for i in _refs.size():
-		_anims[i] = [_clock + at[i] / far * CELEBRATE_TIME, 1]
-	_sweep_until = _clock + CELEBRATE_TIME + PULSE_TIME
-	_next_wave = _sweep_until + FINALE_REST
+	var delays := PackedFloat32Array()
+	delays.resize(at.size())
+	for i in at.size():
+		delays[i] = at[i] / far
+	_write_delays(delays)
 
 
-## Moves animating stones along: pops ease out with an overshoot, pulses
-## swell and settle.
+## Gives every stone its delay in a finale wave (0..1 of CELEBRATE_TIME),
+## where its shaders read it: half of it after the cut in a gem's custom
+## data, a shadow's color alpha, a sparkle's custom w. One buffer write a
+## layer, as a big kit has tens of thousands of stones.
+func _write_delays(delays: PackedFloat32Array) -> void:
+	for layer: Array in _layer_slots:
+		var mm: MultiMesh = layer[0]
+		var which: PackedInt32Array = layer[2]
+		# Per instance: 12 floats of transform, then its color and custom data.
+		var buffer := mm.buffer
+		if layer[1] == "gem":
+			for k in which.size():
+				buffer[k * 20 + 19] = floorf(buffer[k * 20 + 19] + 0.01) + delays[which[k]] * 0.5
+		else:
+			var w := 15 if layer[1] == "shadow" else 19
+			for k in which.size():
+				buffer[k * 20 + w] = delays[which[k]]
+		mm.buffer = buffer
+
+
+## Seconds since the finale's current wave started, for the shaders
+## (negative: no wave).
+func _set_wave_time(seconds: float) -> void:
+	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material]:
+		m.set_shader_parameter("wave_time", seconds)
+
+
+## Moves animating stones along: pops ease out with an overshoot, landings
+## settle.
 func _step_anims() -> void:
 	var done := []
 	for i: int in _anims:
@@ -459,15 +510,10 @@ func _step_anims() -> void:
 		var t: float = _clock - a[0]
 		if t < 0.0:
 			continue
-		var u := minf(t / ([POP_TIME, PULSE_TIME, LAND_TIME][a[1]] as float), 1.0)
-		var f := 1.0
-		match a[1]:
-			0:
-				f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
-			1:
-				f = 1.0 + 0.3 * sin(PI * u)
-			_:
-				f = 1.0 + 0.15 * (1.0 - u) * (1.0 - u)
+		var u := minf(t / (POP_TIME if a[1] == 0 else LAND_TIME), 1.0)
+		var f := 1.0 + 0.15 * (1.0 - u) * (1.0 - u)
+		if a[1] == 0:
+			f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
 		_apply_scale(i, f)
 		if u >= 1.0:
 			done.append(i)
@@ -584,6 +630,10 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_settle = false
 	_board = board
 	_anims.clear()
+	_wave_at = NAN
+	_wave_for = []
+	_layer_slots = []
+	_set_wave_time(-1.0)
 	_refs = []
 	_refs.resize(slots.size())
 	for i in slots.size():
@@ -664,12 +714,13 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 		mm.set_instance_transform(k, xf)
 		mm.set_instance_color(k, color)
 		if i < _refs.size():
-			_refs[i].append([mm, k, xf])
+			_refs[i].append([mm, k, xf, kind])
 	var layer := MultiMeshInstance3D.new()
 	layer.multimesh = mm
 	layer.material_override = material
 	layer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_layers.add_child(layer)
+	_layer_slots.append([mm, kind, PackedInt32Array(which)])
 
 
 ## Refractive index and dispersion for a gem color: pale, unsaturated

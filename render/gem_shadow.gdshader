@@ -18,8 +18,9 @@ uniform float span = 2.6;
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y height of its top above the
 // paper (board units), zw the xz of its tilted top's normal (see as_tilted).
-// COLOR is the gem color. The shadow falls from the true light; the light
-// the stone focuses goes where its tilt sends it.
+// COLOR is the gem color, its alpha the stone's finale delay (see
+// wave_scale). The shadow falls from the true light; the light the stone
+// focuses goes where its tilt sends it.
 varying vec2 off;
 varying vec2 focus_off;
 varying vec3 key_tilted;
@@ -28,7 +29,9 @@ varying vec4 stone;
 
 void vertex() {
 	stone = INSTANCE_CUSTOM;
-	mat3 to_local = inverse(mat3(MODEL_MATRIX));
+	// A finale's pulse scales the stone, but not how far its shadow falls.
+	float f = wave_scale(COLOR.a);
+	mat3 to_local = inverse(mat3(MODEL_MATRIX)) / f;
 	vec3 lean = -vec3(key_dir.x, 0.0, key_dir.z) / max(key_dir.y, 0.25) * stone.y;
 	off = (to_local * lean).xz;
 	key_tilted = as_tilted(key_dir, stone.zw);
@@ -38,6 +41,9 @@ void vertex() {
 	// focused light for any light and tilt; lp stays relative to the stone.
 	VERTEX.xz += off * 1.15;
 	lp = VERTEX.xz;
+	if (f != 1.0) {
+		VERTEX = scaled_about_paper(VERTEX, f, MODEL_MATRIX);
+	}
 }
 
 void fragment() {
