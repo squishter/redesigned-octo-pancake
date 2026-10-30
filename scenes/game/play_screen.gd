@@ -320,7 +320,7 @@ func _build_icons() -> void:
 	_icons.position = Vector2(-100000.0, 0.0)
 	_icons.size = Vector2(cols, rows) * ICON_PX
 	add_child(_icons)
-	_icons.set_always_render()
+	_icons.set_always_render(GemIcons.FPS)
 	_icons.show_collage({"width": cols * ICON_CELL, "height": rows * ICON_CELL, "slots": stones})
 	for t in n:
 		var icon := AtlasTexture.new()

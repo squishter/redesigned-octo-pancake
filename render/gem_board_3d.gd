@@ -183,13 +183,13 @@ var _finale_from := Vector2.ZERO
 var _next_wave := 0.0
 ## Rendering (see IDLE_FPS): render this frame regardless; how much of an
 ## idle frame has come due; the process frame last rendered, and the lights
-## it rendered with; render every frame (set_always_render).
+## it rendered with; a fixed rate instead (set_always_render), or 0.
 var _dirty := true
 var _due := 0.0
 var _drawn_frame := -1
 var _drawn_key := Vector3.UP
 var _drawn_fill := Vector3.UP
-var _always := false
+var _fixed_fps := 0.0
 
 
 func _init() -> void:
@@ -258,10 +258,11 @@ func _process(delta: float) -> void:
 
 
 ## Renders this frame if anything moves, and otherwise once an idle frame
-## (IDLE_FPS) is due. The light keeps drifting every frame either way.
+## (IDLE_FPS) is due; at a fixed rate (set_always_render), only when due or
+## changed. The light keeps drifting every frame either way.
 func _schedule(delta: float) -> void:
-	_due += delta * (0.0 if _always else IDLE_FPS)
-	var moving := (_always or not _touches.is_empty() or not _anims.is_empty() or _clock < _sweep_until
+	_due += delta * (_fixed_fps if _fixed_fps > 0.0 else IDLE_FPS)
+	var moving := _fixed_fps <= 0.0 and (not _touches.is_empty() or not _anims.is_empty() or _clock < _sweep_until
 			or (_glide != null and _glide.is_valid()) or key_dir.angle_to(_drawn_key) > LIGHT_STEP
 			or fill_dir.angle_to(_drawn_fill) > LIGHT_STEP)
 	if _dirty or moving or _due >= 1.0:
@@ -492,9 +493,11 @@ func get_view_texture() -> ViewportTexture:
 	return _viewport.get_texture()
 
 
-## Renders every frame, even off screen (where nothing draws the board).
-func set_always_render() -> void:
-	_always = true
+## For a board kept off screen, whose picture is used elsewhere (icons):
+## renders `fps` times a second, however its light moves (0: as usual). It
+## renders off screen either way: nothing waits for the board to be drawn.
+func set_always_render(fps := 0.0) -> void:
+	_fixed_fps = fps
 
 
 ## Zooms and pans smoothly to show board rect `area` (as focus_on), over

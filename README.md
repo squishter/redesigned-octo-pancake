@@ -338,7 +338,9 @@ The game runs at most 45 frames a second (`application/run/max_fps` in
 renders when a frame is due: every frame while something moves (a touch, a
 pan or pinch, a glide, stones popping in or pulsing, the finale's sweep, the
 phone turning), and 30 times a second (`GemBoard3D.IDLE_FPS`) while only the
-light's slow drift changes it. `render_count` counts its renders.
+light's slow drift changes it. The off-screen icon sheets that the gem row
+and the Collection cut their icons from render 10 times a second
+(`set_always_render(GemIcons.FPS)`). `render_count` counts a board's renders.
 
 | File | What it does |
 | --- | --- |

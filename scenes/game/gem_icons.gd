@@ -11,6 +11,9 @@ extends RefCounted
 const ROUND := 0.62
 const LONG := 0.8
 const FIT := 0.85
+## Icon sheets render this many times a second: their glints only change
+## with the light's slow drift (and the phone's turn).
+const FPS := 10.0
 
 
 ## A stone for an icon cell `cell` units wide, centered at `at`: `ratio` is
