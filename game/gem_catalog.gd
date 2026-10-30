@@ -102,6 +102,11 @@ const EXTRA_COLORS := [
 	{"id": "smoke", "name": "Smoke", "color": "#8a8c94", "hue": "neutral"},
 	{"id": "charcoal", "name": "Charcoal", "color": "#3a3a40", "hue": "neutral"},
 	{"id": "pewter", "name": "Pewter", "color": "#9a9690", "hue": "neutral"},
+	# True grays filling the gaps between the neutrals above.
+	{"id": "platinum", "name": "Platinum", "color": "#d5d6d8", "hue": "neutral"},
+	{"id": "ash", "name": "Ash", "color": "#77787b", "hue": "neutral"},
+	{"id": "graphite", "name": "Graphite", "color": "#505154", "hue": "neutral"},
+	{"id": "gunmetal", "name": "Gunmetal", "color": "#2c2d31", "hue": "neutral"},
 ]
 ## The primaries she starts with: the rainbow, black, white and clear.
 const STARTING_COLORS := ["ruby", "tangerine", "sunflower", "leaf", "sapphire", "indigo", "amethyst", "onyx", "snow",

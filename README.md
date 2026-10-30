@@ -27,9 +27,11 @@ mode for trying out new pattern generation.
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
   mandala collages, with no frames or collars, placing gems with Pop or
   Fly and the Ripple finale. Everything else comes from packs.
-- **Colors and themes.** 105 gem colors, at least 10 of each hue (red,
+- **Colors and themes.** 109 gem colors, at least 10 of each hue (red,
   orange, yellow, green, teal, blue, purple, pink, brown and neutrals; some,
-  like pearl, ivory, jade and turquoise, are opaque stones), and 33 themes:
+  like pearl, ivory, jade and turquoise, are opaque stones). The 14 neutrals
+  step from white to black (Lab lightness 97 to 11, never more than 14
+  apart), so gray shading blends as smoothly as other hues. 33 themes:
   one per hue, the starting rainbow ones and mixes like Tropical, Galaxy and
   Seaside. A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
