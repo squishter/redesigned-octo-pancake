@@ -118,7 +118,7 @@ mode for trying out new pattern generation.
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
   place gems (Pop, Fly, Drop, Spin, Twinkle, and ones that read even zoomed
   far out: Bounce, Comet, Firework, Beam, Halo), finales (Ripple, Spiral,
-  Sweep, Shimmer) and power-up charges. Locked things stay a mystery: gems
+  Sweep, Shimmer, Light ripple: a ring of light instead of swelling gems) and power-up charges. Locked things stay a mystery: gems
   show only as flat silhouettes of their outline, and names, theme colors
   and descriptions stay hidden.
 - **Power-ups**, spent from *Power-ups* while playing. For the whole puzzle:
@@ -163,9 +163,11 @@ mode for trying out new pattern generation.
   Debug builds (the editor and `tools/build_apk.sh` APKs, not release
   exports) add *Unlock everything* to Settings, for testing: while it's on,
   every color, shape, cut, theme, picture type, flourish, placement style
-  and finale is hers. Her own unlocks are what's saved and come back when
-  it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
-  and power-up charges are real.
+  and finale is hers, and every power-up has unlimited charges (shown as ∞)
+  that cost nothing to use. Her own unlocks are what's saved and come back
+  when it's off; anything a pack or reward unlocks meanwhile isn't kept,
+  but coins and power-up charges from packs are real, and her own charges
+  are left as they were.
   The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
   which places every open stone at once, fits the whole picture in view
   and plays the finale, for testing finales.

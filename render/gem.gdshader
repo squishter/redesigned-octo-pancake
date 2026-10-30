@@ -20,13 +20,17 @@ render_mode unshaded, cull_disabled;
 varying vec3 w_normal;
 varying vec3 l_pos;
 varying vec4 stone;
+// The light ripple passing: how strongly (0..1), and how far through.
+varying vec2 shine;
 
 void vertex() {
 	w_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	l_pos = VERTEX;
 	float cut = floor(INSTANCE_CUSTOM.w + 0.01);
 	stone = vec4(INSTANCE_CUSTOM.xyz, cut);
-	float f = wave_scale((INSTANCE_CUSTOM.w - cut) * 2.0);
+	float delay = (INSTANCE_CUSTOM.w - cut) * 2.0;
+	shine = vec2(wave_pulse(delay) * wave_light, wave_phase(delay));
+	float f = wave_scale(delay);
 	if (f != 1.0) {
 		VERTEX = scaled_about_paper(VERTEX, f, MODEL_MATRIX);
 	}
@@ -80,6 +84,14 @@ void fragment() {
 	if (n.y < 0.0) {
 		n = -n;
 	}
+	// The light ripple: as its ring passes, the light swings once round the
+	// stone (its glints race over the facets) and burns brighter.
+	float burn = 1.0;
+	if (shine.x > 0.0) {
+		float a = shine.y * TAU;
+		n.xz = vec2(n.x * cos(a) - n.z * sin(a), n.x * sin(a) + n.z * cos(a));
+		burn = 1.0 + 1.2 * shine.x;
+	}
 	vec3 v = vec3(0.0, 1.0, 0.0);
 	vec3 tint = pow(COLOR.rgb, vec3(2.2));
 	float ior = stone.y;
@@ -123,5 +135,5 @@ void fragment() {
 		inside *= 0.75 + 0.25 * rim;
 	}
 
-	ALBEDO = refl * fres + inside * (1.0 - fres);
+	ALBEDO = (refl * fres + inside * (1.0 - fres)) * burn;
 }

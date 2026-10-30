@@ -244,7 +244,7 @@ func _init() -> void:
 	_shadow_material.set_shader_parameter("span", SHADOW_FADE)
 	_sparkle_material.shader = SPARKLE_SHADER
 	_sparkle_material.render_priority = 1
-	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material]:
+	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
 		m.set_shader_parameter("wave_spread", CELEBRATE_TIME)
 		m.set_shader_parameter("pulse_time", PULSE_TIME)
 	_paper_material.shader = PAPER_SHADER
@@ -422,13 +422,15 @@ func set_transparent() -> void:
 
 
 ## Finale styles celebrate() knows (GemCatalog.FINALES must be among them).
-const FINALES := ["ripple", "spiral", "sweep", "shimmer"]
+const FINALES := ["ripple", "spiral", "sweep", "shimmer", "light_ripple"]
 
 
 ## Waves of pulses through every stone while the light sweeps over them,
 ## timed by `style`: "ripple" outward from board point `from`, "spiral"
 ## round it, "sweep" from left to right, "shimmer" at random. They repeat
-## until end_celebration().
+## until end_celebration(). "light_ripple" goes out like "ripple", but plays
+## light over the stones and paper instead of swelling them (wave_light in
+## gem_light.gdshaderinc).
 func celebrate(from: Vector2, style := "ripple") -> void:
 	_finale = style
 	_finale_from = from
@@ -478,6 +480,10 @@ func _finale_wave() -> void:
 		at.append(t)
 		far = maxf(far, t)
 	far = maxf(far, 1e-6)
+	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
+		m.set_shader_parameter("wave_light", 1.0 if style == "light_ripple" else 0.0)
+		m.set_shader_parameter("wave_from", from)
+		m.set_shader_parameter("wave_far", far)
 	var delays := PackedFloat32Array()
 	delays.resize(at.size())
 	for i in at.size():
@@ -508,7 +514,7 @@ func _write_delays(delays: PackedFloat32Array) -> void:
 ## Seconds since the finale's current wave started, for the shaders
 ## (negative: no wave).
 func _set_wave_time(seconds: float) -> void:
-	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material]:
+	for m: ShaderMaterial in [_gem_material, _shadow_material, _sparkle_material, _paper_material]:
 		m.set_shader_parameter("wave_time", seconds)
 
 

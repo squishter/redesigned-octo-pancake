@@ -26,11 +26,14 @@ varying vec2 focus_off;
 varying vec3 key_tilted;
 varying vec2 lp;
 varying vec4 stone;
+// The light ripple passing (0..1): the light the stone focuses brightens.
+varying float shine;
 
 void vertex() {
 	stone = INSTANCE_CUSTOM;
 	// A finale's pulse scales the stone, but not how far its shadow falls.
 	float f = wave_scale(COLOR.a);
+	shine = wave_pulse(COLOR.a) * wave_light;
 	mat3 to_local = inverse(mat3(MODEL_MATRIX)) / f;
 	vec3 lean = -vec3(key_dir.x, 0.0, key_dir.z) / max(key_dir.y, 0.25) * stone.y;
 	off = (to_local * lean).xz;
@@ -63,7 +66,8 @@ void fragment() {
 	if (focus > 0.0) {
 		float web = caustic(lp * 0.42 + stone.x * 7.0 + light_shift_of(key_tilted) * 0.25,
 				light_phase_of(key_tilted) + stone.x * 9.0);
-		light = pow(COLOR.rgb, vec3(2.2)) * paper_color * focus * (0.18 + 0.9 * web) * light_strength;
+		light = pow(COLOR.rgb, vec3(2.2)) * paper_color * focus * (0.18 + 0.9 * web) * light_strength
+				* (1.0 + 1.5 * shine);
 	}
 	ALBEDO = light;
 	ALPHA = shade;

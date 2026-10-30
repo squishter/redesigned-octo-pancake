@@ -30,6 +30,8 @@ void vertex() {
 	vec3 fill = as_tilted(fill_dir, tilt);
 	vec3 eye = as_tilted(vec3(0.0, 1.0, 0.0), tilt);
 	glint = max(flare(r, 0.0, key, fill, eye), flare(r, 1.0, key, fill, eye)) * light_strength;
+	// The light ripple flares about half the stones it passes.
+	glint = max(glint, wave_pulse(INSTANCE_CUSTOM.w) * wave_light * step(0.5, fract(r * 13.7)));
 	lp = VERTEX.xz;
 	// On a facet, not dead center.
 	VERTEX.xz += vec2(cos(r * 91.0), sin(r * 91.0)) * 0.22;

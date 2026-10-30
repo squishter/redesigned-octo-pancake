@@ -211,6 +211,7 @@ const FINALES := {
 	"spiral": {"name": "Spiral", "about": "A wave sweeping round the center."},
 	"sweep": {"name": "Sweep", "about": "A wave from one side to the other."},
 	"shimmer": {"name": "Shimmer", "about": "Every gem twinkles in its own time."},
+	"light_ripple": {"name": "Light ripple", "about": "A ring of light spreads from the middle, and every gem it passes flashes."},
 }
 const STARTING_FINALES := ["ripple"]
 

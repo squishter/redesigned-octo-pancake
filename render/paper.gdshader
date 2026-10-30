@@ -16,6 +16,10 @@ void fragment() {
 	float grain = texture(grain_tex, UV).r;
 	float lit = 0.8 + 0.2 * clamp(key_dir.y, 0.0, 1.0);
 	vec3 col = paper_color * lit * (0.95 + 0.07 * grain);
+	if (wave_light > 0.0) {
+		// The light ripple's ring crossing the paper.
+		col *= 1.0 + 0.12 * wave_pulse(length(UV * board_px - wave_from) / wave_far);
+	}
 	float m = texture(lines_tex, UV).r;
 	if (m > 0.01) {
 		vec2 texel = 1.0 / board_px;

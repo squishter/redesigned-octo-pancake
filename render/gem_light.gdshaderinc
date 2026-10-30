@@ -8,18 +8,34 @@ uniform vec3 key_dir = vec3(-0.45, 0.62, -0.64);
 uniform vec3 fill_dir = vec3(0.7, 0.5, 0.5);
 uniform float light_strength = 1.0;
 uniform vec3 paper_color = vec3(0.86, 0.84, 0.8);
-// The finale's waves (GemBoard3D.celebrate): every stone swells and settles
-// once a wave, over pulse_time seconds, starting its `delay` (0..1, kept
-// per stone) times wave_spread seconds after the wave does. wave_time is
-// the seconds since the wave started (negative: none yet).
+// The finale's waves (GemBoard3D.celebrate): every stone pulses once a
+// wave, over pulse_time seconds, starting its `delay` (0..1, kept per
+// stone) times wave_spread seconds after the wave does. wave_time is the
+// seconds since the wave started (negative: none yet). A pulse swells the
+// stone, or with wave_light 1 (the light ripple) plays light over it
+// instead: the paper lights up too, wave_far board units from wave_from
+// being a delay of 1.
 uniform float wave_time = -1.0;
 uniform float wave_spread = 1.4;
 uniform float pulse_time = 0.6;
+uniform float wave_light = 0.0;
+uniform vec2 wave_from = vec2(0.0);
+uniform float wave_far = 1.0;
+
+// How far through its pulse a stone with this delay is: 0..1 while it lasts.
+float wave_phase(float delay) {
+	return (wave_time - delay * wave_spread) / pulse_time;
+}
+
+// Its pulse just now: rising from 0 to 1 and back, 0 outside it.
+float wave_pulse(float delay) {
+	float u = wave_phase(delay);
+	return u > 0.0 && u < 1.0 ? sin(PI * u) : 0.0;
+}
 
 // How much the finale's wave scales a stone with this delay just now.
 float wave_scale(float delay) {
-	float u = (wave_time - delay * wave_spread) / pulse_time;
-	return u > 0.0 && u < 1.0 ? 1.0 + 0.3 * sin(PI * u) : 1.0;
+	return 1.0 + 0.3 * wave_pulse(delay) * (1.0 - wave_light);
 }
 
 // Local vertex v of a stone scaled by f about its place on the paper, its
