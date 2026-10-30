@@ -30,13 +30,26 @@ shader_type canvas_item;
 // CameraFeed.FeedDataType: 1 RGB, 2 YCbCr in one image, 3 separate Y and CbCr.
 uniform int data_type = 1;
 uniform sampler2D cbcr_tex : filter_linear;
+// The CbCr plane as one channel twice as wide (Cb, Cr, Cb, Cr...) instead of
+// two channels; see chroma_layout.
+uniform bool chroma_interleaved = false;
+
+vec2 chroma(vec2 uv) {
+	if (chroma_interleaved) {
+		ivec2 size = textureSize(cbcr_tex, 0);
+		ivec2 pairs = ivec2(max(size.x / 2, 1), size.y);
+		ivec2 p = clamp(ivec2(uv * vec2(pairs)), ivec2(0), pairs - 1);
+		return vec2(texelFetch(cbcr_tex, ivec2(p.x * 2, p.y), 0).r, texelFetch(cbcr_tex, ivec2(p.x * 2 + 1, p.y), 0).r);
+	}
+	return texture(cbcr_tex, uv).rg;
+}
 
 void fragment() {
 	vec4 a = texture(TEXTURE, UV);
 	if (data_type == 1) {
 		COLOR = vec4(a.rgb, 1.0);
 	} else {
-		vec2 cbcr = (data_type == 3 ? texture(cbcr_tex, UV).rg : a.gb) - 0.5;
+		vec2 cbcr = (data_type == 3 ? chroma(UV) : a.gb) - 0.5;
 		float y = a.r;
 		vec3 rgb = vec3(y + 1.402 * cbcr.y, y - 0.344136 * cbcr.x - 0.714136 * cbcr.y, y + 1.772 * cbcr.x);
 		COLOR = vec4(clamp(rgb, 0.0, 1.0), 1.0);
@@ -47,6 +60,11 @@ void fragment() {
 var _feeds: Array[CameraFeed] = []
 var _feed_index := 0
 var _extra_turns := 0  # quarter turns clockwise she added with Turn
+## The CbCr plane's layout once looked at (see chroma_layout), "" before,
+## and when to look (a moment after the feed starts, so frames have come).
+var _chroma := ""
+var _chroma_check_at := 0
+var _feed_text := ""
 var _viewport: SubViewport
 var _feed_rect: TextureRect
 var _material: ShaderMaterial
@@ -186,8 +204,11 @@ func _activate(feed: CameraFeed) -> void:
 	_main_tex.camera_feed_id = feed.get_id()
 	_cbcr_tex.camera_feed_id = feed.get_id()
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	# The format helps tell camera problems apart.
-	_status.text = "%s (%d of %d)%s" % [feed.get_name(), _feed_index + 1, _feeds.size(), format]
+	# The format (and the CbCr layout, once seen) helps tell camera problems apart.
+	_feed_text = "%s (%d of %d)%s" % [feed.get_name(), _feed_index + 1, _feeds.size(), format]
+	_status.text = _feed_text
+	_chroma = ""
+	_chroma_check_at = Time.get_ticks_msec() + 600
 
 
 ## The biggest format no wider than MAX_FEED_WIDTH (or the narrowest),
@@ -226,12 +247,70 @@ func _process(_delta: float) -> void:
 		return
 	var feed := _feeds[_feed_index]
 	_material.set_shader_parameter("data_type", feed.get_datatype())
+	if _chroma == "" and feed.get_datatype() == CameraFeed.FEED_YCBCR_SEP and Time.get_ticks_msec() >= _chroma_check_at:
+		_check_chroma()
 	var tex_size := Vector2i(_main_tex.get_size())
 	if tex_size.x <= 0 or tex_size.y <= 0:
 		return
 	# The feed turned upright inside the viewport, so the preview stands
 	# the way the photo will.
 	lay_out_upright(_feed_rect, _viewport, tex_size, _turns())
+
+
+## Looks at the CbCr plane once (reading a texture back is slow) and tells
+## the shader how to read it.
+func _check_chroma() -> void:
+	var c := _cbcr_tex.get_image()
+	if c == null or c.is_empty():
+		_chroma_check_at = Time.get_ticks_msec() + 300
+		return
+	_chroma = chroma_layout(c)
+	_material.set_shader_parameter("chroma_interleaved", _chroma == "interleaved")
+	_status.text = "%s · CbCr %s %d×%d (%s)" % [_feed_text, _format_name(c.get_format()), c.get_width(),
+			c.get_height(), _chroma]
+
+
+## How a CbCr plane's bytes are laid out: "pairs" (two channels per pixel,
+## Cb then Cr, as Godot's Android camera builds it) or "interleaved" (one
+## channel, Cb and Cr side by side, so twice as wide).
+static func chroma_layout(chroma: Image) -> String:
+	var per_pixel := chroma.get_data().size() / maxi(1, chroma.get_width() * chroma.get_height())
+	return "interleaved" if per_pixel == 1 else "pairs"
+
+
+## A CbCr plane as RG8 (R: Cb, G: Cr), whichever layout it came in.
+static func chroma_pairs(chroma: Image) -> Image:
+	match chroma_layout(chroma):
+		"interleaved":
+			var w := maxi(1, chroma.get_width() / 2)
+			var data := chroma.get_data()
+			data.resize(w * 2 * chroma.get_height())
+			return Image.create_from_data(w, chroma.get_height(), false, Image.FORMAT_RG8, data)
+	var w := chroma.get_width()
+	var h := chroma.get_height()
+	if chroma.get_data().size() == w * h * 2:
+		# RG8, or another two-byte format (LA8): the same bytes, as RG8.
+		return Image.create_from_data(w, h, false, Image.FORMAT_RG8, chroma.get_data())
+	var out := chroma.duplicate() as Image
+	out.convert(Image.FORMAT_RG8)
+	return out
+
+
+static func _format_name(format: int) -> String:
+	match format:
+		Image.FORMAT_L8:
+			return "L8"
+		Image.FORMAT_LA8:
+			return "LA8"
+		Image.FORMAT_R8:
+			return "R8"
+		Image.FORMAT_RG8:
+			return "RG8"
+		Image.FORMAT_RGB8:
+			return "RGB8"
+		Image.FORMAT_RGBA8:
+			return "RGBA8"
+	return "format %d" % format
 
 
 ## Sizes `viewport` to the feed turned `turns` quarter turns clockwise, and
@@ -279,7 +358,8 @@ func _snap() -> void:
 
 
 ## An RGB photo from a camera's separate planes: `luma` (Y, R8) and
-## `chroma` (Cb and Cr, RG8, usually half as big), full-range BT.601 as
+## `chroma` (Cb and Cr, usually half as big, in either chroma_layout),
+## full-range BT.601 as
 ## Android's YUV_420_888 is. Shrunk first so its longest side is at most
 ## `max_side`, which keeps the per-pixel loop short.
 static func photo_from_planes(luma: Image, chroma: Image, max_side: int) -> Image:
@@ -293,8 +373,7 @@ static func photo_from_planes(luma: Image, chroma: Image, max_side: int) -> Imag
 	var y_img := luma.duplicate() as Image
 	y_img.convert(Image.FORMAT_R8)
 	y_img.resize(w, h, Image.INTERPOLATE_BILINEAR)
-	var c_img := chroma.duplicate() as Image
-	c_img.convert(Image.FORMAT_RG8)
+	var c_img := chroma_pairs(chroma)
 	c_img.resize(w, h, Image.INTERPOLATE_BILINEAR)
 	var ys := y_img.get_data()
 	var cs := c_img.get_data()

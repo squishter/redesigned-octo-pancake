@@ -44,7 +44,12 @@ mode for trying out new pattern generation.
   RGBA formats); the preview converts them in a shader and stands them
   upright by the feed's own rotation, and the photo is converted on the CPU
   from the same planes (full-range BT.601), shrunk to 1024 px, not read back
-  from the screen. The status line names the camera format in use. Photo puzzles can't be
+  from the screen. Some phones hand over the CbCr plane as one channel
+  twice as wide (Cb, Cr, Cb, Cr...) instead of two channels; read as two,
+  that turns everything green and blue with no red. The panel reads the
+  plane back once when the feed starts, picks the layout from its bytes per
+  pixel, and decodes either. The status line names the camera format and,
+  after that check, the CbCr plane's format, size and layout. Photo puzzles can't be
   recolored: their colors come from the photo.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
     edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
