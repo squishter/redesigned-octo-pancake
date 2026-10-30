@@ -312,7 +312,21 @@ func _test_completion_rewards() -> void:
 	play._filled = 1
 	play._powers_on.append("double_coins")
 	play._finish(true)
-	play._show_rewards()
+	await create_timer(3.5).timeout
+	_check(play._board.is_celebrating() and not is_instance_valid(play._reward_dialog),
+		"The finale keeps playing until she taps")
+	_check(not play._board.input_enabled, "The board ignores gestures during the finale")
+	var tap := InputEventScreenTouch.new()
+	tap.position = play.size / 2.0
+	tap.pressed = true
+	Input.parse_input_event(tap)
+	await process_frame
+	_check(play._board.is_celebrating(), "Pressing alone doesn't end the finale")
+	tap = tap.duplicate()
+	tap.pressed = false
+	Input.parse_input_event(tap)
+	await process_frame
+	_check(not play._board.is_celebrating(), "Letting go of a tap ends the finale")
 	await _layout_frames()
 	var saved := SaveStore.load_profile()
 	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Double coins and the daily pick are saved before the dialog")

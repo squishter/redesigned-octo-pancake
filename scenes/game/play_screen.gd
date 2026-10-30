@@ -60,6 +60,8 @@ const FLING_DECAY := 4.0
 const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle", "bounce", "comet", "firework", "beam", "halo"]
 const POWER_EFFECTS := ["big_brush", "auto_finish", "free_hand", "double_coins", "finish_gem", "sweep", "finder",
 		"sprinkle"]
+## The finished bar's words once the finale is over.
+const DONE_TEXT := "Beautifully finished. Pinch and pan to admire your work."
 
 ## Set before adding to the tree.
 var puzzle_id := ""
@@ -190,7 +192,7 @@ func _ready() -> void:
 	var done_row := HBoxContainer.new()
 	_done_bar.add_child(done_row)
 	done_row.add_child(UI.icon("trophy", 80))
-	_done_label = UI.label("Beautifully finished. Pinch and pan to admire your work.", 34, GameTheme.GOLD)
+	_done_label = UI.label(DONE_TEXT, 34, GameTheme.GOLD)
 	done_row.add_child(_done_label)
 	_button(done_row, "Rewards", _show_rewards)
 
@@ -401,6 +403,14 @@ func _apply_scroll() -> void:
 ## The gem row's touches: a drag scrolls it (and flings on letting go), a
 ## tap picks the gem under the finger (or lets go of the picked one).
 func _input(event: InputEvent) -> void:
+	if _board.is_celebrating():
+		# Any tap ends the finale and goes no further. It ends on letting go,
+		# so the dialog never sees the press and the tap can't click its buttons.
+		if event is InputEventScreenTouch or event is InputEventMouseButton:
+			get_viewport().set_input_as_handled()
+			if not event.pressed:
+				_show_rewards()
+		return
 	if _powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible):
 		return
 	if not _palette.is_visible_in_tree():
@@ -595,7 +605,8 @@ func _toggle_powers() -> void:
 
 
 func _update_board_input() -> void:
-	_board.input_enabled = not (_powers_panel.visible or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
+	_board.input_enabled = not (_powers_panel.visible or _board.is_celebrating()
+			or (is_instance_valid(_reward_dialog) and _reward_dialog.visible))
 	_row_touch = -1
 	_fling = 0.0
 
@@ -797,14 +808,18 @@ func _finish(celebrate: bool) -> void:
 	var finale: String = profile["settings"].get("finale", "ripple")
 	if not finale in profile["unlocks"].get("finales", ["ripple"]):
 		finale = "ripple"
-	var lasts := _board.celebrate(center, finale)
+	_board.celebrate(center, finale)
+	_done_label.text = "Tap anywhere to finish the celebration."
+	_update_board_input()
 	Input.vibrate_handheld(70, 0.7)
-	get_tree().create_timer(minf(1.2, lasts)).timeout.connect(_show_rewards, CONNECT_ONE_SHOT)
 
 
+## Ends the finale, if it's still playing, and shows the rewards.
 func _show_rewards() -> void:
 	if not _done:
 		return
+	_board.end_celebration()
+	_done_label.text = DONE_TEXT
 	if not is_instance_valid(_reward_dialog):
 		_reward_dialog = CompletionRewards.new()
 		_reward_dialog.reward = _completion_reward.duplicate()
@@ -881,7 +896,9 @@ func _leave() -> void:
 
 ## Android's back button.
 func go_back() -> void:
-	if is_instance_valid(_reward_dialog) and _reward_dialog.visible:
+	if _board.is_celebrating():
+		_show_rewards()
+	elif is_instance_valid(_reward_dialog) and _reward_dialog.visible:
 		_reward_dialog.close()
 	elif _powers_panel.visible:
 		_powers_panel.close()
