@@ -422,7 +422,7 @@ func show_kit(pattern: Dictionary) -> void:
 	var cells: PackedByteArray = pattern["cells"]
 	var palette: Array = pattern["palette"]
 	var shape := "round" if pattern["drill"] == "round" else "square"
-	var d := KIT_CELL * KIT_DRILL
+	var d := GemShapes.drill_length(shape, KIT_CELL * KIT_DRILL)
 	var slots := []
 	for y in h:
 		for x in w:

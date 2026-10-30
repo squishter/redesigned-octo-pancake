@@ -189,7 +189,7 @@ static func kit_slots(picture: Dictionary) -> Array:
 	var palette: Array = grid["palette"]
 	var drill: String = grid["drill"]
 	var cut: String = grid["cut"]
-	var d := KIT_CELL * KIT_DRILL
+	var d := GemShapes.drill_length(drill, KIT_CELL * KIT_DRILL)
 	var slots := []
 	slots.resize(w * h)
 	for y in h:

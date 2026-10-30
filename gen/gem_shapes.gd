@@ -11,6 +11,11 @@ extends RefCounted
 ## `width` wide: oval, marquise, teardrop, kite, lozenge. Baguette and
 ## emerald fill the whole `length` x `width` box (only for gem lines).
 
+## A square's side as a share of `length`: a little over the inscribed square,
+## so it reads as big as the round stones beside it. Kits, whose square drills
+## fill their cell, size their slots by it (see drill_length).
+const SQUARE_SIDE := 0.75
+
 
 static func outline(shape: String, length: float, width: float, segments: int = 24) -> PackedVector2Array:
 	var a := length / 2.0
@@ -38,7 +43,7 @@ static func outline(shape: String, length: float, width: float, segments: int = 
 		"baguette":
 			pts = PackedVector2Array([Vector2(-a, -b), Vector2(a, -b), Vector2(a, b), Vector2(-a, b)])
 		"square":
-			var s := a * 0.75
+			var s := a * SQUARE_SIDE
 			pts = PackedVector2Array([Vector2(-s, -s), Vector2(s, -s), Vector2(s, s), Vector2(-s, s)])
 		"hexagon":
 			for i in 6:
@@ -133,3 +138,9 @@ static func slot_polygon(slot: Dictionary, segments: int = 24) -> PackedVector2A
 	var local := outline(slot["shape"], slot["size"], slot["width"], segments)
 	var xf := Transform2D(slot["rotation"], Vector2(slot["x"], slot["y"]))
 	return xf * local
+
+
+## The slot length that makes a `shape` drill `across` wide edge to edge in
+## a kit's grid: squares draw smaller than their slot (SQUARE_SIDE).
+static func drill_length(shape: String, across: float) -> float:
+	return across / SQUARE_SIDE if shape == "square" else across

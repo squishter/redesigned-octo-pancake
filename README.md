@@ -38,8 +38,13 @@ mode for trying out new pattern generation.
   or a kit of drills, in her unlocked colors. *Take photo…* takes a new
   photo instead (`scenes/game/camera_capture.gd`:
   a full-screen camera view through `CameraServer`, with Switch for the
-  other camera and Turn for the photo's way up; Android asks for the camera
-  permission, which the committed export preset includes). Photo puzzles can't be
+  other camera and Turn for an extra quarter turn; Android asks for the camera
+  permission, which the committed export preset includes). Android sends
+  frames as a Y plane and a half-size CbCr plane (YUV_420_888, picked over
+  RGBA formats); the preview converts them in a shader and stands them
+  upright by the feed's own rotation, and the photo is converted on the CPU
+  from the same planes (full-range BT.601), shrunk to 1024 px, not read back
+  from the screen. The status line names the camera format in use. Photo puzzles can't be
   recolored: their colors come from the photo.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
     edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
@@ -89,7 +94,9 @@ mode for trying out new pattern generation.
   a Finish gem and two Finders.
 - **Diamond kits**: a mandala painted with the theme, turned into a grid of
   round or square drills (whichever are unlocked), played like a collage.
-  Drills fill 98% of their cell, so neighbors almost touch, like a real kit.
+  Drills fill 98% of their cell, so neighbors almost touch, like a real kit
+  (square drills' slots are sized by `GemShapes.drill_length`, since a square
+  draws at 75% of its slot to fit round collage slots).
   *Kit size* in the New puzzle panel (for photo kits too) sets the drills
   on the longer side: Small 50, Medium 90, Large 130 or X-large 250; the
   shorter side follows the picture's shape (an X-large kit can have 62,500

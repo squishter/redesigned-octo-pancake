@@ -2,9 +2,14 @@ class_name CameraCapture
 extends PanelContainer
 ## A full-screen overlay that takes a photo with the device camera through
 ## CameraServer, for photo puzzles (the menu) and the generator lab.
-## The feed is drawn into a SubViewport through a shader that turns any feed
-## type (RGB, YCbCr, or separate Y and CbCr planes) into RGB, so the snapshot
-## is a plain image whatever the platform delivers.
+## The preview is drawn into a SubViewport through a shader that turns any
+## feed type (RGB, YCbCr, or separate Y and CbCr planes, which is what Android
+## sends) into RGB, turned upright. The photo itself is made on the CPU from
+## the camera's own planes (photo_from_planes), not read back from the screen,
+## so it doesn't depend on how the preview was drawn.
+##
+## Which way is up comes from the feed's transform (Godot works it out from
+## the sensor's and the screen's orientation); Turn adds quarter turns on top.
 ##
 ## On Android the export preset needs the CAMERA permission; it is requested
 ## here when the panel opens.
@@ -15,8 +20,10 @@ signal closed
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
 
 ## Largest feed width picked from the camera's formats; more is slow to
-## generate from and adds nothing at kit or collage sizes.
+## convert and adds nothing at kit or collage sizes.
 const MAX_FEED_WIDTH := 1920
+## The photo's longest side (PuzzleMaker shrinks photos to this anyway).
+const PHOTO_MAX := 1024
 const CONVERT_SHADER := """
 shader_type canvas_item;
 
@@ -39,7 +46,7 @@ void fragment() {
 
 var _feeds: Array[CameraFeed] = []
 var _feed_index := 0
-var _turns := 0  # quarter turns clockwise applied to the snapshot
+var _extra_turns := 0  # quarter turns clockwise she added with Turn
 var _viewport: SubViewport
 var _feed_rect: TextureRect
 var _material: ShaderMaterial
@@ -107,7 +114,7 @@ func _ready() -> void:
 ## Android). `captured` follows if she takes a photo, `closed` either way.
 func open() -> void:
 	show()
-	_turns = 1 if OS.get_name() == "Android" else 0  # Android sensors are landscape
+	_extra_turns = 0
 	if OS.get_name() == "Android" and not "android.permission.CAMERA" in OS.get_granted_permissions():
 		_status.text = "Asking for camera permission…"
 		OS.request_permission("android.permission.CAMERA")
@@ -169,30 +176,49 @@ func _activate(feed: CameraFeed) -> void:
 		if other != feed:
 			other.feed_is_active = false
 	var formats := feed.get_formats()
+	var format := ""
 	if not formats.is_empty():
-		feed.set_format(_best_format(formats), {})
+		var best := _best_format(formats)
+		feed.set_format(best, {})
+		var f: Dictionary = formats[best]
+		format = " · %s %d×%d" % [f.get("format", "?"), f.get("width", 0), f.get("height", 0)]
 	feed.feed_is_active = true
 	_main_tex.camera_feed_id = feed.get_id()
 	_cbcr_tex.camera_feed_id = feed.get_id()
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_status.text = "%s (%d of %d)" % [feed.get_name(), _feed_index + 1, _feeds.size()]
+	# The format helps tell camera problems apart.
+	_status.text = "%s (%d of %d)%s" % [feed.get_name(), _feed_index + 1, _feeds.size(), format]
 
 
-## The biggest format no wider than MAX_FEED_WIDTH (or the narrowest).
+## The biggest format no wider than MAX_FEED_WIDTH (or the narrowest),
+## YUV_420_888 first on Android: Godot copies its rows carefully, while its
+## RGBA path assumes rows without padding, which some cameras have.
 static func _best_format(formats: Array) -> int:
 	var best := -1
-	var best_px := 0
+	var best_score := -1
 	var narrowest := 0
 	for i in formats.size():
 		var f: Dictionary = formats[i]
 		var w: int = f.get("width", 0)
-		var px: int = w * int(f.get("height", 0))
-		if w <= MAX_FEED_WIDTH and px > best_px:
+		var score: int = w * int(f.get("height", 0))
+		if str(f.get("format", "")) == "YUV_420_888":
+			score += 1 << 40
+		if w <= MAX_FEED_WIDTH and score > best_score:
 			best = i
-			best_px = px
+			best_score = score
 		if w < int(formats[narrowest].get("width", 0)):
 			narrowest = i
 	return best if best >= 0 else narrowest
+
+
+## Quarter turns clockwise that stand the feed upright: the feed's own
+## rotation (set from the sensor and screen orientation) plus Turn's.
+func _turns() -> int:
+	var turns := _extra_turns
+	if not _feeds.is_empty():
+		var rotation := _feeds[_feed_index].feed_transform.get_rotation()
+		turns += roundi(rotation / (PI / 2.0))
+	return posmod(turns, 4)
 
 
 func _process(_delta: float) -> void:
@@ -201,9 +227,23 @@ func _process(_delta: float) -> void:
 	var feed := _feeds[_feed_index]
 	_material.set_shader_parameter("data_type", feed.get_datatype())
 	var tex_size := Vector2i(_main_tex.get_size())
-	if tex_size.x > 0 and tex_size.y > 0 and _viewport.size != tex_size:
-		_viewport.size = tex_size
-		_feed_rect.size = tex_size
+	if tex_size.x <= 0 or tex_size.y <= 0:
+		return
+	# The feed turned upright inside the viewport, so the preview stands
+	# the way the photo will.
+	lay_out_upright(_feed_rect, _viewport, tex_size, _turns())
+
+
+## Sizes `viewport` to the feed turned `turns` quarter turns clockwise, and
+## turns `rect` (showing the feed, `tex_size` big) about its center to fill it.
+static func lay_out_upright(rect: Control, viewport: SubViewport, tex_size: Vector2i, turns: int) -> void:
+	var upright := tex_size if turns % 2 == 0 else Vector2i(tex_size.y, tex_size.x)
+	if viewport.size != upright:
+		viewport.size = upright
+	rect.size = tex_size
+	rect.pivot_offset = Vector2(tex_size) / 2.0
+	rect.rotation = turns * PI / 2.0
+	rect.position = (Vector2(upright) - Vector2(tex_size)) / 2.0
 
 
 func _switch_camera() -> void:
@@ -213,27 +253,61 @@ func _switch_camera() -> void:
 	_activate(_feeds[_feed_index])
 
 
-## The preview shows the feed as the sensor sees it; the photo is turned
-## this much more.
+## A quarter turn more, for when the camera's idea of up is wrong.
 func _rotate() -> void:
-	_turns = (_turns + 1) % 4
-	_status.text = "The photo will be turned %d° clockwise." % (_turns * 90)
+	_extra_turns = (_extra_turns + 1) % 4
 
 
 func _snap() -> void:
 	if _feeds.is_empty() or _feeds[_feed_index].get_datatype() == CameraFeed.FEED_NOIMAGE:
 		_status.text = "No camera image yet."
 		return
-	await RenderingServer.frame_post_draw
-	var img := _viewport.get_texture().get_image()
+	var img: Image
+	if _feeds[_feed_index].get_datatype() == CameraFeed.FEED_YCBCR_SEP:
+		img = photo_from_planes(_main_tex.get_image(), _cbcr_tex.get_image(), PHOTO_MAX)
+	else:
+		img = _main_tex.get_image()
 	if img == null or img.is_empty():
 		_status.text = "Couldn't read the camera image."
 		return
-	img.convert(Image.FORMAT_RGBA8)
-	for _i in _turns:
+	if img.get_format() != Image.FORMAT_RGB8 and img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	for _i in _turns():
 		img.rotate_90(CLOCKWISE)
 	close()
 	captured.emit(img)
+
+
+## An RGB photo from a camera's separate planes: `luma` (Y, R8) and
+## `chroma` (Cb and Cr, RG8, usually half as big), full-range BT.601 as
+## Android's YUV_420_888 is. Shrunk first so its longest side is at most
+## `max_side`, which keeps the per-pixel loop short.
+static func photo_from_planes(luma: Image, chroma: Image, max_side: int) -> Image:
+	if luma == null or chroma == null or luma.is_empty() or chroma.is_empty():
+		return null
+	var w := luma.get_width()
+	var h := luma.get_height()
+	var k := minf(1.0, float(max_side) / maxi(w, h))
+	w = maxi(1, int(w * k))
+	h = maxi(1, int(h * k))
+	var y_img := luma.duplicate() as Image
+	y_img.convert(Image.FORMAT_R8)
+	y_img.resize(w, h, Image.INTERPOLATE_BILINEAR)
+	var c_img := chroma.duplicate() as Image
+	c_img.convert(Image.FORMAT_RG8)
+	c_img.resize(w, h, Image.INTERPOLATE_BILINEAR)
+	var ys := y_img.get_data()
+	var cs := c_img.get_data()
+	var rgb := PackedByteArray()
+	rgb.resize(w * h * 3)
+	for i in w * h:
+		var y := ys[i]
+		var cb := cs[i * 2] - 128
+		var cr := cs[i * 2 + 1] - 128
+		rgb[i * 3] = clampi(roundi(y + 1.402 * cr), 0, 255)
+		rgb[i * 3 + 1] = clampi(roundi(y - 0.344136 * cb - 0.714136 * cr), 0, 255)
+		rgb[i * 3 + 2] = clampi(roundi(y + 1.772 * cb), 0, 255)
+	return Image.create_from_data(w, h, false, Image.FORMAT_RGB8, rgb)
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
