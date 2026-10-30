@@ -39,7 +39,7 @@ mode for trying out new pattern generation.
   *Camera kit…* take a new photo instead (`scenes/game/camera_capture.gd`:
   a full-screen camera view through `CameraServer`, with Switch for the
   other camera and Turn for the photo's way up; Android asks for the camera
-  permission, which the export preset must include). Photo puzzles can't be
+  permission, which the committed export preset includes). Photo puzzles can't be
   recolored: their colors come from the photo.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
     edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
@@ -169,8 +169,9 @@ earlier version loads through `SaveStore.upgrade()`, which only adds things
 and keeps anything it doesn't recognize; the *Old profiles* check covers
 this.
 
-Buzzes need the `VIBRATE` permission in the Android export preset
-(*Permissions → Vibrate*).
+Buzzes need the `VIBRATE` permission and taking photos the `CAMERA`
+permission; both are on in the committed Android export preset
+(`export_presets.cfg`).
 
 ## Picture sources → puzzles
 
@@ -309,3 +310,43 @@ hold still when it does.
   ```
 
 Lint with [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit): `gdlint gen game scenes tests`.
+
+## Building an APK
+
+`tools/build_apk.sh` builds a signed debug APK from the command line on
+Linux x86_64, with nothing set up beforehand but a JDK 17+ (`java` and
+`keytool`), `curl` and `unzip`:
+
+```sh
+tools/build_apk.sh           # build/paint-with-gems-debug.apk
+```
+
+It uses the committed `export_presets.cfg` (one *Android* preset: package
+`com.squishter.paintwithgems`, arm64-v8a, no Gradle build, camera and vibrate
+permissions, tests and tools left out) and keeps everything else in a cache
+folder (`~/.cache/paint-with-gems-build`, or `BUILD_CACHE`), never touching
+your own Godot settings:
+
+- The Godot editor (`GODOT_VERSION`, default `4.7-stable`) from GitHub.
+- Only the `android_*` templates out of the official export-templates bundle
+  (the bundle itself is about 1 GB; it is deleted after).
+- An Android SDK. A plain APK export only needs `apksigner` from build-tools
+  and a `platform-tools` folder, so `ANDROID_SDK_SOURCE` picks where they
+  come from: `google` (default; sdkmanager from `dl.google.com`), `apt`
+  (Ubuntu/Debian's `apksigner`, `zipalign` and `adb` packages linked into a
+  minimal SDK layout, for machines that can't reach `dl.google.com`, such
+  as Claude's cloud sessions), or `existing` (your `ANDROID_HOME`).
+- A debug keystore made with `keytool`, and Godot's editor settings (SDK,
+  JDK and keystore paths), both in the cache. Godot runs with the
+  `XDG_*_HOME` folders pointed there, which is how it finds them and its
+  templates.
+
+It imports the project first (so `class_name` scripts are registered) and
+then runs `godot --headless --export-debug Android`. Install with
+`adb install -r build/paint-with-gems-debug.apk`.
+
+For a release APK, make a keystore (never commit it; `*.keystore` and
+`*.jks` are ignored), set `GODOT_ANDROID_KEYSTORE_RELEASE_PATH`,
+`GODOT_ANDROID_KEYSTORE_RELEASE_USER` and
+`GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD`, raise `version/code` in the
+preset, and run `tools/build_apk.sh release`.
