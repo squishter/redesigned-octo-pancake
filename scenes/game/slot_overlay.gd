@@ -2,7 +2,8 @@ class_name SlotOverlay
 extends Control
 ## Drawn over the GemBoard3D while playing: every open slot as a thin
 ## outline of its shape with its gem type's number in it. The selected
-## type's open slots stand out (darker outlines over a tint of its color).
+## type's open slots stand out (darker outlines over a tint of its color, or
+## of medium light gray for white and pale gray stones).
 ## Numbers are drawn at screen size, scaling with the zoom, and hide where a
 ## slot is too small to hold them.
 ##
@@ -17,6 +18,12 @@ const OUTLINE_SELECTED := Color(0.13, 0.08, 0.2, 0.95)
 const NUMBER := Color(0.3, 0.25, 0.36, 0.7)
 const NUMBER_SELECTED := Color(0.1, 0.05, 0.16, 1.0)
 const TINT_ALPHA := 0.32
+## White and pale gray stones would tint the paper with nearly its own
+## color, so their slots take a medium light gray instead: stones at least
+## this light and at most this saturated.
+const PALE_LUMINANCE := 0.7
+const PALE_SATURATION := 0.2
+const PALE_TINT := Color(0.55, 0.55, 0.58, 0.45)
 ## Numbers show when the slot is at least this many px across (the font is
 ## about half of it, up to MAX_FONT).
 const MIN_LABEL_PX := 44.0
@@ -277,9 +284,17 @@ func _follow_view() -> void:
 	_labels.queue_redraw()
 
 
+## The selected gem's tint over its open slots: its own color, faint, or
+## PALE_TINT for white and pale gray stones.
+static func tint_for(color: Color) -> Color:
+	if color.get_luminance() >= PALE_LUMINANCE and color.s <= PALE_SATURATION:
+		return PALE_TINT
+	return Color(color, TINT_ALPHA)
+
+
 func _draw_shapes() -> void:
 	if _tint != null and selected >= 0:
-		_shapes.draw_mesh(_tint, null, Transform2D.IDENTITY, Color(type_colors[selected], TINT_ALPHA))
+		_shapes.draw_mesh(_tint, null, Transform2D.IDENTITY, tint_for(type_colors[selected]))
 	for t in _lines.size():
 		if t != selected and _lines[t].size() >= 2:
 			_shapes.draw_multiline(_lines[t], OUTLINE)

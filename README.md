@@ -145,7 +145,10 @@ mode for trying out new pattern generation.
   trail of tiny sparkles and a little burst as it lands, or in another
   unlocked style chosen in *Settings* on the menu (where the finale is
   chosen too), always with a tiny buzz. A drag that doesn't start
-  on the selected gem's slot pans instead, and two fingers pinch. Zoomed
+  on the selected gem's slot pans instead, and two fingers pinch. The
+  selected gem's open slots are tinted with its color, or with a medium
+  light gray for white and pale gray stones (snow, diamond, pearl, ivory...),
+  which would hardly show on the paper. Zoomed
   in, the board pans until an edge reaches the middle of the screen, so
   stones at the very edge can be placed comfortably. When the
   last stone is in, a wave ripples out from the middle while the light
