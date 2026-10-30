@@ -22,6 +22,7 @@ func _ready() -> void:
 	_frame_rate_setting()
 	if show_debug_settings and OS.is_debug_build():
 		_unlock_all_setting()
+		_free_purchases_setting()
 	var done := GameTheme.button(done_text, true)
 	done.pressed.connect(close)
 	actions.add_child(done)
@@ -80,3 +81,20 @@ func _unlock_all_setting() -> void:
 	body.add_child(toggle)
 	body.add_child(UI.label("Every color, shape, cut, theme, picture type, flourish and animation, for "
 			+ "testing. Your own collection is kept and comes back when this is off.", 29, GameTheme.TEXT_DIM))
+
+
+func _free_purchases_setting() -> void:
+	var toggle := GameTheme.button("")
+	toggle.name = "FreePurchases"
+	toggle.icon = GameTheme.icon("coin")
+	toggle.theme_type_variation = "QuietButton"
+	var refresh := func() -> void:
+		toggle.text = "Free purchases: %s" % ("On" if SaveStore.free_purchases_enabled(profile) else "Off")
+	refresh.call()
+	toggle.pressed.connect(func() -> void:
+		SaveStore.set_free_purchases(profile, not SaveStore.free_purchases_enabled(profile))
+		SaveStore.save_profile(profile)
+		refresh.call())
+	body.add_child(toggle)
+	body.add_child(UI.label("Open packs without spending coins or free picks, for testing. "
+			+ "Your balances stay the same. Available only in debug builds.", 29, GameTheme.TEXT_DIM))

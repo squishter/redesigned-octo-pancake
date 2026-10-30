@@ -94,6 +94,14 @@ func _test_unlock_all() -> void:
 	await _layout_frames()
 	var toggle: Button = menu._settings_panel.body.find_child("UnlockAll", true, false)
 	_check(toggle != null and toggle.text.ends_with("Off"), "Debug builds offer unlock-all in settings, off")
+	var free: Button = menu._settings_panel.body.find_child("FreePurchases", true, false)
+	_check(free != null and free.text.ends_with("Off"), "Debug Settings offers free purchases, off by default")
+	free.pressed.emit()
+	_check(SaveStore.free_purchases_enabled(profile) and free.text.ends_with("On"), "Free-purchase toggle turns on immediately")
+	_check(SaveStore.free_purchases_enabled(SaveStore.load_profile()), "Free-purchase toggle persists after reloading")
+	free.pressed.emit()
+	_check(not SaveStore.free_purchases_enabled(profile) and free.text.ends_with("Off"), "Free-purchase toggle turns off immediately")
+	_check(not SaveStore.free_purchases_enabled(SaveStore.load_profile()), "Turning free purchases off persists")
 	var reloads := [0]
 	menu.reload_requested.connect(func() -> void: reloads[0] += 1)
 	toggle.pressed.emit()
@@ -326,6 +334,7 @@ func _test_settings() -> void:
 	menu._settings_panel.open()
 	await _layout_frames()
 	_check(menu._settings_panel.body.find_child("UnlockAll", true, false) == null, "Production settings hide debug unlocks")
+	_check(menu._settings_panel.body.find_child("FreePurchases", true, false) == null, "Production settings hide free purchases")
 	_check_dialog(menu._settings_panel)
 	_check_button_widths(menu, menu.size.x)
 	for cap: int in SaveStore.FPS_CAPS:

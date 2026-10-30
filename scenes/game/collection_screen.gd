@@ -201,11 +201,12 @@ func _update_pack(pack: String) -> void:
 	else:
 		_pack_stock.text = "Always a little more magic" if pack == "powers" else "%d discoveries still to find" % left
 	_pack_index.text = "SWIPE TO SPIN   ·   %02d / %02d" % [Packs.PACKS.keys().find(pack) + 1, Packs.PACKS.size()]
-	_free.visible = Packs.can_use_pick(pack)
-	_free.disabled = sold_out or not Packs.can_use_pick(pack) or Packs.picks(profile) <= 0
-	_buy.disabled = sold_out or Packs.coins(profile) < Packs.price(pack)
-	_buy.theme_type_variation = "" if Packs.can_use_pick(pack) else "PrimaryButton"
-	_buy.text = "%d coins" % Packs.price(pack)
+	var free := SaveStore.free_purchases_enabled(profile)
+	_free.visible = not free and Packs.can_use_pick(pack)
+	_free.disabled = free or sold_out or not Packs.can_use_pick(pack) or Packs.picks(profile) <= 0
+	_buy.disabled = sold_out or (not free and Packs.coins(profile) < Packs.price(pack))
+	_buy.theme_type_variation = "PrimaryButton" if free or not Packs.can_use_pick(pack) else ""
+	_buy.text = "Open free (debug)" if free else "%d coins" % Packs.price(pack)
 
 
 func _open(pack: String, with_pick: bool) -> void:

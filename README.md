@@ -173,6 +173,11 @@ mode for trying out new pattern generation.
   and finale is hers. Her own unlocks are what's saved and come back when
   it's off; anything a pack or reward unlocks meanwhile isn't kept, but coins
   and power-up charges are real.
+  The same debug Settings section offers *Free purchases*: open any available
+  pack without spending coins or free picks, even with an empty wallet.
+  Pack purchases show *Open free (debug)* while it is on. The toggle persists
+  in debug builds; release builds ignore and clear it. Actual balances are
+  preserved, and turning it off restores normal prices and payment rules.
   The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
   which places every open stone at once, fits the whole picture in view
   and plays the finale, for testing finales.

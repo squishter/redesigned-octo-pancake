@@ -101,7 +101,10 @@ static func open(profile: Dictionary, pack: String, with_pick: bool, rng: Random
 		catalog: Dictionary = PACKS) -> Array[Dictionary]:
 	if sold_out(pack, profile, catalog):
 		return []
-	if (with_pick and (not can_use_pick(pack, catalog) or picks(profile) <= 0)
+	if with_pick and not can_use_pick(pack, catalog):
+		return []
+	var free := SaveStore.free_purchases_enabled(profile)
+	if not free and ((with_pick and picks(profile) <= 0)
 			or (not with_pick and coins(profile) < price(pack, catalog))):
 		return []
 	var staged: Dictionary = profile.duplicate(true)
@@ -138,10 +141,11 @@ static func open(profile: Dictionary, pack: String, with_pick: bool, rng: Random
 	for item: Dictionary in rewards:
 		give(profile, item)
 	var wallet: Dictionary = profile["wallet"]
-	if with_pick:
-		wallet["picks"] = picks(profile) - 1
-	else:
-		wallet["coins"] = coins(profile) - price(pack, catalog)
+	if not free:
+		if with_pick:
+			wallet["picks"] = picks(profile) - 1
+		else:
+			wallet["coins"] = coins(profile) - price(pack, catalog)
 	return rewards
 
 

@@ -29,6 +29,8 @@ const FPS_CAPS := [30, 60, 90, 120, 0]
 ## off (or in a release build) she has exactly what she had.
 const UNLOCK_ALL := "debug_unlock_all"
 const REAL_UNLOCKS := "_real_unlocks"
+## Debug purchases never spend the player's actual coins or free picks.
+const FREE_PURCHASES := "debug_free_purchases"
 
 
 static func load_profile() -> Dictionary:
@@ -40,6 +42,7 @@ static func load_profile() -> Dictionary:
 			profile = data
 	upgrade(profile)
 	set_unlock_all(profile, bool(profile["settings"].get(UNLOCK_ALL, false)))
+	set_free_purchases(profile, bool(profile["settings"].get(FREE_PURCHASES, false)))
 	return profile
 
 
@@ -61,6 +64,18 @@ static func set_unlock_all(profile: Dictionary, on: bool) -> void:
 
 static func is_unlock_all(profile: Dictionary) -> bool:
 	return profile.has(REAL_UNLOCKS)
+
+
+static func set_free_purchases(profile: Dictionary, on: bool) -> void:
+	if on and OS.is_debug_build():
+		profile["settings"][FREE_PURCHASES] = true
+	else:
+		profile["settings"].erase(FREE_PURCHASES)
+
+
+## Also guard at purchase time so a copied debug profile cannot enable it in release.
+static func free_purchases_enabled(profile: Dictionary) -> bool:
+	return OS.is_debug_build() and profile.get("settings", {}).get(FREE_PURCHASES, false) == true
 
 
 ## A profile as loaded from JSON (any version, or {} for a new player),
