@@ -7,6 +7,7 @@ const GameTheme := preload("res://scenes/game/game_theme.gd")
 const MainMenu := preload("res://scenes/game/main_menu.gd")
 const CollectionScreen := preload("res://scenes/game/collection_screen.gd")
 const AppScene := preload("res://scenes/game/app.tscn")
+const PlayScreen := preload("res://scenes/game/play_screen.gd")
 var _failures := 0
 var _checks := 0
 
@@ -18,10 +19,12 @@ func _init() -> void:
 func _run() -> void:
 	root.theme = GameTheme.build()
 	await _test_menu_layout()
+	await _test_creation_choices()
 	await _test_carousel()
 	await _test_purchases()
 	await _test_reward_kinds()
 	await _test_transitions()
+	await _test_completion_rewards()
 	_test_camera_helper()
 	print("Menu UI: %d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures else 0)
@@ -61,6 +64,45 @@ func _test_menu_layout() -> void:
 	_check_button_widths(menu, menu.size.x)
 	menu.go_back()
 	_check(not menu._new_panel.visible, "Back closes the new-puzzle form")
+	menu.queue_free()
+	await process_frame
+
+
+func _test_creation_choices() -> void:
+	print("Creation choices, photo controls, and dialog navigation")
+	var menu := MainMenu.new()
+	menu.profile = SaveStore.upgrade({})
+	menu.show_developer_tools = false
+	root.add_child(menu)
+	menu._open_new({})
+	await _layout_frames()
+	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_DISABLED, "Workshop freezes the background menu")
+	menu._mode_buttons[1].pressed.emit()
+	_check(menu._is_kit(), "Diamond kit card changes the puzzle mode")
+	_check((menu._kit_size.get_meta("row") as Control).is_visible_in_tree(), "Kits offer picture size")
+	menu._source.select(menu._source.item_count - 1)
+	menu._source.item_selected.emit(menu._source.selected)
+	await _layout_frames()
+	_check(menu._photo_actions.visible and not menu._start.visible, "Photo kit offers library and camera actions")
+	_check((menu._kit_colors.get_meta("row") as Control).is_visible_in_tree(), "Photo kits offer drill color choices")
+	_check_button_widths(menu, menu.size.x)
+	menu._mode_buttons[0].pressed.emit()
+	_check(menu._is_photo() and not menu._is_kit(), "Changing mode preserves the photo source")
+	_check((menu._subject.get_meta("row") as Control).is_visible_in_tree(), "Photo collage offers composition choices")
+	menu._open_new({"type": "mandala", "theme": "rainbow"})
+	_check(menu._mode_buttons.all(func(button: Button) -> bool: return button.disabled),
+		"Recoloring keeps the original puzzle mode fixed")
+	menu.go_back()
+	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_INHERIT, "Closing a dialog restores menu input")
+	menu._settings_panel.open()
+	await _layout_frames()
+	_check_button_widths(menu, menu.size.x)
+	menu.go_back()
+	_check(not menu._settings_panel.visible, "Back closes settings")
+	_check(menu._camera.player_style, "The player's camera opts into the game styling")
+	var lab_camera := CameraCapture.new()
+	_check(not lab_camera.player_style, "Developer camera styling remains opt-in")
+	lab_camera.free()
 	menu.queue_free()
 	await process_frame
 
@@ -120,6 +162,13 @@ func _test_purchases() -> void:
 	await _layout_frames()
 	_check_button_widths(screen, screen.size.x)
 	_check(screen._carousel.get_parent() == screen._packs_list, "Pack picker is the carousel")
+	screen._show_tab(false)
+	for category: String in ["shapes", "extras", "colors"]:
+		screen._select_collection(category)
+		await _layout_frames()
+		_check_button_widths(screen, screen.size.x)
+	_check(screen._collection_filter == "colors", "Collection categories can be switched without changing unlocks")
+	screen._show_tab(true)
 	var before: int = screen.profile["unlocks"]["colors"].size()
 	screen._open("colors", true)
 	screen._open("colors", true)
@@ -222,6 +271,74 @@ func _test_transitions() -> void:
 	SaveStore.delete_puzzle(app.profile, meta["id"])
 	app.queue_free()
 	await process_frame
+
+
+func _test_completion_rewards() -> void:
+	print("Completion rewards, modal input, saved summaries, and replay safety")
+	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
+	var picture := {"type": "collage", "width": 100, "height": 100, "slots": [
+		{"id": 0, "region": 0, "shape": "round", "cut": "brilliant", "x": 50, "y": 50,
+			"rotation": 0.0, "size": 20.0, "width": 20.0, "target_gem": "ruby", "target_color": Color.RED}],
+		"regions": [{"id": 0, "color": Color.RED}], "puzzle": {"type": "mandala", "theme": "rainbow"}}
+	var meta := SaveStore.add_puzzle(profile, picture)
+	var play := PlayScreen.new()
+	play.profile = profile
+	play.puzzle_id = meta["id"]
+	root.add_child(play)
+	await _layout_frames()
+	play._toggle_powers()
+	await _layout_frames()
+	_check(not play._board.input_enabled, "Power-up dialog blocks board input")
+	_check_button_widths(play, play.size.x)
+	play.go_back()
+	_check(not play._powers_panel.visible and play._board.input_enabled, "Back closes power-ups and restores the board")
+	play._overlay.placed[0] = 1
+	play._filled = 1
+	play._powers_on.append("double_coins")
+	play._finish(true)
+	play._show_rewards()
+	await _layout_frames()
+	var saved := SaveStore.load_profile()
+	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Double coins and the daily pick are saved before the dialog")
+	_check(play._reward_dialog.visible and not play._board.input_enabled, "Completion dialog blocks board input")
+	_check_button_widths(play, play.size.x)
+	var texts := []
+	for label: Label in play._reward_dialog.find_children("*", "Label", true, false):
+		texts.append(label.text)
+	_check("+20 coins" in texts and "+1 free pick" in texts, "Reward cards show the exact coins and pick earned")
+	play._finish(true)
+	play.go_back()
+	_check(play._board.input_enabled, "Admiring the completed picture restores board gestures")
+	play._show_rewards()
+	_check(Packs.coins(profile) == 20 and Packs.picks(profile) == 1, "Reopening rewards never grants them twice")
+	play._reward_dialog.close()
+	play.queue_free()
+	await process_frame
+	var reopened := PlayScreen.new()
+	reopened.profile = saved
+	reopened.puzzle_id = meta["id"]
+	root.add_child(reopened)
+	await _layout_frames()
+	reopened._show_rewards()
+	_check(reopened._reward_dialog.reward.get("coins") == 20, "The earned summary survives reopening the saved puzzle")
+	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Reopening a finished puzzle leaves the wallet unchanged")
+	reopened.queue_free()
+	await process_frame
+	SaveStore.save_progress(meta["id"], PackedByteArray())
+	var replay := PlayScreen.new()
+	replay.profile = saved
+	replay.puzzle_id = meta["id"]
+	root.add_child(replay)
+	replay._overlay.placed[0] = 1
+	replay._filled = 1
+	replay._finish(true)
+	replay._show_rewards()
+	_check(int(replay._reward_dialog.reward["coins"]) == 0 and not replay._reward_dialog.reward["pick"],
+		"Replaying an already rewarded picture shows no new rewards")
+	_check(Packs.coins(saved) == 20 and Packs.picks(saved) == 1, "Replays cannot farm coins or daily picks")
+	replay.queue_free()
+	await process_frame
+	SaveStore.delete_puzzle(saved, meta["id"])
 
 
 func _test_camera_helper() -> void:

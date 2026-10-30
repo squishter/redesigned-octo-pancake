@@ -58,6 +58,7 @@ func _play(id: String) -> void:
 	play.profile = profile
 	play.puzzle_id = id
 	play.back_requested.connect(_show_menu)
+	play.collection_requested.connect(_show_collection)
 	_swap(play)
 
 

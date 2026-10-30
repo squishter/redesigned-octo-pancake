@@ -18,6 +18,8 @@ signal captured(photo: Image)
 signal closed
 
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const GameTheme := preload("res://scenes/game/game_theme.gd")
+const UI := preload("res://scenes/game/ui_widgets.gd")
 
 ## Largest feed width picked from the camera's formats; more is slow to
 ## convert and adds nothing at kit or collage sizes.
@@ -57,6 +59,8 @@ void fragment() {
 }
 """
 
+## The generator keeps its original camera UI; only the player opts in.
+var player_style := false
 var _feeds: Array[CameraFeed] = []
 var _feed_index := 0
 var _extra_turns := 0  # quarter turns clockwise she added with Turn
@@ -78,11 +82,15 @@ func _ready() -> void:
 	var root := VBoxContainer.new()
 	add_child(root)
 	SafeArea.apply(root)
+	if player_style:
+		z_index = 300
+		root.add_child(UI.label("YOUR PHOTO, YOUR MASTERPIECE", 28, GameTheme.MINT, true))
+		root.add_child(UI.label("Find something beautiful", 50, GameTheme.GOLD, true))
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
-	_status.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	_status.add_theme_color_override("font_color", GameTheme.TEXT_DIM if player_style else LabTheme.TEXT_DIM)
 	root.add_child(_status)
 
 	_material = ShaderMaterial.new()
@@ -118,7 +126,9 @@ func _ready() -> void:
 	_button(bar, "Cancel", close)
 	_button(bar, "Switch", _switch_camera)
 	_button(bar, "Turn", _rotate)
-	var snap := _button(bar, "Take photo", _snap)
+	var snap := _button(root if player_style else bar, "Take photo", _snap)
+	if player_style:
+		snap.theme_type_variation = "PrimaryButton"
 	snap.add_theme_color_override("font_color", LabTheme.GOLD)
 
 	CameraServer.camera_feed_added.connect(func(_id: int) -> void: _refresh_feeds())
@@ -392,7 +402,11 @@ static func photo_from_planes(luma: Image, chroma: Image, max_side: int) -> Imag
 
 
 func _button(parent: Control, text: String, action: Callable) -> Button:
-	var b := Button.new()
+	var b := GameTheme.button(text) if player_style else Button.new()
+	if player_style:
+		b.theme_type_variation = "QuietButton"
+		b.add_theme_font_size_override("font_size", 30)
+		b.add_theme_constant_override("icon_max_width", 36)
 	b.text = text
 	b.custom_minimum_size.y = LabTheme.TAP_HEIGHT
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL

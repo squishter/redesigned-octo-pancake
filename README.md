@@ -27,6 +27,18 @@ mode for trying out new pattern generation.
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
   mandala collages, with no frames or collars, placing gems with Pop or
   Fly and the Ripple finale. Everything else comes from packs.
+- **Player UI.** The workshop, saved-puzzle cards, collection categories,
+  settings, camera controls, gem tray, hint meter and power-up dialog share
+  the jewel artwork, gold framing and quiet mint progress meters. Creation
+  uses illustrated mode cards and a color-story preview. Dialogs scroll on
+  smaller screens, keep their actions visible and contain keyboard focus;
+  the board ignores touches while a power-up or reward dialog is open.
+- **Completion rewards.** After the finale, a framed dialog shows the
+  finished picture, exact coins (including a Double coins bonus), the day's
+  free pick when earned, and the resulting wallet. Rewards are saved before
+  the dialog appears. She can admire the picture, visit Collection & packs,
+  or return to the menu. Reopening the summary never pays again; replaying
+  an already rewarded picture explicitly shows that no new reward was given.
 - **Colors and themes.** 109 gem colors, at least 10 of each hue (red,
   orange, yellow, green, teal, blue, purple, pink, brown and neutrals; some,
   like pearl, ivory, jade and turquoise, are opaque stones). The 14 neutrals
@@ -115,7 +127,7 @@ mode for trying out new pattern generation.
   (with 3 the clock waits). *Hint* in the top bar glides the board to the
   selected gem's open slot nearest the middle of the view (never zooming
   out from a closer view) and rings it in gold. The button fills from the
-  left, a shade lighter than itself, as the next hint comes closer.
+  left along a quiet mint meter as the next hint comes closer.
 - **Diamond kits**: a mandala painted with the theme, turned into a grid of
   round or square drills (whichever are unlocked), played like a collage.
   Drills fill 98% of their cell, so neighbors almost touch, like a real kit
@@ -140,7 +152,8 @@ mode for trying out new pattern generation.
   how far along it is, and can be continued, restarted (asks "Sure?"
   first), recolored (the same picture made again in another unlocked theme,
   saved as a new puzzle beside the original) or deleted. *Generator lab
-  (debug)* at the bottom opens the lab; its *‹ Menu* button comes back.
+  (debug)* at the bottom opens the lab in editor builds only; exported apps
+  omit that launcher. The generator and its camera retain their developer UI.
 - **Playing.** Every gem type (a shape in a cut and a color) gets a number,
   the most used first. Open slots show as thin outlines of their shape with
   the number inside, drawn at screen size so it grows as you zoom, and

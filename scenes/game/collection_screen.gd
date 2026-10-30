@@ -13,10 +13,11 @@ extends Control
 signal back_requested
 
 const GameTheme := preload("res://scenes/game/game_theme.gd")
+const UI := preload("res://scenes/game/ui_widgets.gd")
 const ICON_PX := 128
 const ICON_CELL := 100.0
 const ICON_COLUMNS := 10
-const CELL_SIZE := Vector2(150, 196)
+const CELL_SIZE := Vector2(176, 224)
 ## Shapes in Collection are shown in these colors, one per shape in turn.
 const SHAPE_COLORS := ["sapphire", "ruby", "sunflower", "leaf", "amethyst", "tangerine", "diamond", "indigo"]
 ## Locked gems are drawn in this flat color: their outline, nothing more.
@@ -63,6 +64,7 @@ var _pack_index: Label
 var _free: Button
 var _buy: Button
 var _opening: PackOpening
+var _collection_filter := "colors"
 
 
 func _ready() -> void:
@@ -297,8 +299,40 @@ static func _stone(shape: String, cut: String, color: Color, gem: String) -> Dic
 
 func _fill_collection() -> void:
 	_clear(_collection_list)
+	_collection_list.add_child(UI.label("YOUR JEWEL BOX", 27, GameTheme.MINT, true))
+	_collection_list.add_child(UI.label("Little discoveries, all yours", 52, GameTheme.GOLD, true))
+	var navigation := HBoxContainer.new()
+	_collection_list.add_child(navigation)
+	for entry: Array in [["colors", "Gem colors", "gem"], ["shapes", "Shapes & cuts", "collage"],
+			["extras", "Discoveries", "sparkle"]]:
+		var tab := GameTheme.button(entry[1])
+		tab.icon = GameTheme.icon(entry[2])
+		tab.add_theme_constant_override("icon_max_width", 38)
+		tab.add_theme_font_size_override("font_size", 30)
+		tab.theme_type_variation = "ChoiceButton"
+		tab.toggle_mode = true
+		tab.set_pressed_no_signal(_collection_filter == entry[0])
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.pressed.connect(_select_collection.bind(entry[0]))
+		navigation.add_child(tab)
 	var unlocks: Dictionary = profile["unlocks"]
+	match _collection_filter:
+		"colors":
+			_collection_colors(unlocks)
+		"shapes":
+			_collection_shapes(unlocks)
+		_:
+			_collection_extras(unlocks)
 
+
+func _select_collection(category: String) -> void:
+	_collection_filter = category
+	_fill_collection()
+	(_collection_view as ScrollContainer).scroll_vertical = 0
+	GameTheme.appear(_collection_view)
+
+
+func _collection_colors(unlocks: Dictionary) -> void:
 	var colors := GemCatalog.all_colors()
 	var colors_owned := colors.filter(func(g: Dictionary) -> bool: return g["id"] in unlocks["colors"])
 	_heading(_collection_list, "Gem colors", colors_owned.size(), colors.size())
@@ -311,6 +345,8 @@ func _fill_collection() -> void:
 			var have: bool = g["id"] in unlocks["colors"]
 			color_flow.add_child(_gem_cell(g["id"], g["name"] if have else "?", have))
 
+
+func _collection_shapes(unlocks: Dictionary) -> void:
 	var pairs := GemCatalog.all_cuts()
 	var owned := 0
 	for pair: Array in pairs:
@@ -325,6 +361,8 @@ func _fill_collection() -> void:
 			var have := GemCatalog.has_cut(unlocks, shape, cut)
 			flow.add_child(_gem_cell("%s|%s" % [shape, cut], cut if have else "?", have))
 
+
+func _collection_extras(unlocks: Dictionary) -> void:
 	# Themes come with their colors: a locked one shows only the colors
 	# she has found so far, and how many it needs.
 	var themes: Array = GemCatalog.unlocked_themes(unlocks)
@@ -332,16 +370,12 @@ func _fill_collection() -> void:
 	_note(_collection_list, "A theme is yours once you have all its colors.")
 	for t: String in GemCatalog.THEMES:
 		var have := GemCatalog.has_theme(unlocks, t)
-		var row := HBoxContainer.new()
-		_collection_list.add_child(row)
-		var name_label := Label.new()
 		var gems: Array = GemCatalog.THEMES[t]["gems"]
 		var found := gems.filter(func(g: String) -> bool: return g in unlocks["colors"]).size()
-		name_label.text = GemCatalog.theme_name(t) if have else "?  (%d / %d colors)" % [found, gems.size()]
-		name_label.custom_minimum_size.x = 400
-		name_label.add_theme_color_override("font_color", GameTheme.TEXT if have else GameTheme.TEXT_DIM)
-		row.add_child(name_label)
-		row.add_child(_swatches(t, 48.0, not have, unlocks["colors"]))
+		var title := GemCatalog.theme_name(t) if have else "An undiscovered color story"
+		var copy := UI.item(_collection_list, title, "%d / %d colors collected" % [found, gems.size()],
+			"palette" if have else "lock", have)
+		copy.add_child(_swatches(t, 44, not have, unlocks["colors"]))
 
 	# Every other kind of unlockable, as a list (a new kind shows up here).
 	for kind: String in Unlockables.KINDS:
@@ -371,27 +405,32 @@ func _kind_section(kind: String) -> void:
 
 ## A gem in Collection: rendered when she has it, else only its outline.
 func _gem_cell(key: String, caption: String, have: bool) -> Control:
+	var card := UI.panel(false, 12)
+	card.custom_minimum_size = CELL_SIZE
+	card.size_flags_horizontal = Control.SIZE_FILL
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = CELL_SIZE
-	box.add_theme_constant_override("separation", 0)
+	box.add_theme_constant_override("separation", 8)
+	card.add_child(box)
+	var art_size := CELL_SIZE.x - 24
 	if have:
 		var icon := TextureRect.new()
 		icon.texture = _icons.get(key)
-		icon.custom_minimum_size = Vector2(CELL_SIZE.x, CELL_SIZE.x)
+		icon.custom_minimum_size = Vector2.ONE * art_size
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		box.add_child(icon)
 	else:
 		var shape := key.split("|")[0] if "|" in key else "round"
-		box.add_child(Silhouette.new(_stone(shape, "", Color.BLACK, ""), CELL_SIZE.x / ICON_CELL))
+		box.add_child(Silhouette.new(_stone(shape, "", Color.BLACK, ""), art_size / ICON_CELL))
 	var label := Label.new()
 	label.text = caption
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE - 6)
+	label.add_theme_font_size_override("font_size", 25)
 	label.add_theme_color_override("font_color", GameTheme.TEXT if have else GameTheme.TEXT_DIM)
 	box.add_child(label)
-	return box
+	card.tooltip_text = caption if have else "A little discovery still to find"
+	return card
 
 
 ## A theme's colors as a strip of squares; when `hidden`, only the ones in
@@ -409,32 +448,22 @@ func _swatches(theme_id: String, px: float, hidden := false, shown: Array = []) 
 
 
 func _heading(parent: Control, text: String, have: int, total: int) -> void:
-	var l := Label.new()
-	l.text = text if total < 0 else "%s  %d / %d" % [text, have, total]
-	l.add_theme_font_size_override("font_size", 48)
-	l.add_theme_color_override("font_color", GameTheme.GOLD)
-	parent.add_child(l)
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	row.add_child(UI.label(text, 44, GameTheme.GOLD))
+	if total >= 0:
+		var count := UI.label("%d / %d" % [have, total], 30, GameTheme.MINT)
+		count.size_flags_horizontal = Control.SIZE_SHRINK_END
+		row.add_child(count)
+		parent.add_child(UI.progress(float(have) / maxi(1, total)))
 
 
 func _subheading(parent: Control, text: String, bright := true) -> void:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE)
-	l.add_theme_color_override("font_color", GameTheme.TEXT if bright else GameTheme.TEXT_DIM)
-	parent.add_child(l)
+	parent.add_child(UI.label(text.to_upper(), 28, GameTheme.MINT if bright else GameTheme.TEXT_DIM))
 
 
 func _item_row(parent: Control, title: String, about: String, have: bool) -> void:
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 0)
-	parent.add_child(box)
-	var t := Label.new()
-	t.text = title
-	t.add_theme_color_override("font_color", GameTheme.TEXT if have else GameTheme.TEXT_DIM)
-	box.add_child(t)
-	var a := _note(box, about)
-	if not have:
-		a.modulate = Color(1, 1, 1, 0.6)
+	UI.item(parent, title if have else "Undiscovered", about, "sparkle" if have else "lock", have)
 
 
 func _flow(parent: Control) -> HFlowContainer:
@@ -460,6 +489,7 @@ func _scroll(parent: Control) -> ScrollContainer:
 
 func _clear(node: Node) -> void:
 	for child in node.get_children():
+		node.remove_child(child)
 		child.queue_free()
 
 

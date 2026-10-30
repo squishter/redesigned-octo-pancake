@@ -63,6 +63,18 @@ static func build() -> Theme:
 	theme.set_stylebox("focus", "LineEdit", focus)
 	theme.set_stylebox("panel", "PopupMenu", _field_box(PANEL))
 	theme.set_stylebox("hover", "PopupMenu", _field_box(FIELD_PRESSED))
+	theme.set_icon("arrow", "OptionButton", icon("chevron_down"))
+	for variation: String in ["QuietButton", "ChoiceButton"]:
+		theme.set_type_variation(variation, "Button")
+		for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+			var style := _field_box(FIELD if state == "normal" else FIELD_PRESSED)
+			if state == "disabled":
+				style.bg_color = PANEL
+			if state in ["pressed", "hover_pressed"]:
+				style.border_color = GOLD
+				style.set_border_width_all(3)
+			theme.set_stylebox(state, variation, style)
+		theme.set_stylebox("focus", variation, focus)
 	var panel := StyleBoxFlat.new()
 	panel.bg_color = PANEL
 	panel.border_color = Color("#45526a")
@@ -128,6 +140,10 @@ static func glyph_for(text: String) -> String:
 		return "settings"
 	if "power" in lower:
 		return "power"
+	if "hint" in lower:
+		return "hint"
+	if "fit" in lower:
+		return "fit"
 	if "recolor" in lower:
 		return "palette"
 	if "restart" in lower:
