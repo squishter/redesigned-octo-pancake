@@ -30,5 +30,5 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = gem_color(normalize(w_normal), l_pos.xz, stone, COLOR, shine);
+	ALBEDO = gem_color(normalize(w_normal), l_pos.xz, stone, COLOR, shine, true);
 }

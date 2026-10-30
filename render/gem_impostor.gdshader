@@ -15,6 +15,11 @@ render_mode unshaded, cull_disabled;
 // them: the UV of its -1..1 square's corner and its size.
 uniform sampler2D facets : filter_linear, repeat_disable;
 instance uniform vec4 facet_tile = vec4(0.0, 0.0, 1.0, 1.0);
+// Points shaded per pixel (1, 2 or 4), and whether light through the stone
+// splits per color. Two, without the split, look as the mesh does at a few
+// px (its fire is too fine to see) for well under half the work of four.
+uniform int samples = 2;
+uniform bool fire = false;
 
 // As in gem.gdshader; and the stone's transform for normals.
 varying vec3 l_pos;
@@ -41,7 +46,7 @@ vec4 shade(vec2 at, vec2 p, vec4 color) {
 	vec4 facet = textureLod(facets, at, 0.0);
 	vec3 n = vec3(facet.r * 2.0 - 1.0, 0.0, facet.g * 2.0 - 1.0);
 	n.y = sqrt(max(1.0 - dot(n.xz, n.xz), 0.0));
-	return vec4(gem_color(normalize(normal_matrix * n), p, stone, color, shine), 1.0) * facet.b;
+	return vec4(gem_color(normalize(normal_matrix * n), p, stone, color, shine, fire), 1.0) * facet.b;
 }
 
 void fragment() {
@@ -55,8 +60,9 @@ void fragment() {
 	vec2 px = dFdx(l_pos.xz);
 	vec2 py = dFdy(l_pos.xz);
 	vec4 sum = vec4(0.0);
-	for (int k = 0; k < 4; k++) {
-		vec2 o = k == 0 ? vec2(-0.125, -0.375) : k == 1 ? vec2(0.375, -0.125) : k == 2 ? vec2(0.125, 0.375)
+	for (int k = 0; k < samples; k++) {
+		vec2 o = samples == 1 ? vec2(0.0) : samples == 2 ? (k == 0 ? vec2(-0.25, -0.25) : vec2(0.25, 0.25))
+				: k == 0 ? vec2(-0.125, -0.375) : k == 1 ? vec2(0.375, -0.125) : k == 2 ? vec2(0.125, 0.375)
 				: vec2(-0.375, 0.125);
 		sum += shade(at + o.x * dx + o.y * dy, l_pos.xz + o.x * px + o.y * py, COLOR);
 	}

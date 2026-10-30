@@ -71,8 +71,9 @@ vec3 through(vec3 n, vec3 pav, float ior) {
 
 // A stone's color where its surface faces `facing` (world space, toward the
 // viewer) at local point p (outline radius 1): `stone` and `color` are its
-// instance data (see gem.gdshader), `shine` the light ripple passing.
-vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine) {
+// instance data (see gem.gdshader), `shine` the light ripple passing. With
+// `fire` off, the light through it isn't split per color (too small to see).
+vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine, bool fire) {
 	vec3 n = facing;
 	if (n.y < 0.0) {
 		n = -n;
@@ -104,9 +105,13 @@ vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine) {
 	} else {
 		vec3 pav = pavilion(p, n, cut, stone.x);
 		vec3 body;
-		body.r = studio_at(through(n, pav, ior - disp)).r;
-		body.g = studio_at(through(n, pav, ior)).g;
-		body.b = studio_at(through(n, pav, ior + disp)).b;
+		if (fire) {
+			body.r = studio_at(through(n, pav, ior - disp)).r;
+			body.g = studio_at(through(n, pav, ior)).g;
+			body.b = studio_at(through(n, pav, ior + disp)).b;
+		} else {
+			body = studio_at(through(n, pav, ior));
+		}
 		// Colored stones soak up light on the way through, deepest in the middle.
 		float depth = 1.0 + 0.7 * rim;
 		vec3 absorb = pow(max(tint, vec3(0.001)), vec3(depth));

@@ -59,8 +59,10 @@ void fragment() {
 	float edge = 1.0 - smoothstep(span * 0.7, span * 0.97, max(abs(lp.x), abs(lp.y)));
 	shade *= edge;
 	focus *= edge;
+	// Nothing to add here: written fully clear rather than discarded, which
+	// would keep phones from skipping the pixels hidden under stones.
 	if (shade < 0.004 && focus <= 0.0) {
-		discard;
+		shade = 0.0;
 	}
 	vec3 light = vec3(0.0);
 	if (focus > 0.0) {
