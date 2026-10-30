@@ -493,6 +493,11 @@ func get_view_texture() -> ViewportTexture:
 	return _viewport.get_texture()
 
 
+## The viewport the board renders in (for measuring it, as PerfReadout does).
+func render_viewport_rid() -> RID:
+	return _viewport.get_viewport_rid()
+
+
 ## For a board kept off screen, whose picture is used elsewhere (icons):
 ## renders `fps` times a second, however its light moves (0: as usual). It
 ## renders off screen either way: nothing waits for the board to be drawn.

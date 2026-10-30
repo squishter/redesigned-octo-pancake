@@ -42,6 +42,7 @@ var _show_lines: CheckBox
 var _show_3d: CheckBox
 var _canvas: PreviewCanvas
 var _board: GemBoard3D
+var _perf: PerfReadout
 ## The picture the 3D board should show (built when it first shows it).
 var _board_picture: Dictionary = {}
 var _board_stale := false
@@ -102,6 +103,11 @@ func _ready() -> void:
 	_board.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_board.visible = false
 	root.add_child(_board)
+	# Over the board (see PerfReadout), when Readout in the Options is on.
+	_perf = PerfReadout.new()
+	_perf.board = _board
+	_perf.position = Vector2(24.0, 150.0)
+	add_child(_perf)
 
 	# Options: hidden until asked for, and scrolls when taller than its share.
 	var panel := PanelContainer.new()
@@ -135,6 +141,15 @@ func _ready() -> void:
 	shadows.toggled.connect(func(on: bool) -> void: _board.shadows = on)
 	_fill_row(shadows)
 	controls.add_child(shadows)
+	_label(controls, "Readout")
+	var readout := CheckBox.new()
+	readout.text = "Performance"
+	readout.button_pressed = PerfReadout.shown
+	readout.toggled.connect(func(on: bool) -> void:
+		if on != PerfReadout.shown:
+			_perf.toggle())
+	_fill_row(readout)
+	controls.add_child(readout)
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())

@@ -342,6 +342,15 @@ light's slow drift changes it. The off-screen icon sheets that the gem row
 and the Collection cut their icons from render 10 times a second
 (`set_always_render(GemIcons.FPS)`). `render_count` counts a board's renders.
 
+For judging speed on a phone there is a performance readout
+(`scenes/game/perf_readout.gd`, off by default): hold the progress line
+("12 / 340 gems") on the play screen for a moment, or tick *Readout* in
+the generator lab's Options. It stays on for the session and shows frames
+a second, frame time and the last frame's process time; the board's renders
+a second and GPU time per render (and the whole screen's); and the
+triangles and draw calls of the board's last render and of the whole last
+frame.
+
 | File | What it does |
 | --- | --- |
 | `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). For play, stones can start hidden, pop in when placed (`fill_slot`) and pulse in waves when the picture is done (`celebrate`, repeating until `end_celebration`); a `stroke_filter` turns touches into strokes instead of pans, and `view_transform()` maps the board onto the screen for drawing over it. White stones are opaque, with a soft glaze, so they read apart from clear diamonds. Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |
