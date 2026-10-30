@@ -47,8 +47,9 @@ const PULSE_TIME := 0.6
 const CELEBRATE_TIME := 1.4
 ## A finale's waves repeat, resting this long between them, until it ends.
 const FINALE_REST := 0.6
-## A stone that flew in settles from a little too big over this long.
+## A stone that flew in settles from LAND_SWELL too big over this long.
 const LAND_TIME := 0.18
+const LAND_SWELL := 0.15
 ## How far a pop overshoots (the usual "back" easing constant).
 const OVERSHOOT := 1.70158
 ## Gem colors cut as opaque polished stones rather than see-through ones,
@@ -447,7 +448,9 @@ func fill_slot(i: int) -> void:
 ## Shows one stone that has just flown in, settling into place.
 func land_slot(i: int) -> void:
 	_anims[i] = [_clock, 1]
-	_step_anims()
+	# Its first step only: stepping every stone here would make a crowd of
+	# landings in one frame cost the square of their number.
+	_apply_scale(i, 1.0 + LAND_SWELL)
 
 
 ## Draws only the stones, no paper, over a transparent background (for
@@ -578,7 +581,7 @@ func _step_anims() -> void:
 		if t < 0.0:
 			continue
 		var u := minf(t / (POP_TIME if a[1] == 0 else LAND_TIME), 1.0)
-		var f := 1.0 + 0.15 * (1.0 - u) * (1.0 - u)
+		var f := 1.0 + LAND_SWELL * (1.0 - u) * (1.0 - u)
 		if a[1] == 0:
 			f = 1.0 + (OVERSHOOT + 1.0) * pow(u - 1.0, 3.0) + OVERSHOOT * pow(u - 1.0, 2.0)
 		_apply_scale(i, f)

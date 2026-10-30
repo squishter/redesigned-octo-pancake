@@ -467,8 +467,10 @@ frame.
 
 - Placement animation regressions compare movement, size/rotation easing and
   landing times against main at `7f17c8c`, including panning during a flight.
-  They also cover rapid strokes, effect cleanup, leaving mid-flight, saved
-  progress and completion rewards. The CI job runs them with real Vulkan
+  They also cover rapid strokes, queued crowds (spread, off-screen and
+  expired gems, each landing exactly once), 300-stone Big brush strokes on
+  the play screen, effect cleanup, leaving mid-flight, saved progress and
+  completion rewards. The CI job runs them with real Vulkan
   shader compilation as well as the menu and pack checks.
 
   ```sh
@@ -491,8 +493,19 @@ placement durations, trajectories and size/rotation easing are preserved.
 `GemFlights` owns timing and emits one landing event per gem. The visual helper
 `scenes/game/gem_placement_fx.gd` draws the effects; Beam's feathered shaft uses
 one shader quad. Landing glints last 0.4 s, follow the board during pans and are
-capped at 96 independently of the existing 48-flight limit. They never delay
-puzzle completion. Particle cleanup disconnects safely when leaving a board.
+capped at 240, drawn with fewer sparks past 60 at once. They never delay
+puzzle completion.
+
+Up to 160 gems fly at once. A Big brush stroke can place hundreds in a
+moment, so a frame's first few gems fly straight away and the rest wait in a
+queue: each frame, while there is room (at most 360 launches a second, with a
+burst of 32), the waiting gems on screen where the fewest are flying go first,
+then the longest waiting, so the flights spread over the whole stroke. A gem
+whose slot is off screen, or that has waited 0.3 s, lands without flying, with
+its glint. Gem sprites and beam shafts are reused rather than created per gem;
+trails are drawn sparkles (at most 384 over all flights) rather than a particle
+emitter per gem; at most 32 beams show a full shaft. A crowd of landings no
+longer steps every settling stone on the board once per landing.
 
 ## Building an APK
 
