@@ -61,9 +61,14 @@ const GIRDLE_HEIGHT := 0.45
 ## itself is drawn flat. It keeps a board of stones from all flashing alike.
 const TILT_MAX_DEG := 15.0
 const CROWN_HEIGHT := 0.3
-## Shadow and sparkle planes, in stone half-sizes (shadows must cover the
-## farthest the light can push them).
-const SHADOW_SPAN := 2.6
+## Shadow and sparkle planes, in stone half-sizes. Shadows (with the light
+## their stone focuses) fade out by SHADOW_FADE from their stone, and each
+## draws on a plane SHADOW_SPAN each way that gem_shadow.gdshader moves
+## toward where they fall (up to SHADOW_SHIFT): the smallest that holds them
+## for any light (MIN_KEY_ELEVATION up) and tilt (TILT_MAX_DEG), and a little more.
+const SHADOW_FADE := 2.6
+const SHADOW_SPAN := 1.75
+const SHADOW_SHIFT := 1.05
 const SPARKLE_SPAN := 1.7
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
@@ -207,7 +212,7 @@ func _init() -> void:
 	_gem_material.shader = GEM_SHADER
 	_shadow_material.shader = SHADOW_SHADER
 	_shadow_material.render_priority = -1
-	_shadow_material.set_shader_parameter("span", SHADOW_SPAN)
+	_shadow_material.set_shader_parameter("span", SHADOW_FADE)
 	_sparkle_material.shader = SPARKLE_SHADER
 	_sparkle_material.render_priority = 1
 	_paper_material.shader = PAPER_SHADER
@@ -579,6 +584,8 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	var all := range(slots.size())
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
+	var reach := SHADOW_SPAN + SHADOW_SHIFT
+	shadow_plane.custom_aabb = AABB(Vector3(-reach, -0.1, -reach), Vector3(reach * 2.0, 0.2, reach * 2.0))
 	_add_layer(shadow_plane, _shadow_material, slots, all, "shadow")
 	if _flares:
 		var sparkle_plane := PlaneMesh.new()

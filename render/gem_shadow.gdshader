@@ -1,18 +1,20 @@
 // Under each stone, on the paper: its soft shadow, cast away from the key
 // light by how high the stone stands, and inside it the colored light the
 // stone focuses (caustics), shifting as the light moves. Drawn on a plane
-// SPAN stone half-sizes across (the board scales each plane to its stone's
-// half-length and half-width), so local units are the stone's own. With
-// shadow_strength 0 only the light is left.
+// GemBoard3D.SHADOW_SPAN stone half-sizes each way (the board scales each
+// plane to its stone's half-length and half-width), so local units are the
+// stone's own; the plane moves toward where the shade and light fall, just
+// far enough that it always holds them. With shadow_strength 0 only the
+// light is left.
 shader_type spatial;
 render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled;
 
 #include "res://render/gem_light.gdshaderinc"
 
 uniform float shadow_strength = 1.0;
-// Half the plane's width, in stone half-sizes: everything fades out before
-// its edge, so no shadow is ever cut square.
-uniform float span = 2.2;
+// How far from the stone everything has faded out, in stone half-sizes
+// (GemBoard3D.SHADOW_FADE), so no shadow is ever cut square.
+uniform float span = 2.6;
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y height of its top above the
 // paper (board units), zw the xz of its tilted top's normal (see as_tilted).
@@ -26,13 +28,16 @@ varying vec4 stone;
 
 void vertex() {
 	stone = INSTANCE_CUSTOM;
-	lp = VERTEX.xz;
 	mat3 to_local = inverse(mat3(MODEL_MATRIX));
 	vec3 lean = -vec3(key_dir.x, 0.0, key_dir.z) / max(key_dir.y, 0.25) * stone.y;
 	off = (to_local * lean).xz;
 	key_tilted = as_tilted(key_dir, stone.zw);
 	vec3 bend = -vec3(key_tilted.x, 0.0, key_tilted.z) / max(key_tilted.y, 0.25) * stone.y;
 	focus_off = (to_local * bend).xz;
+	// Centered here, a plane SHADOW_SPAN each way holds the shade and the
+	// focused light for any light and tilt; lp stays relative to the stone.
+	VERTEX.xz += off * 1.15;
+	lp = VERTEX.xz;
 }
 
 void fragment() {
