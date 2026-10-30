@@ -175,13 +175,16 @@ func _stop() -> void:
 func _refresh_feeds() -> void:
 	if not visible:
 		return
-	_feeds.clear()
-	for feed in CameraServer.feeds():
-		# Back cameras first: that's what you point at a picture.
-		if feed.get_position() == CameraFeed.FEED_BACK:
-			_feeds.push_front(feed)
-		else:
-			_feeds.append(feed)
+	_feeds.assign(CameraServer.feeds())
+	# Back cameras first (that's what you point at a picture), then by id:
+	# on Android "0" is the main back camera, and higher ids are extra
+	# lenses (wide, macro, depth, monochrome) that can deliver odd colors.
+	_feeds.sort_custom(func(a: CameraFeed, b: CameraFeed) -> bool:
+		var a_back := a.get_position() == CameraFeed.FEED_BACK
+		var b_back := b.get_position() == CameraFeed.FEED_BACK
+		if a_back != b_back:
+			return a_back
+		return _camera_number(a) < _camera_number(b))
 	if _feeds.is_empty():
 		_status.text = "No camera found (waiting for one to connect)."
 		return
@@ -209,6 +212,13 @@ func _activate(feed: CameraFeed) -> void:
 	_status.text = _feed_text
 	_chroma = ""
 	_chroma_check_at = Time.get_ticks_msec() + 600
+
+
+## The camera's id from its feed name ("0 | BACK" on Android), or a big
+## number when it has none.
+static func _camera_number(feed: CameraFeed) -> int:
+	var head := feed.get_name().get_slice("|", 0).strip_edges()
+	return head.to_int() if head.is_valid_int() else 1 << 20
 
 
 ## The biggest format no wider than MAX_FEED_WIDTH (or the narrowest),
@@ -266,8 +276,28 @@ func _check_chroma() -> void:
 		return
 	_chroma = chroma_layout(c)
 	_material.set_shader_parameter("chroma_interleaved", _chroma == "interleaved")
-	_status.text = "%s · CbCr %s %d×%d (%s)" % [_feed_text, _format_name(c.get_format()), c.get_width(),
-			c.get_height(), _chroma]
+	_status.text = "%s · CbCr %s %d×%d (%s) · %s" % [_feed_text, _format_name(c.get_format()), c.get_width(),
+			c.get_height(), _chroma, chroma_stats(chroma_pairs(c))]
+
+
+## Cb and Cr's average and range over a sample of a CbCr plane (RG8): both
+## sit near 128 in an ordinary scene, so this shows a broken plane at once.
+static func chroma_stats(pairs: Image) -> String:
+	var data := pairs.get_data()
+	var n := data.size() / 2
+	var sums := [0, 0]
+	var lo := [255, 255]
+	var hi := [0, 0]
+	var count := 0
+	for i in range(0, n, 97):
+		for ch in 2:
+			var v := data[i * 2 + ch]
+			sums[ch] += v
+			lo[ch] = mini(lo[ch], v)
+			hi[ch] = maxi(hi[ch], v)
+		count += 1
+	count = maxi(count, 1)
+	return "Cb %d (%d-%d), Cr %d (%d-%d)" % [sums[0] / count, lo[0], hi[0], sums[1] / count, lo[1], hi[1]]
 
 
 ## How a CbCr plane's bytes are laid out: "pairs" (two channels per pixel,
