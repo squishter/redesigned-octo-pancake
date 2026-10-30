@@ -333,6 +333,13 @@ light over the stones from one side to the other, while it always stays
 generally overhead (at least 40° above the paper). The camera never moves. Caustics depend on the light's direction only, so they
 hold still when it does.
 
+The game runs at most 45 frames a second (`application/run/max_fps` in
+`project.godot`; change it there, e.g. to 30). The board's SubViewport only
+renders when a frame is due: every frame while something moves (a touch, a
+pan or pinch, a glide, stones popping in or pulsing, the finale's sweep, the
+phone turning), and 30 times a second (`GemBoard3D.IDLE_FPS`) while only the
+light's slow drift changes it. `render_count` counts its renders.
+
 | File | What it does |
 | --- | --- |
 | `gem_board_3d.gd` | `GemBoard3D`, a `SubViewportContainer`: `show_collage(picture)` or `show_kit(pattern)` (each drill a round or square brilliant). For play, stones can start hidden, pop in when placed (`fill_slot`) and pulse in waves when the picture is done (`celebrate`, repeating until `end_celebration`); a `stroke_filter` turns touches into strokes instead of pans, and `view_transform()` maps the board onto the screen for drawing over it. White stones are opaque, with a soft glaze, so they read apart from clear diamonds. Stones of one shape and cut share a mesh and draw as one `MultiMesh`, with their color, refractive index (pale stones read as diamonds, with more fire) and cut per instance. Moves the key and fill lights with time and with the phone's turn since the picture appeared, each sensor for one thing so they never pull against each other: gravity for tilting and rolling, the gyroscope for spinning about the vertical (both enabled in the project settings). The lights glide to new directions; glow blooms the glints. Zooms in up to 40×. `shadows` turns the shadows off (their caustic light stays). Pinch, drag, double-tap and the mouse wheel zoom and pan, like the 2D preview. |

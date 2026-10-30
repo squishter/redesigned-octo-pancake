@@ -16,6 +16,7 @@ run/main_scene="res://scenes/game/app.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+run/max_fps=45
 
 [display]
 

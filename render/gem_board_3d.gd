@@ -86,6 +86,14 @@ const TURN_GAIN := 2.0
 ## How quickly gravity readings and the light settle (per second).
 const SENSOR_SMOOTH := 6.0
 const LIGHT_SMOOTH := 8.0
+## The board renders every frame while something moves (a touch, a pan or
+## zoom, a glide, stones animating, the finale's sweep, the phone turning)
+## and IDLE_FPS times a second while only the light's slow drift changes it.
+## The game's own frame rate is capped by application/run/max_fps.
+const IDLE_FPS := 30.0
+## The light moving more than this (radians) since the last render counts as
+## the phone turning; the drift alone moves it less between idle frames.
+const LIGHT_STEP := 0.006
 
 ## The light drifts with time (tests freeze it and set the time instead).
 var animate := true
@@ -104,6 +112,7 @@ var shadows := true:
 	set(value):
 		shadows = value
 		_shadow_material.set_shader_parameter("shadow_strength", 1.0 if value else 0.0)
+		_redraw()
 ## Room around the fitted picture, as a share of its size.
 var margin := MARGIN
 ## Off: touches, drags and the wheel leave the board alone.
@@ -112,6 +121,8 @@ var input_enabled := true
 ## that touch a stroke (stroke_started, stroke_moved, stroke_ended) instead
 ## of a pan. Unset, every touch pans.
 var stroke_filter := Callable()
+## How many frames the board has rendered (for performance readouts).
+var render_count := 0
 
 var _viewport := SubViewport.new()
 var _camera := Camera3D.new()
@@ -157,6 +168,15 @@ var _sweep_until := 0.0
 var _finale := ""
 var _finale_from := Vector2.ZERO
 var _next_wave := 0.0
+## Rendering (see IDLE_FPS): render this frame regardless; how much of an
+## idle frame has come due; the process frame last rendered, and the lights
+## it rendered with; render every frame (set_always_render).
+var _dirty := true
+var _due := 0.0
+var _drawn_frame := -1
+var _drawn_key := Vector3.UP
+var _drawn_fill := Vector3.UP
+var _always := false
 
 
 func _init() -> void:
@@ -164,6 +184,7 @@ func _init() -> void:
 	_viewport.own_world_3d = true
 	_viewport.msaa_3d = Viewport.MSAA_4X
 	_viewport.handle_input_locally = false
+	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(_viewport)
 	var env := _env
 	env.background_mode = Environment.BG_COLOR
@@ -194,9 +215,7 @@ func _init() -> void:
 	_viewport.add_child(_paper)
 	_viewport.add_child(_layers)
 	resized.connect(_apply_view)
-	visibility_changed.connect(func() -> void:
-		_viewport.render_target_update_mode = (SubViewport.UPDATE_WHEN_VISIBLE if is_visible_in_tree()
-				else SubViewport.UPDATE_DISABLED))
+	visibility_changed.connect(_redraw)
 
 
 func _process(delta: float) -> void:
@@ -213,6 +232,39 @@ func _process(delta: float) -> void:
 	if use_sensor:
 		_read_sensors(delta)
 	update_light(delta)
+	_schedule(delta)
+
+
+## Renders this frame if anything moves, and otherwise once an idle frame
+## (IDLE_FPS) is due. The light keeps drifting every frame either way.
+func _schedule(delta: float) -> void:
+	_due += delta * (0.0 if _always else IDLE_FPS)
+	var moving := (_always or not _touches.is_empty() or not _anims.is_empty() or _clock < _sweep_until
+			or (_glide != null and _glide.is_valid()) or key_dir.angle_to(_drawn_key) > LIGHT_STEP
+			or fill_dir.angle_to(_drawn_fill) > LIGHT_STEP)
+	if _dirty or moving or _due >= 1.0:
+		_render()
+	if _drawn_frame == Engine.get_process_frames():
+		_drawn_key = key_dir
+		_drawn_fill = fill_dir
+
+
+## Something changed (the view, a stone, visibility): render this frame.
+func _redraw() -> void:
+	_dirty = true
+	_render()
+
+
+## Renders the SubViewport once this frame (it is never left updating).
+func _render() -> void:
+	if not is_visible_in_tree():
+		return
+	_dirty = false
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if _drawn_frame != Engine.get_process_frames():
+		_drawn_frame = Engine.get_process_frames()
+		render_count += 1
+		_due = fmod(maxf(_due - 1.0, 0.0), 1.0)
 
 
 ## Follows the phone's orientation, each sensor for one thing so they never
@@ -317,6 +369,7 @@ func set_transparent() -> void:
 	_env.background_mode = Environment.BG_CLEAR_COLOR
 	_env.glow_enabled = false
 	_paper.visible = false
+	_redraw()
 
 
 ## Finale styles celebrate() knows (GemCatalog.FINALES must be among them).
@@ -409,6 +462,7 @@ func _apply_scale(i: int, f: float) -> void:
 		var o := xf.origin
 		(ref[0] as MultiMesh).set_instance_transform(ref[1],
 				Transform3D(xf.basis.scaled(Vector3(k, k, k)), Vector3(o.x, o.y * k, o.z)))
+	_redraw()
 
 
 ## The board's picture as a texture (for icons cut from a board of single stones).
@@ -416,9 +470,9 @@ func get_view_texture() -> ViewportTexture:
 	return _viewport.get_texture()
 
 
-## Keeps rendering while off screen.
+## Renders every frame, even off screen (where nothing draws the board).
 func set_always_render() -> void:
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_always = true
 
 
 ## Zooms and pans smoothly to show board rect `area` (as focus_on), over
@@ -628,6 +682,7 @@ func _apply_view() -> void:
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
+	_redraw()
 	view_changed.emit()
 
 
