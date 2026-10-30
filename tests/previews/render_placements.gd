@@ -255,7 +255,15 @@ func _build_icon() -> void:
 	_icons.show_collage({"width": 100, "height": 100,
 		"slots": [GemIcons.stone("round", "brilliant", GEM_COLOR, "amethyst", 1.0, 100, Vector2(50, 50))]})
 	await _warmup()
-	_icon = _icons.get_view_texture()
+	# Freeze the real rendered icon so all panels sample the same image
+	# while their viewports are replaced between studies.
+	var capture := _icons.get_view_texture().get_image()
+	if capture == null or capture.is_empty():
+		push_error("Could not render the preview's real gem icon")
+		quit(1)
+		return
+	_icon = ImageTexture.create_from_image(capture)
+	_icons.queue_free()
 
 
 func _fixture() -> Dictionary:
