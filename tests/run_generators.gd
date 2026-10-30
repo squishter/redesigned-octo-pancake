@@ -36,6 +36,7 @@ func _init() -> void:
 	test_kits()
 	test_photo_line_art()
 	test_json_round_trip()
+	test_hints()
 	test_game_puzzles()
 	test_saves()
 	test_packs()
@@ -1268,3 +1269,19 @@ func count_overlaps(slots: Array, tolerance: float) -> int:
 					if pts[0].distance_to(pts[1]) < ra + rb - tolerance:
 						n += 1
 	return n
+
+
+func test_hints() -> void:
+	print("Hints")
+	var meta := {}
+	Hints.upgrade(meta)
+	check(meta["hints"] == Hints.START and meta["hint_ms"] == 0, "a puzzle starts with %d hint" % Hints.START)
+	check(Hints.spend(meta) and not Hints.spend(meta), "spending: one, then none")
+	check(not Hints.tick(meta, Hints.EVERY_MS - 1), "no hint a moment early")
+	check(is_equal_approx(Hints.progress(meta), 1.0 - 1.0 / Hints.EVERY_MS), "progress just short of full")
+	check(Hints.tick(meta, 1) and meta["hints"] == 1 and meta["hint_ms"] == 0, "a hint every %d ms" % Hints.EVERY_MS)
+	Hints.tick(meta, Hints.EVERY_MS * 10)
+	check(meta["hints"] == Hints.MAX and meta["hint_ms"] == 0, "at most %d banked" % Hints.MAX)
+	check(Hints.progress(meta) == 0.0, "no fill while full")
+	Hints.spend(meta)
+	check(not Hints.tick(meta, 1000) and meta["hint_ms"] == 1000, "the clock starts again below the cap")

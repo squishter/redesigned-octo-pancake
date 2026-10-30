@@ -101,6 +101,12 @@ mode for trying out new pattern generation.
   Finish gem, Sweep (the picked gem's slots on screen), Finder (zooms to
   the picked gem's slots) and Sprinkle (40 gems anywhere). She starts with
   a Finish gem and two Finders.
+- **Hints** belong to each puzzle (`game/hints.gd`): a new puzzle starts
+  with 1, and another comes every 3 minutes of play in it, up to 3 banked
+  (with 3 the clock waits). *Hint* in the top bar glides the board to the
+  selected gem's open slot nearest the middle of the view (never zooming
+  out from a closer view) and rings it in gold. The button fills from the
+  left, a shade lighter than itself, as the next hint comes closer.
 - **Diamond kits**: a mandala painted with the theme, turned into a grid of
   round or square drills (whichever are unlocked), played like a collage.
   Drills fill 98% of their cell, so neighbors almost touch, like a real kit
@@ -139,7 +145,9 @@ mode for trying out new pattern generation.
   trail of tiny sparkles and a little burst as it lands, or in another
   unlocked style chosen in *Settings* on the menu (where the finale is
   chosen too), always with a tiny buzz. A drag that doesn't start
-  on the selected gem's slot pans instead, and two fingers pinch. When the
+  on the selected gem's slot pans instead, and two fingers pinch. Zoomed
+  in, the board pans until an edge reaches the middle of the screen, so
+  stones at the very edge can be placed comfortably. When the
   last stone is in, a wave ripples out from the middle while the light
   sweeps over the gems, and the picture is left to look at, zoomed and
   panned at will, until *‹ Menu*. Progress saves every couple of seconds

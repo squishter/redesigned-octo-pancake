@@ -15,10 +15,20 @@ extends Control
 ## fingers pinch. When the last stone is in, the picture ripples and
 ## sparkles, and from then on it's only for looking at, zoomed and panned
 ## at will. Progress saves every few seconds and on leaving.
+##
+## Hint (see Hints) glides the board to the selected gem's open slot nearest
+## the middle of the view and rings it; the button fills quietly as the next
+## hint comes closer.
 
 signal back_requested
 
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const HintButton := preload("res://scenes/game/hint_button.gd")
+## A hint: how long the board takes to get there, how long the ring around
+## the slot lasts (it pulses twice), and how much around the slot shows.
+const HINT_GLIDE := 0.55
+const HINT_RING := 1.8
+const HINT_VIEW := 8.0
 ## The icon board: px per icon, its cells in board units, and icons per row.
 const ICON_PX := 150
 const ICON_CELL := 100.0
@@ -101,6 +111,13 @@ var _done := false
 var _dirty := false
 var _since_save := 0.0
 var _last_buzz := -BUZZ_GAP_MS
+var _hint: HintButton
+## Play time not yet counted toward the next hint (ms), the hinted slot
+## (-1: none) and how long its ring has shown.
+var _hint_carry := 0.0
+var _ring: Control
+var _ring_slot := -1
+var _ring_time := 0.0
 
 
 func _ready() -> void:
@@ -116,8 +133,17 @@ func _ready() -> void:
 	_progress = Label.new()
 	_progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_progress.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_progress.add_theme_color_override("font_color", LabTheme.TEXT_DIM)
+	# Small, and wrapping onto two lines, so the buttons beside it fit.
+	_progress.add_theme_font_size_override("font_size", LabTheme.SMALL_FONT_SIZE)
+	_progress.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_progress.custom_minimum_size.x = 120
 	top.add_child(_progress)
+	_hint = HintButton.new()
+	_hint.custom_minimum_size.y = LabTheme.TAP_HEIGHT
+	_hint.pressed.connect(_use_hint)
+	top.add_child(_hint)
 	_button(top, "Power-ups", _toggle_powers)
 	_button(top, "Fit", func() -> void: _board.reset_view())
 
@@ -176,6 +202,11 @@ func _ready() -> void:
 	_overlay.board = _board
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_area.add_child(_overlay)
+	_ring = Control.new()
+	_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ring.draw.connect(_draw_ring)
+	_area.add_child(_ring)
 	_board.stroke_filter = _can_stroke
 	_board.stroke_started.connect(_on_stroke_started)
 	_board.stroke_moved.connect(_on_stroke_moved)
@@ -212,6 +243,8 @@ func _load() -> void:
 			_filled += 1
 			_types[_type_of[i]]["left"] -= 1
 	_powers_on = _meta.get("powers", [])
+	Hints.upgrade(_meta)
+	_update_hint()
 	_overlay.setup(_picture, _type_of, colors, placed)
 	_board.show_collage(_picture, placed)
 	_build_icons()
@@ -630,6 +663,61 @@ func _use_power(power: String) -> void:
 	_save(false)
 
 
+## Spends a hint: picks a gem if none is picked, then glides to its open
+## slot nearest the middle of the view and rings it.
+func _use_hint() -> void:
+	if _done:
+		return
+	var t := _selected
+	if t < 0 or _types[t]["left"] <= 0:
+		t = _next_open(-1)
+		if t < 0:
+			return
+		_select(t)
+	var middle := _board.screen_to_board(_board.size / 2.0)
+	var best := -1
+	var best_d := INF
+	for i: int in _overlay.open_of_type(t):
+		var d := middle.distance_squared_to(Vector2(_overlay.slots[i]["x"], _overlay.slots[i]["y"]))
+		if d < best_d:
+			best_d = d
+			best = i
+	if best < 0 or not Hints.spend(_meta):
+		return
+	var s: Dictionary = _overlay.slots[best]
+	var reach := maxf(float(s["size"]), float(s["width"])) * HINT_VIEW
+	_board.glide_to(Rect2(Vector2(s["x"], s["y"]) - Vector2(reach, reach) / 2.0, Vector2(reach, reach)), HINT_GLIDE)
+	_ring_slot = best
+	_ring_time = 0.0
+	_dirty = true
+	_update_hint()
+
+
+func _update_hint() -> void:
+	var left := int(_meta.get("hints", 0))
+	_hint.text = "Hint %d" % left
+	_hint.disabled = left <= 0
+	_hint.progress = Hints.progress(_meta)
+
+
+## The hinted slot's ring: it pulses out twice once the board gets there,
+## fading away.
+func _draw_ring() -> void:
+	if _ring_slot < 0 or _ring_time < HINT_GLIDE * 0.6:
+		return
+	var s: Dictionary = _overlay.slots[_ring_slot]
+	if _overlay.placed[_ring_slot] != 0:
+		_ring_slot = -1
+		return
+	var u := clampf((_ring_time - HINT_GLIDE * 0.6) / HINT_RING, 0.0, 1.0)
+	var at := _board.view_transform() * Vector2(s["x"], s["y"])
+	var r := maxf(float(s["size"]), float(s["width"])) / 2.0 * _board.scale_px()
+	var pulse := fmod(u * 2.0, 1.0)
+	var fade := 1.0 - u
+	_ring.draw_arc(at, r * (1.15 + pulse * 0.9), 0.0, TAU, 48, Color(LabTheme.GOLD, fade * (1.0 - pulse)), 6.0, true)
+	_ring.draw_arc(at, r * 1.15, 0.0, TAU, 48, Color(LabTheme.GOLD, fade), 4.0, true)
+
+
 func _on_landed(i: int) -> void:
 	_board.land_slot(i)
 	_buzz()
@@ -677,6 +765,8 @@ func _finish(celebrate: bool) -> void:
 	_done = true
 	_stroke_type = -1
 	_powers_panel.visible = false
+	_hint.visible = false
+	_ring_slot = -1
 	_select(-1)
 	_board.stroke_filter = Callable()
 	_overlay.visible = false
@@ -731,6 +821,18 @@ func _process(delta: float) -> void:
 	elif _row_touch < 0:
 		# Idle: follow the row's real scroll (it moves back when a card at the end goes).
 		_scroll_x = float(_palette.scroll_horizontal)
+	if not _done and not _meta.is_empty():
+		_hint_carry += delta * 1000.0
+		var ms := int(_hint_carry)
+		_hint_carry -= ms
+		if Hints.tick(_meta, ms):
+			_dirty = true
+		_update_hint()
+	if _ring_slot >= 0:
+		_ring_time += delta
+		if _ring_time > HINT_GLIDE + HINT_RING:
+			_ring_slot = -1
+		_ring.queue_redraw()
 	if not _dirty:
 		return
 	_since_save += delta
