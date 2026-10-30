@@ -72,6 +72,11 @@ const CROWN_HEIGHT := 0.3
 const SHADOW_FADE := 2.6
 const SHADOW_SPAN := 1.75
 const SHADOW_SHIFT := 1.05
+## A stone's shadow and the light it focuses fade out as it shrinks on
+## screen, from SHADOW_FADE_PX across to gone at SHADOW_GONE_PX (when every
+## stone is that small the shadows aren't drawn at all).
+const SHADOW_FADE_PX := 12.0
+const SHADOW_GONE_PX := 6.0
 const SPARKLE_SPAN := 1.7
 ## Stones smaller than this on screen (px across) draw as a flat outline
 ## each, their facets from a picture (gem_impostor.gdshader, GemMesh.
@@ -227,6 +232,10 @@ var _layer_slots := []
 ## length or width (board units), the MultiMeshInstance3D drawing it, its
 ## flat outline for when it's tiny].
 var _gem_layers := []
+## The shadows' layer, and the board's largest stone (length or width, in
+## board units): when even it is under SHADOW_GONE_PX, no shadow shows.
+var _shadow_layer: MultiMeshInstance3D
+var _largest := 0.0
 ## Rendering (see IDLE_FPS): render this frame regardless; how much of an
 ## idle frame has come due; the process frame last rendered, and the lights
 ## it rendered with; a fixed rate instead (set_always_render), or 0.
@@ -269,6 +278,8 @@ func _init() -> void:
 	_shadow_material.shader = SHADOW_SHADER
 	_shadow_material.render_priority = -1
 	_shadow_material.set_shader_parameter("span", SHADOW_FADE)
+	_shadow_material.set_shader_parameter("fade_from", SHADOW_FADE_PX)
+	_shadow_material.set_shader_parameter("fade_to", SHADOW_GONE_PX)
 	_sparkle_material.shader = SPARKLE_SHADER
 	_sparkle_material.render_priority = 1
 	for m: ShaderMaterial in _materials():
@@ -728,6 +739,10 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	var reach := SHADOW_SPAN + SHADOW_SHIFT
 	shadow_plane.custom_aabb = AABB(Vector3(-reach, -0.1, -reach), Vector3(reach * 2.0, 0.2, reach * 2.0))
 	_add_layer(shadow_plane, _shadow_material, slots, all, "shadow")
+	_shadow_layer = _layer_slots[_layer_slots.size() - 1][3]
+	_largest = 0.0
+	for s: Dictionary in slots:
+		_largest = maxf(_largest, maxf(s["size"], s["width"]))
 	if _flares:
 		var sparkle_plane := PlaneMesh.new()
 		sparkle_plane.size = Vector2(2.0, 2.0)
@@ -894,6 +909,8 @@ func _apply_view() -> void:
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
 	_pick_meshes(scale_px)
+	if _shadow_layer != null:
+		_shadow_layer.visible = _largest * scale_px >= SHADOW_GONE_PX and debug_test != "no shadows"
 	_redraw()
 	view_changed.emit()
 

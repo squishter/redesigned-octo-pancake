@@ -12,10 +12,10 @@ render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled;
 #include "res://render/gem_light.gdshaderinc"
 
 uniform float shadow_strength = 1.0;
-// Stones under this many px across get their caustics' average light,
-// CAUSTIC_MEAN (caustic() over every place and phase).
-const float TINY_PX = 6.0;
-const float CAUSTIC_MEAN = 0.125;
+// Shadows (and their light) fade out as their stone shrinks on screen,
+// from fade_from px across to gone at fade_to (GemBoard3D.SHADOW_FADE_PX).
+uniform float fade_from = 12.0;
+uniform float fade_to = 6.0;
 // How far from the stone everything has faded out, in stone half-sizes
 // (GemBoard3D.SHADOW_FADE), so no shadow is ever cut square.
 uniform float span = 2.6;
@@ -61,6 +61,9 @@ void fragment() {
 	// The light the stone gathers lands in the far half of its shadow.
 	float focus = 1.0 - smoothstep(0.05, 0.85, length(lp - focus_off * 1.25));
 	float edge = 1.0 - smoothstep(span * 0.7, span * 0.97, max(abs(lp.x), abs(lp.y)));
+	// The stone's length on screen (px): two of its half-sizes.
+	float across = 2.0 / max(min(fwidth(lp.x), fwidth(lp.y)), 1e-6);
+	edge *= smoothstep(fade_to, fade_from, across);
 	shade *= edge;
 	focus *= edge;
 	// Nothing to add here: written fully clear rather than discarded, which
@@ -70,13 +73,8 @@ void fragment() {
 	}
 	vec3 light = vec3(0.0);
 	if (focus > 0.0) {
-		// Under a stone tiny on screen (under TINY_PX across) the web is finer
-		// than a pixel: its average light is all that shows, and far cheaper.
-		float web = CAUSTIC_MEAN;
-		if (2.0 / max(fwidth(lp.x), fwidth(lp.y)) >= TINY_PX) {
-			web = caustic(lp * 0.42 + stone.x * 7.0 + light_shift_of(key_tilted) * 0.25,
-					light_phase_of(key_tilted) + stone.x * 9.0);
-		}
+		float web = caustic(lp * 0.42 + stone.x * 7.0 + light_shift_of(key_tilted) * 0.25,
+				light_phase_of(key_tilted) + stone.x * 9.0);
 		light = pow(COLOR.rgb, vec3(2.2)) * paper_color * focus * (0.18 + 0.9 * web) * light_strength
 				* (1.0 + 1.5 * shine);
 	}
