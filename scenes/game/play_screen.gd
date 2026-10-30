@@ -199,6 +199,9 @@ func _load() -> void:
 		return
 	var slots: Array = _picture["slots"]
 	var placed := SaveStore.load_progress(puzzle_id, slots.size())
+	# Puzzles saved before gem types kept one shape get it now (a no-op for
+	# newer ones).
+	GemVariety.even_aspects(slots)
 	_number_types(slots)
 	var colors := PackedColorArray()
 	for t in _types:
@@ -250,9 +253,7 @@ func _number_types(slots: Array) -> void:
 
 
 static func _type_key(s: Dictionary) -> String:
-	var gem: Variant = s.get("target_gem")
-	var color := str(gem) if gem != null else (s["target_color"] as Color).to_html(false)
-	return "%s|%s|%s" % [s["shape"], s.get("cut", ""), color]
+	return GemVariety.type_key(s)
 
 
 ## One stone of every gem type on a small board of its own, kept off screen;

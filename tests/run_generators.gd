@@ -374,6 +374,16 @@ func test_collages() -> void:
 		check(coverage > 0.15, "seed %d: coverage %.2f" % [seed_value, coverage])
 		check(overlaps == 0, "seed %d: %d overlapping slot pairs" % [seed_value, overlaps])
 		check(img.get_meta("stray") < 0.02, "seed %d: slots spill onto lines" % seed_value)
+		# A gem type only changes size, never shape (see GemVariety.even_aspects).
+		var ratios := {}
+		for s: Dictionary in slots:
+			var key := GemVariety.type_key(s)
+			var r: float = float(s["width"]) / float(s["size"])
+			var seen: Vector2 = ratios.get(key, Vector2(r, r))
+			ratios[key] = Vector2(minf(seen.x, r), maxf(seen.y, r))
+		for key: String in ratios:
+			check(ratios[key].y <= ratios[key].x * 1.01, "seed %d: gem type %s has proportions %.2f to %.2f" % [
+					seed_value, key, ratios[key].x, ratios[key].y])
 		img.save_png(out_dir.path_join("collage_%d_%s.png" % [seed_value, variant]))
 
 

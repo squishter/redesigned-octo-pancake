@@ -226,6 +226,42 @@ static func _stand_in(shape: String, allowed: Dictionary) -> String:
 	return ""
 
 
+## Gives every stone of a gem type (shape, cut and color, as the game counts
+## them) the same proportions, the type's median width / length, so a type
+## only ever changes size. A stone shrinks to them inside its own slot
+## (narrower if it was rounder, shorter if it was thinner), keeping its
+## center and turn, so nothing comes to overlap. Circle shapes are already
+## even; capsules come out of packing stretched to their space.
+static func even_aspects(slots: Array) -> void:
+	var ratios := {}
+	for s: Dictionary in slots:
+		var key := type_key(s)
+		if not ratios.has(key):
+			ratios[key] = []
+		ratios[key].append(float(s["width"]) / maxf(float(s["size"]), 0.001))
+	var target := {}
+	for key: String in ratios:
+		var list: Array = ratios[key]
+		list.sort()
+		target[key] = list[list.size() / 2]
+	for s: Dictionary in slots:
+		var want: float = target[type_key(s)]
+		var size: float = s["size"]
+		var width: float = s["width"]
+		var ratio := width / maxf(size, 0.001)
+		if ratio > want * 1.001:
+			s["width"] = size * want
+		elif ratio < want / 1.001:
+			s["size"] = width / want
+
+
+## A gem type's key: shape, cut and gem (or color, when not snapped to gems).
+static func type_key(s: Dictionary) -> String:
+	var gem: Variant = s.get("target_gem")
+	var color := str(gem) if gem != null else (s["target_color"] as Color).to_html(false)
+	return "%s|%s|%s" % [s["shape"], s.get("cut", ""), color]
+
+
 ## Turns a slot into `to`, keeping it inside the slot it had: a circle's
 ## stone fits a capsule as wide as it, a capsule's fits the circle it spans,
 ## and a box's corners are pulled in.
