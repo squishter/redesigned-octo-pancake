@@ -57,7 +57,7 @@ const GIRDLE_HEIGHT := 0.45
 ## in its own direction. Only its sparkles and the light it focuses on the
 ## paper see the tilt (see as_tilted in gem_light.gdshaderinc); the stone
 ## itself is drawn flat. It keeps a board of stones from all flashing alike.
-const TILT_MAX_DEG := 7.0
+const TILT_MAX_DEG := 15.0
 const CROWN_HEIGHT := 0.3
 ## Shadow and sparkle planes, in stone half-sizes (shadows must cover the
 ## farthest the light can push them).
