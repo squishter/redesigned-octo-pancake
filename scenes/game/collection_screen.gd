@@ -390,8 +390,8 @@ func _collection_extras(unlocks: Dictionary) -> void:
 	for p: String in GemCatalog.POWERS:
 		var info: Dictionary = GemCatalog.POWERS[p]
 		var n := Packs.charges(profile, p)
-		if profile["powers"].has(p):
-			_item_row(_collection_list, "%s  ×%d" % [info["name"], n], info["about"], n > 0)
+		if profile["powers"].has(p) or SaveStore.is_unlock_all(profile):
+			_item_row(_collection_list, "%s  ×%s" % [info["name"], Packs.charges_text(profile, p)], info["about"], n > 0)
 		else:
 			_item_row(_collection_list, "?", "Find it in a power-up pack.", false)
 

@@ -572,8 +572,9 @@ func _unlock_all_setting(parent: Control) -> void:
 		reload_requested.emit())
 	b.theme_type_variation = "QuietButton"
 	b.name = "UnlockAll"
-	parent.add_child(UI.label("Every color, shape, cut, theme, picture type, flourish and animation, for "
-			+ "testing. Your own collection is kept and comes back when this is off.", 29, GameTheme.TEXT_DIM))
+	parent.add_child(UI.label("Every color, shape, cut, theme, picture type, flourish and animation, and "
+			+ "unlimited power-ups, for testing. Your own collection and charges are kept and come back when "
+			+ "this is off.", 29, GameTheme.TEXT_DIM))
 
 
 ## Debug builds: the performance readout and the game's frame cap, for

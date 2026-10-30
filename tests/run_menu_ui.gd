@@ -106,6 +106,12 @@ func _test_unlock_all() -> void:
 			if kind != "power" and not Unlockables.has(profile["unlocks"], item):
 				missing.append(item["id"])
 	_check(missing.is_empty(), "Every item but power-up charges is had: missing %s" % [missing])
+	var own_powers: Dictionary = profile["powers"].duplicate()
+	var unlimited := GemCatalog.POWERS.keys().all(func(p: String) -> bool:
+		return Packs.charges(profile, p) == Packs.UNLIMITED and Packs.charges_text(profile, p) == "∞")
+	_check(unlimited, "Every power-up has unlimited charges while it's on")
+	_check(Packs.spend(profile, "big_brush") and Packs.spend(profile, "finder") and profile["powers"] == own_powers,
+		"Using a power-up while it's on costs none of her own charges")
 	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SaveStore.DIR + "/profile.json"))
 	_check(raw["unlocks"] == own and not raw.has(SaveStore.REAL_UNLOCKS), "Her own unlocks are what's saved")
 	var loaded := SaveStore.load_profile()

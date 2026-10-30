@@ -19,6 +19,8 @@ extends RefCounted
 const COINS_PER_PUZZLE := 10
 const PACK_PRICE := 30
 const POWER_PACK_PRICE := 10
+## Charges of every power-up while the debug unlock-all setting is on.
+const UNLIMITED := 999
 
 const PACKS := {
 	"colors": {"name": "Color pack", "about": "A new gem color."},
@@ -177,12 +179,24 @@ static func puzzle_finished(profile: Dictionary, meta: Dictionary, doubled: bool
 	return {"coins": earned, "pick": pick}
 
 
+## Her charges of a power-up: UNLIMITED while the debug unlock-all setting
+## is on (SaveStore.UNLOCK_ALL), when using them costs nothing and her own
+## charges are kept as they are.
 static func charges(profile: Dictionary, power: String) -> int:
+	if SaveStore.is_unlock_all(profile):
+		return UNLIMITED
 	return int(profile["powers"].get(power, 0))
+
+
+## Her charges of a power-up as shown: a number, or ∞ (see charges).
+static func charges_text(profile: Dictionary, power: String) -> String:
+	return "∞" if SaveStore.is_unlock_all(profile) else str(charges(profile, power))
 
 
 ## Spends a power-up charge; false if there's none.
 static func spend(profile: Dictionary, power: String) -> bool:
+	if SaveStore.is_unlock_all(profile):
+		return true
 	if charges(profile, power) <= 0:
 		return false
 	profile["powers"][power] = charges(profile, power) - 1

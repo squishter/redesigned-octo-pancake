@@ -646,7 +646,7 @@ func _refresh_powers() -> void:
 		if n <= 0 and not on:
 			continue
 		any = true
-		var text := UI.item(_powers_list, "%s  ×%d" % [info["name"], n],
+		var text := UI.item(_powers_list, "%s  ×%s" % [info["name"], Packs.charges_text(profile, power)],
 			info["about"] + (" · For this whole picture" if info["kind"] == "puzzle" else ""), "power")
 		var about := text.get_child(1) as Label
 		var use := _button(text.get_parent(), "Active" if on else "Use", func() -> void: _use_power(power))
