@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_reward_kinds()
 	await _test_transitions()
 	await _test_completion_rewards()
+	await _test_stroke_limit()
 	await _test_unlock_all()
 	_test_camera_helper()
 	print("Menu UI: %d checks, %d failures" % [_checks, _failures])
@@ -330,6 +331,45 @@ func _test_transitions() -> void:
 	SaveStore.delete_puzzle(app.profile, meta["id"])
 	app.queue_free()
 	await process_frame
+
+
+func _test_stroke_limit() -> void:
+	print("Stones per gesture")
+	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
+	var slots := []
+	for k in 8:
+		slots.append({"id": k, "region": 0, "shape": "round", "cut": "brilliant", "x": 10 + k * 10, "y": 50,
+			"rotation": 0.0, "size": 8.0, "width": 8.0, "target_gem": "ruby", "target_color": Color.RED})
+	var picture := {"type": "collage", "width": 100, "height": 100, "slots": slots,
+		"regions": [{"id": 0, "color": Color.RED}], "puzzle": {"type": "mandala", "theme": "rainbow"}}
+	var meta := SaveStore.add_puzzle(profile, picture)
+	var play := PlayScreen.new()
+	play.profile = profile
+	play.puzzle_id = meta["id"]
+	root.add_child(play)
+	await _layout_frames()
+	_check(play._stroke_button.text == "∞", "Strokes place any number of stones by default")
+	_check_button_widths(play, play.size.x)
+	var seen := []
+	for _k in PlayScreen.STROKE_LIMITS.size():
+		play._stroke_button.pressed.emit()
+		seen.append(play._stroke_button.text)
+	_check(seen == ["1×", "3×", "5×", "∞"], "The stones button steps through 1×, 3×, 5× and ∞: %s" % [seen])
+	play._stroke_button.pressed.emit()
+	play._stroke_button.pressed.emit()
+	_check(int(SaveStore.load_profile()["settings"]["stroke_limit"]) == 3, "The limit is saved in the settings")
+	play._stroke_type = play._type_of[0]
+	play._stroke_placed = 0
+	for i in 8:
+		play._stroke_fill(i)
+	_check(play._filled == 3, "A 3× stroke places three stones (%d)" % play._filled)
+	play._stroke_placed = 0
+	for i in 8:
+		play._stroke_fill(i)
+	_check(play._filled == 6, "The next stroke places three more (%d)" % play._filled)
+	play.queue_free()
+	await process_frame
+	SaveStore.delete_puzzle(profile, meta["id"])
 
 
 func _test_completion_rewards() -> void:

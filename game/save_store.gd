@@ -20,7 +20,7 @@ const DIR := "user://saves"
 const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
 ## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES).
-const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple"}
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple", "stroke_limit": 0}
 ## Debug builds only: the setting that lends her everything for testing.
 ## While it's on, the profile's `unlocks` hold every item and her own are
 ## kept aside under REAL_UNLOCKS, which is what save_profile writes; every
