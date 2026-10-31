@@ -60,9 +60,11 @@ const OPAQUE_GEMS := ["snow", "pearl", "ivory", "cream", "jade", "turquoise"]
 ## about this much above that, in its half-widths.
 const GIRDLE_HEIGHT := 0.45
 ## Stones sit a little tilted on the glue: each leans up to this many degrees
-## in its own direction. Only its sparkles and the light it focuses on the
-## paper see the tilt (see as_tilted in gem_light.gdshaderinc); the stone
-## itself is drawn flat. It keeps a board of stones from all flashing alike.
+## in its own direction, picked from its random number (see stone_tilt in
+## gem_light.gdshaderinc, which the gem shaders work out for themselves). Its
+## body, its sparkles and the light it focuses on the paper all see the tilt
+## (see as_tilted); the stone itself is drawn flat. It keeps a board of
+## stones, a kit's rows of drills above all, from all flashing alike.
 const TILT_MAX_DEG := 15.0
 const CROWN_HEIGHT := 0.3
 ## Shadow and sparkle planes, in stone half-sizes. Shadows (with the light
@@ -800,7 +802,7 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 		var at := Vector3(s["x"], 0.0, s["y"])
 		var color: Color = s["target_color"]
 		var random := fposmod(sin(i * 12.9898 + 78.233) * 43758.5453, 1.0)
-		var tilt := _tilt(i)
+		var tilt := _tilt(random)
 		var xf: Transform3D
 		match kind:
 			"gem":
@@ -834,11 +836,13 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 
 ## Refractive index and dispersion for a gem color: pale, unsaturated
 ## stones read as diamonds (bright, with fire), the rest as colored gems.
-## Stone i's tilt: the xz (board space) of its top's normal, leaning up to
-## TILT_MAX_DEG in a direction of its own, the same every time it's built.
-static func _tilt(i: int) -> Vector2:
-	var a := fposmod(sin(i * 78.233 + 12.9898) * 43758.5453, 1.0)
-	var b := fposmod(sin(i * 39.346 + 11.135) * 24634.6345, 1.0)
+## The tilt of a stone with random number `random`: the xz (board space)
+## of its top's normal, leaning up to TILT_MAX_DEG in a direction of its own.
+## As stone_tilt in gem_light.gdshaderinc, which must match it: the gem
+## shaders have no room left in their instance data to be handed it.
+static func _tilt(random: float) -> Vector2:
+	var a := fposmod(random * 53.17, 1.0)
+	var b := fposmod(random * 37.91, 1.0)
 	return Vector2.from_angle(a * TAU) * sin(deg_to_rad(TILT_MAX_DEG) * b)
 
 
