@@ -50,6 +50,8 @@ var _blocks: Array[PackedVector2Array] = []
 ## What the current clip tests: 0 outside the corner ornaments, 1 inside the
 ## band, 2 in the background (between the frame and the halo).
 var _mode := 0
+## How much the picture was scaled to fit inside the frame.
+var _scale := 1.0
 
 
 ## Frames the picture, or not. options:
@@ -59,8 +61,10 @@ var _mode := 0
 ##   frame_recent: Array of earlier results' "frame" dictionaries, for
 ##       pictures made in a row; recent choices are skipped and the least
 ##       used preferred
-## Returns {"polylines", "closed", "frame"}: "frame" is {"shape", "band",
-## "corner", "background"}, or empty when the picture isn't framed.
+## Returns {"polylines", "closed", "frame", "scale"}: "frame" is {"shape",
+## "band", "corner", "background"}, or empty when the picture isn't framed;
+## the picture's polylines come first, scaled by "scale" about the center,
+## then the frame's.
 static func apply(lines: Array[PackedVector2Array], line_closed: PackedByteArray, seed_value: int,
 		options: Dictionary = {}) -> Dictionary:
 	var g := FrameDesign.new()
@@ -68,7 +72,7 @@ static func apply(lines: Array[PackedVector2Array], line_closed: PackedByteArray
 	var wanted: Variant = options.get("frame", "auto")
 	var framed: bool = wanted if wanted is bool else g.rng.randf() < FRAME_CHANCE
 	if not framed:
-		return {"polylines": lines, "closed": line_closed, "frame": {}}
+		return {"polylines": lines, "closed": line_closed, "frame": {}, "scale": 1.0}
 	var recent: Array = options.get("frame_recent", [])
 	var info := {
 		"shape": g._choose(options, "frame_shape", "shape", SHAPES, recent, AVOID_RECENT),
@@ -77,7 +81,7 @@ static func apply(lines: Array[PackedVector2Array], line_closed: PackedByteArray
 		"background": g._choose(options, "background", "background", BACKGROUNDS, recent, AVOID_RECENT),
 	}
 	g._build(lines, line_closed, info)
-	return {"polylines": g.polylines, "closed": g.closed, "frame": info}
+	return {"polylines": g.polylines, "closed": g.closed, "frame": info, "scale": g._scale}
 
 
 func _choose(options: Dictionary, option: String, key: String, names: Array, recent: Array, avoid: int) -> String:
@@ -135,6 +139,7 @@ func _build(lines: Array[PackedVector2Array], line_closed: PackedByteArray, info
 		for v in line:
 			reach = maxf(reach, v.length())
 	var k := room * fill / maxf(reach, 1e-6)
+	_scale = k
 	var content: Array[PackedVector2Array] = []
 	for i in lines.size():
 		var scaled := PackedVector2Array()

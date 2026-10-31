@@ -16,17 +16,34 @@ const BACKGROUND := Color("#f4eee6")
 ## and recent for snowflakes (see SnowflakeGenerator), size (raster px,
 ## default 768), line_width (px, default size / 170), and FrameDesign's
 ## framing options (frame, background, ...); most pictures get a frame.
-## Returns {"mask", "width", "height", "mandala"}.
+## Swirls (layout, shape, recent; see SwirlGenerator) aren't symmetric but
+## come with families of lines and areas; those are returned as "motifs":
+## {"lines": a family per pixel (-1 off the lines), "areas": [{"at": px,
+## "family"}]}, for CollageGenerator.
+## Returns {"mask", "width", "height", "mandala"} (and "motifs").
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
 	var size: int = options.get("size", DEFAULT_SIZE)
 	var line_width: float = options.get("line_width", size / 170.0)
-	var mask := LineRaster.rasterize(mandala["polylines"], mandala["closed"], Vector2i(size, size), line_width)
-	return {"mask": mask, "width": size, "height": size, "mandala": mandala}
+	var px := Vector2i(size, size)
+	var mask := LineRaster.rasterize(mandala["polylines"], mandala["closed"], px, line_width)
+	var out := {"mask": mask, "width": size, "height": size, "mandala": mandala}
+	if mandala.has("families"):
+		# A little wider than the lines, so their centerlines read it.
+		var areas := []
+		for m: Dictionary in mandala["marks"]:
+			areas.append({"at": LineRaster.to_px(m["at"], px), "family": m["family"]})
+		out["motifs"] = {
+			"lines": LineRaster.rasterize_labels(mandala["polylines"], mandala["closed"], mandala["families"], px,
+					line_width + 2.0),
+			"areas": areas,
+		}
+	return out
 
 
 ## A Collage puzzle from a seeded mandala. Options as mandala_lines plus
-## CollageGenerator's (theme, gems, setting, line_gems, ...). The seed picks
+## CollageGenerator's (theme, gems, setting, line_gems, ...); a swirl's
+## families go in as `motifs`. The seed picks
 ## the lines; `pattern_seed` picks how they become gems, so one line art
 ## makes many collages. Pass `lines` (mandala_lines of the same seed and
 ## options) to reuse line art already made.
@@ -55,6 +72,10 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 		opts["source"]["snowflake"] = mandala["snowflake"]
 	if mandala.has("mandala"):
 		opts["source"]["mandala"] = mandala["mandala"]
+	if mandala.has("swirl"):
+		opts["source"]["swirl"] = mandala["swirl"]
+	if lines.has("motifs"):
+		opts["motifs"] = lines["motifs"]
 	if not mandala["frame"].is_empty():
 		opts["source"]["frame"] = mandala["frame"]
 	return CollageGenerator.generate(lines["mask"], lines["width"], lines["height"], opts)
@@ -65,6 +86,7 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 ## The same design plan as the collage applies (sparsity, line_style options):
 ## bare regions take the background color, other sparse fills a pale tint of
 ## their color, and hidden lines take the color of the regions beside them.
+## A swirl's motif areas (all its leaves, say) share colors.
 ## Pass `lines` (mandala_lines of the same seed and options) to reuse them.
 static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dictionary = {}) -> Image:
 	if lines.is_empty():
@@ -75,9 +97,12 @@ static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dict
 	var map := RegionMap.build(lines["mask"], w, h, 0)
 	var palette: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
 			else Palettes.theme_colors(options.get("theme", "sunset")))
-	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value)
+	var groups := RegionPaint.symmetry_groups(map, symmetry)
+	if lines.has("motifs"):
+		groups = RegionPaint.motif_groups(map, groups, lines["motifs"]["areas"])
+	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value, groups)
 	var background: Color = options.get("background", BACKGROUND)
-	var plan := DesignPlan.make(map, RegionPaint.symmetry_groups(map, symmetry), options, seed_value)
+	var plan := DesignPlan.make(map, groups, options, seed_value)
 	var fills: PackedStringArray = plan["fills"]
 	for r in colors.size():
 		if fills[r] == "bare":
