@@ -8,6 +8,10 @@ extends RefCounted
 ## y = 0. The board stretches each mesh to a stone's length and width. Every
 ## facet is flat with its own normal, so light glints off one facet at a
 ## time; cabochons are smooth instead.
+## Kites need the stone's width / length when building that unit mesh:
+## their shoulders depend on its proportions. Build the GemShapes outline
+## first, then normalize it, so stretching it back preserves the generator's
+## slot and packing footprint.
 ##
 ## A cut is a stack of rings from the girdle up: every k-th girdle point
 ## (starting at an offset), pulled toward the center and raised. Neighboring
@@ -44,15 +48,26 @@ const LOW_SHARE := 0.25
 ## Facet pictures (get_facets) are this many texels a side, plus a texel of
 ## border all round (repeating the edge, so filtering never reads past it).
 const FACET_PX := 64
+const ASPECT_SHAPES := ["kite"]
 
 static var _cache := {}
 
 
-## The mesh for a shape in a cut, built once and shared.
-static func get_mesh(shape: String, cut: String) -> ArrayMesh:
-	var key := shape + "|" + cut
+## Other outlines stretch affinely and can share a mesh at every aspect.
+## Six decimals coalesce floating-point noise between sizes of one type.
+static func profile_ratio(shape: String, ratio: float) -> float:
+	return snappedf(maxf(ratio, 0.000001), 0.000001) if shape in ASPECT_SHAPES else 1.0
+
+
+static func mesh_key(shape: String, cut: String, ratio := 1.0) -> String:
+	return "%s|%s|%.6f" % [shape, cut, profile_ratio(shape, ratio)]
+
+
+## The mesh for a shape, cut and outline proportions, built once and shared.
+static func get_mesh(shape: String, cut: String, ratio := 1.0) -> ArrayMesh:
+	var key := mesh_key(shape, cut, ratio)
 	if not _cache.has(key):
-		_cache[key] = build(shape, cut)
+		_cache[key] = build(shape, cut, ratio)
 	return _cache[key]
 
 
@@ -60,10 +75,10 @@ static func get_mesh(shape: String, cut: String) -> ArrayMesh:
 ## keeping the corners) at height `y`, facing up, for drawing tiny stones
 ## (gem_impostor.gdshader): their facets come from get_facets. An octagon
 ## for a round stone: 6 triangles. Built once a shape.
-static func get_outline_mesh(shape: String, y: float) -> ArrayMesh:
-	var key := "%s|outline|%f" % [shape, y]
+static func get_outline_mesh(shape: String, y: float, ratio := 1.0) -> ArrayMesh:
+	var key := mesh_key(shape, "outline", ratio) + "|%f" % y
 	if not _cache.has(key):
-		var girdle := girdle_points(shape, roundi(GIRDLE.get(shape, GIRDLE_DEFAULT) * LOW_SHARE), 1)
+		var girdle := girdle_points(shape, roundi(GIRDLE.get(shape, GIRDLE_DEFAULT) * LOW_SHARE), 1, ratio)
 		var flat := PackedVector2Array()
 		for g: Array in girdle:
 			flat.append(g[1])
@@ -84,10 +99,10 @@ static func get_outline_mesh(shape: String, y: float) -> ArrayMesh:
 ## the facet there (its x and z, as 0..1 in red and green; y is the rest, as
 ## every facet faces up) and in blue whether the stone covers it. Built once
 ## a shape and cut, from the full mesh.
-static func get_facets(shape: String, cut: String) -> Image:
-	var key := shape + "|" + cut + "|facets"
+static func get_facets(shape: String, cut: String, ratio := 1.0) -> Image:
+	var key := mesh_key(shape, cut, ratio) + "|facets"
 	if not _cache.has(key):
-		_cache[key] = _facets(get_mesh(shape, cut))
+		_cache[key] = _facets(get_mesh(shape, cut, ratio))
 	return _cache[key]
 
 
@@ -139,8 +154,8 @@ static func _facets(mesh: ArrayMesh) -> Image:
 
 
 ## Builds the mesh for a shape in a cut (unknown cuts make a brilliant).
-static func build(shape: String, cut: String) -> ArrayMesh:
-	var girdle := girdle_points(shape)
+static func build(shape: String, cut: String, ratio := 1.0) -> ArrayMesh:
+	var girdle := girdle_points(shape, -1, QUANTUM, ratio)
 	var rings := []
 	if cut == "cabochon":
 		for k in DOME_RINGS + 1:
@@ -173,15 +188,18 @@ static func build(shape: String, cut: String) -> ArrayMesh:
 ## them (the shape's GIRDLE count when -1), resampled so every corner keeps
 ## a point and the points between corners come in `quantum` steps, evenly
 ## spaced along each side.
-static func girdle_points(shape: String, want := -1, quantum := QUANTUM) -> Array:
-	var outline := GemShapes.outline(shape, 2.0, 2.0, 96)
+static func girdle_points(shape: String, want := -1, quantum := QUANTUM, ratio := 1.0) -> Array:
+	ratio = profile_ratio(shape, ratio)
+	var outline := GemShapes.outline(shape, 2.0, 2.0 * ratio, 96)
+	for i in outline.size():
+		outline[i].y /= ratio
 	var n := outline.size()
 	var corners := []
 	for i in n:
 		var a := outline[(i - 1 + n) % n]
 		var b := outline[i]
 		var c := outline[(i + 1) % n]
-		if absf((b - a).angle_to(c - b)) > CORNER:
+		if shape in ASPECT_SHAPES or absf((b - a).angle_to(c - b)) > CORNER:
 			corners.append(i)
 	if corners.is_empty():
 		corners.append(0)

@@ -231,7 +231,7 @@ var _wave_for := []
 ## Each MultiMesh layer: [MultiMesh, "gem", "shadow" or "sparkle", its
 ## instances' slots, the MultiMeshInstance3D drawing it].
 var _layer_slots := []
-## Each gem layer: [MultiMesh, its mesh, "shape|cut", its largest stone's
+## Each gem layer: [MultiMesh, its mesh, "shape|cut|ratio", its largest stone's
 ## length or width (board units), the MultiMeshInstance3D drawing it, its
 ## flat outline for when it's tiny].
 var _gem_layers := []
@@ -727,6 +727,7 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 		_bake_grain(board)
 
 	var by_mesh := {}
+	var profiles := {}
 	_gem_layers = []
 	for i in slots.size():
 		var s: Dictionary = slots[i]
@@ -734,19 +735,24 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 		if not cut in GemCuts.for_shape(s["shape"]):
 			cut = GemCuts.for_shape(s["shape"])[0]
 		var band := floori(log(maxf(maxf(s["size"], s["width"]), 1.0)) / log(2.0))
-		by_mesh.get_or_add("%s|%s|%d" % [s["shape"], cut, band], []).append(i)
+		var profile := GemMesh.mesh_key(s["shape"], cut, float(s["width"]) / maxf(float(s["size"]), 0.001))
+		profiles[profile] = true
+		by_mesh.get_or_add("%s|%d" % [profile, band], []).append(i)
+	_facets.prepare(profiles.size())
 	for key: String in by_mesh:
 		var parts := key.split("|")
 		var which: Array = by_mesh[key]
-		_add_layer(GemMesh.get_mesh(parts[0], parts[1]), _gem_material, slots, which, "gem",
+		var ratio := float(parts[2])
+		var mesh := GemMesh.get_mesh(parts[0], parts[1], ratio)
+		_add_layer(mesh, _gem_material, slots, which, "gem",
 				GemCuts.SHADER_STYLE.get(parts[1], 0))
 		var largest := 0.0
 		for i: int in which:
 			largest = maxf(largest, maxf(slots[i]["size"], slots[i]["width"]))
 		var added: Array = _layer_slots[_layer_slots.size() - 1]
 		# The outline sits above the girdle (stone's local units), over its shadow.
-		_gem_layers.append([added[0], GemMesh.get_mesh(parts[0], parts[1]), parts[0] + "|" + parts[1], largest,
-				added[3], GemMesh.get_outline_mesh(parts[0], 0.25)])
+		_gem_layers.append([added[0], mesh, GemMesh.mesh_key(parts[0], parts[1], ratio), largest,
+				added[3], GemMesh.get_outline_mesh(parts[0], 0.25, ratio)])
 	var all := range(slots.size())
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
