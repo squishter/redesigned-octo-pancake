@@ -26,6 +26,8 @@ extends RefCounted
 ## symmetric copies match. Every style also narrows toward a line's loose
 ## end. The caller builds the channel around the stones it gets back, so a
 ## line is exactly as wide as its stones at every point.
+## A share of the classes of lines can be dense: their stones sit closer
+## together (DENSE_GAP of the gap), so a line carries more of them.
 
 const STYLES := ["beads", "beads", "pearls", "marquise", "baguette", "emerald", "lozenge", "taper", "pulse", "ramp",
 		"radial", "hub"]
@@ -77,6 +79,8 @@ const BOLD_SIZES := [1.7, 2.3]
 const BOLD_REACH := 0.55
 ## How far out bold lines may go when the middle has too few with room.
 const BOLD_REACH_MORE := 0.75
+## The space between a dense line's stones, as a share of the gap.
+const DENSE_GAP := 0.4
 
 
 ## graph: Contours.centerlines() of the line mask. map: a RegionMap of the
@@ -96,9 +100,12 @@ const BOLD_REACH_MORE := 0.75
 ## gives the symmetry the stones are made to follow (see LineMirror).
 ## Classes listed in `drop` get no stones (their lines stay as plain
 ## separators); class numbers don't change when some are dropped.
+## `dense` (0..1) is the share of classes whose stones sit closer together
+## (see DENSE_GAP), picked by the seed among all the classes, so dropping
+## some doesn't change which.
 static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String,
 		symmetry: String = "none", seed_value: int = 1, bold: int = 0,
-		line_mask: PackedByteArray = PackedByteArray(), drop: Array = []) -> Array[Dictionary]:
+		line_mask: PackedByteArray = PackedByteArray(), drop: Array = [], dense: float = 0.0) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var hash := {}
 	var cell := r * 4.0
@@ -120,6 +127,7 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 			at /= pts.size()
 		path_keys.append(_sym_key(at, center, symmetry, Contours.length(pts, path["closed"])))
 	var all_class := _classes(path_keys, tol)
+	var tight := _dense_classes(all_class, dense, seed_value)
 	var paths := []
 	var path_class := PackedInt32Array()
 	for k in all_paths.size():
@@ -257,13 +265,13 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 	var ctx := {
 		"field": field, "r": r, "r_node": r_node, "gap": gap, "cell": cell, "style": style, "outer": outer,
 		"path_class": path_class, "bold_r": bold_r, "seed": seed_value, "rings": rings, "strokes": strokes,
-		"path_r": path_r, "node_r": node_r,
+		"path_r": path_r, "node_r": node_r, "tight": tight,
 	}
 	var laid := {}
 	for c: int in by_class:
 		for k: int in by_class[c]:
 			if copy_of.has(k):
-				_copy_line(out, hash, cell, laid[copy_of[k][0]], copy_of[k][1], gap)
+				_copy_line(out, hash, cell, laid[copy_of[k][0]], copy_of[k][1], gap * tight.get(c, 1.0))
 			else:
 				var before := out.size()
 				_lay_line(out, hash, paths[k], k, ctx)
@@ -273,10 +281,33 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 	# them, so the drawing stays legible.
 	for c: int in by_class:
 		for k: int in by_class[c]:
-			_fill_line(out, hash, cell, gap, paths[k], path_r[k], outer[k], path_class[k])
+			_fill_line(out, hash, cell, gap * tight.get(c, 1.0), paths[k], path_r[k], outer[k], path_class[k])
 	if line_mask.is_empty():
 		line_mask = map.line_mask()
-	return LineMirror.apply(out, line_mask, map.width, map.height, symmetry, r, gap, cell)
+	return LineMirror.apply(out, line_mask, map.width, map.height, symmetry, r, gap, cell, tight)
+
+
+## The dense classes of lines: `share` of the classes in `all_class`, picked
+## in a seeded order, as {class: their gap's share of the gap}.
+static func _dense_classes(all_class: PackedInt32Array, share: float, seed_value: int) -> Dictionary:
+	var tight := {}
+	if share <= 0.0:
+		return tight
+	var seen := {}
+	for c in all_class:
+		seen[c] = true
+	var classes: Array = seen.keys()
+	classes.sort()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "dense lines"])
+	for i in range(classes.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t: int = classes[i]
+		classes[i] = classes[j]
+		classes[j] = t
+	for i in mini(classes.size(), roundi(classes.size() * share)):
+		tight[classes[i]] = DENSE_GAP
+	return tight
 
 
 ## Moves the junctions at the ends of `copy` (a copy of `master` by xf) to
@@ -381,9 +412,9 @@ static func _lay_line(out: Array[Dictionary], hash: Dictionary, path: Dictionary
 	var style: String = ctx["style"]
 	var r: float = ctx["r"]
 	var r_node: float = ctx["r_node"]
-	var gap: float = ctx["gap"]
-	var cell: float = ctx["cell"]
 	var path_class: PackedInt32Array = ctx["path_class"]
+	var gap: float = ctx["gap"] * ctx["tight"].get(path_class[k], 1.0)
+	var cell: float = ctx["cell"]
 	var bold_r: Dictionary = ctx["bold_r"]
 	var pts: PackedVector2Array = path["points"]
 	var closed: bool = path["closed"]

@@ -30,6 +30,7 @@ func _init() -> void:
 	test_collages()
 	test_design_plans()
 	test_pattern_seeds()
+	test_layouts()
 	test_symmetry()
 	test_gem_cuts()
 	test_board_light()
@@ -518,6 +519,87 @@ func test_pattern_seeds() -> void:
 	check(settings.get("gems", 0) > settings.get("metal", 0), "gem lines should be the usual setting")
 	for style in ["echo", "halo", "spine", "solitaire"]:
 		check(styles.has(style), "pattern %s never used" % style)
+
+
+## The dense layout: 2/3 to 3/4 of the area groups are packed dense and
+## never sparse, the picture has more stones than the classic one of the
+## same seeds, still none overlapping, and a request without a layout (an
+## older puzzle) stays classic.
+func test_layouts() -> void:
+	print("Layouts")
+	var denser := 0
+	var tighter_lines := 0
+	var gem_pictures := 0
+	var classic_sparse := 0
+	var dense_sparse := 0
+	for i in 6:
+		var seed_value := 2020 + i
+		var opts := {"variant": MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()], "pattern_seed": i,
+				"frame": false}
+		var lines := PictureSources.mandala_lines(seed_value, opts)
+		var classic := PictureSources.mandala_collage(seed_value, opts, lines)
+		opts["layout"] = "dense"
+		var dense := PictureSources.mandala_collage(seed_value, opts, lines)
+		check(classic["layout"] == "classic" and classic["dense"] == 0.0, "seed %d: no layout wasn't classic" % seed_value)
+		check(dense["layout"] == "dense", "seed %d: layout dense not honored" % seed_value)
+		check(dense["dense"] >= CollageGenerator.DENSE_SHARE_MIN and dense["dense"] <= CollageGenerator.DENSE_SHARE_MAX,
+				"seed %d: dense share %.2f" % [seed_value, dense["dense"]])
+		var groups := {}
+		var dense_groups := {}
+		for r in dense["regions"]:
+			if r["kind"] != "area":
+				continue
+			groups[r["group"]] = true
+			if r["dense"]:
+				dense_groups[r["group"]] = true
+				check(r["fill"] == "full", "seed %d: dense region %d is %s" % [seed_value, r["id"], r["fill"]])
+			if r["fill"] != "full":
+				dense_sparse += 1
+		for r in classic["regions"]:
+			if r["kind"] == "area" and r["fill"] != "full":
+				classic_sparse += 1
+		var share := float(dense_groups.size()) / maxi(1, groups.size())
+		check(groups.size() < 4 or (share >= 0.5 and share <= 0.85),
+				"seed %d: %d of %d groups dense" % [seed_value, dense_groups.size(), groups.size()])
+		var n_classic: int = classic["slots"].size()
+		var n_dense: int = dense["slots"].size()
+		check(n_dense <= CollageGenerator.DENSE_MAX_SLOTS, "seed %d: %d stones in a dense picture" % [seed_value, n_dense])
+		if n_dense > n_classic:
+			denser += 1
+		if (classic["setting"] == "gems" and dense["setting"] == "gems" and classic["unit"] == dense["unit"]
+				and classic["dropped"] == 0 and dense["dropped"] == 0):
+			gem_pictures += 1
+			if _line_stones(dense) > _line_stones(classic):
+				tighter_lines += 1
+		var overlaps := count_overlaps(dense["slots"], dense["width"] * 0.002)
+		check(overlaps == 0, "seed %d: %d overlapping stones in the dense layout" % [seed_value, overlaps])
+		print("  seed %d %-9s %s: %4d stones classic, %4d dense (%d of %d groups dense), coverage %.0f%% -> %.0f%%" % [
+				seed_value, opts["variant"], classic["setting"], n_classic, n_dense, dense_groups.size(), groups.size(),
+				CollageGenerator.mean_coverage(classic) * 100.0, CollageGenerator.mean_coverage(dense) * 100.0])
+		render_collage(classic).save_png(out_dir.path_join("layout_%d_classic.png" % seed_value))
+		render_collage(dense).save_png(out_dir.path_join("layout_%d_dense.png" % seed_value))
+	check(denser >= 5, "only %d of 6 dense pictures have more stones than classic" % denser)
+	check(tighter_lines == gem_pictures, "only %d of %d dense gem-line pictures have more line stones" % [
+			tighter_lines, gem_pictures])
+	check(dense_sparse <= classic_sparse, "dense pictures have more sparse areas (%d) than classic (%d)" % [
+			dense_sparse, classic_sparse])
+
+	# New requests are dense; an older one (no layout) is made classic again.
+	var unlocks := GemCatalog.default_unlocks()
+	check(PuzzleMaker.new_request("mandala", "rainbow")["layout"] == PuzzleMaker.LAYOUT, "new requests have no layout")
+	var old := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow"}, unlocks)
+	check(old["layout"] == "classic", "a request without a layout wasn't classic")
+	var made := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow", "layout": "dense"},
+			unlocks)
+	check(made["layout"] == "dense", "a dense request wasn't dense")
+
+
+static func _line_stones(p: Dictionary) -> int:
+	var n := 0
+	for s in p["slots"]:
+		if p["regions"][s["region"]]["kind"] == "line":
+			n += 1
+	return n
 
 
 ## Symmetric pictures get symmetric stones: turned by one repeat, nearly

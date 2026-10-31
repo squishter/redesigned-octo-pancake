@@ -393,6 +393,8 @@ func _start_making() -> void:
 		_request["seed"] = _recolor["seed"]
 		_request["pattern_seed"] = _recolor["pattern_seed"]
 		_request["kit_size"] = _recolor.get("kit_size", _request["kit_size"])
+		# Older puzzles were made before layouts: the same picture is classic.
+		_request["layout"] = _recolor.get("layout", "classic")
 	_new_panel.visible = false
 	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(_request["type"]).to_lower()
 	_busy.visible = true
