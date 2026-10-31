@@ -53,10 +53,13 @@ static func outline(shape: String, length: float, width: float, segments: int = 
 			for i in 3:
 				pts.append(Vector2.from_angle(TAU / 3.0 * i) * a)
 		"emerald":
-			# Step cut: a rectangle with its corners clipped.
-			var c := b * 0.35
-			pts = PackedVector2Array([Vector2(-a + c, -b), Vector2(a - c, -b), Vector2(a, -b + c), Vector2(a, b - c),
-					Vector2(a - c, b), Vector2(-a + c, b), Vector2(-a, b - c), Vector2(-a, -b + c)])
+			# Keep the existing 3D silhouette: each axis loses 35% at its
+			# corners. Using the width's clip on both axes would expand long
+			# stones past their old silhouette and can crowd gem-line neighbors.
+			var cx := a * 0.35
+			var cy := b * 0.35
+			pts = PackedVector2Array([Vector2(-a + cx, -b), Vector2(a - cx, -b), Vector2(a, -b + cy), Vector2(a, b - cy),
+					Vector2(a - cx, b), Vector2(-a + cx, b), Vector2(-a, b - cy), Vector2(-a, -b + cy)])
 		"kite":
 			# Pointed at +x, with its shoulders behind the middle, kept inside
 			# the capsule's straight stretch so it fits a capsule slot.
