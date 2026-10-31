@@ -26,7 +26,8 @@ mode for trying out new pattern generation.
   black onyx, white and clear diamond), six themes made of those colors
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
   mandala collages, with no frames or collars, placing gems with Pop or
-  Fly and the Ripple finale. Everything else comes from packs.
+  Fly and the Light shimmer finale. Everything else comes from packs
+  (Ripple too; players from before keep the Ripple they had).
 - **Player UI.** The workshop, saved-puzzle cards, collection categories,
   settings, camera controls, gem tray, hint meter and power-up dialog share
   the jewel artwork, gold framing and quiet mint progress meters. Creation
@@ -134,7 +135,9 @@ mode for trying out new pattern generation.
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to
   place gems (Pop, Fly, Drop, Spin, Twinkle, and ones that read even zoomed
   far out: Bounce, Comet, Firework, Beam, Halo), finales (Ripple, Spiral,
-  Sweep, Shimmer, Light ripple: a ring of light instead of swelling gems) and power-up charges. Locked things stay a mystery: gems
+  Sweep, Shimmer, and a light version of each: Light ripple, Light spiral,
+  Light sweep and Light shimmer, which flash the gems and light the paper in
+  the same pattern instead of swelling them) and power-up charges. Locked things stay a mystery: gems
   show only as flat silhouettes of their outline, and names, theme colors
   and descriptions stay hidden.
 - **Power-ups**, spent from *Power-ups* while playing. For the whole puzzle:
@@ -218,8 +221,8 @@ mode for trying out new pattern generation.
   which would hardly show on the paper. Zoomed
   in, the board pans until an edge reaches the middle of the screen, so
   stones at the very edge can be placed comfortably. When the
-  last stone is in, a wave ripples out from the middle while the light
-  sweeps over the gems, and the picture is left to look at, zoomed and
+  last stone is in, the chosen finale plays (Light shimmer to begin with:
+  light flashes over the gems, each in its own time), and the picture is left to look at, zoomed and
   panned at will, until *‹ Menu*. Progress saves every couple of seconds
   and whenever she leaves or the app goes to the background.
 
@@ -403,7 +406,7 @@ frame.
 | `facet_atlas.gd` | `FacetAtlas`: a board's facet pictures (`GemMesh.get_facets`) gathered into one texture for its tiny stones, a tile per shape and cut the first time one is needed. |
 | `studio_map.gd` | `StudioMap`: the viewport a board renders its studio map in (below), only again when the lights have moved. |
 | `studio_map.gdshader` | The studio as a picture: every direction octahedrally mapped onto a 512 px HDR square (`oct_decode`), rendered by the board along with any frame where the lights have moved, so gems look a direction up instead of working the studio out four times a pixel. `studio_map = false` on the board (or *Studio* in the lab's Options) works it out per pixel instead, for comparing. |
-| `gem_light.gdshaderinc` | The light and studio shared by all of them, `stone_tilt`, a stone's tilt from its random number (matching `GemBoard3D._tilt`), `as_tilted`, which turns a direction into a tilted stone's frame, `oct_encode`/`oct_decode` for the studio map, and `wave_scale`, how far the finale's wave swells a stone just now. |
+| `gem_light.gdshaderinc` | The light and studio shared by all of them, `stone_tilt`, a stone's tilt from its random number (matching `GemBoard3D._tilt`), `as_tilted`, which turns a direction into a tilted stone's frame, `oct_encode`/`oct_decode` for the studio map, and `wave_scale`, how far the finale's wave swells a stone just now (a light finale, `wave_light`, flashes it instead; `paper.gdshader` lights the paper along the same wave, by `wave_kind`). |
 
 ## Trying it
 

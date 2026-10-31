@@ -32,6 +32,7 @@ func _run() -> void:
 	await _test_transitions()
 	await _test_completion_rewards()
 	await _test_stroke_limit()
+	await _test_light_finales()
 	await _test_unlock_all()
 	_test_camera_helper()
 	print("Menu UI: %d checks, %d failures" % [_checks, _failures])
@@ -487,6 +488,40 @@ func _test_transitions() -> void:
 	_check(app._screen.get_script() == MainMenu and not app._veil.visible, "Board-to-menu transition completes")
 	SaveStore.delete_puzzle(app.profile, meta["id"])
 	app.queue_free()
+	await process_frame
+
+
+func _test_light_finales() -> void:
+	print("Light finales")
+	var slots := []
+	for k in 25:
+		slots.append({"id": k, "region": 0, "shape": "round", "cut": "brilliant", "x": 10 + (k % 5) * 20,
+			"y": 10 + (k / 5) * 20, "rotation": 0.0, "size": 8.0, "width": 8.0, "target_gem": "ruby",
+			"target_color": Color.RED})
+	var board := GemBoard3D.new()
+	board.size = Vector2(600, 600)
+	root.add_child(board)
+	board.show_collage({"width": 100, "height": 100, "slots": slots})
+	var paper: ShaderMaterial = board._paper_material
+	for style: String in GemBoard3D.FINALES:
+		var light := style.begins_with("light_")
+		var base := style.trim_prefix("light_")
+		_check(base in GemBoard3D.WAVE_KINDS, "%s goes as a known wave" % style)
+		if light:
+			_check(base in GemBoard3D.FINALES and GemCatalog.FINALES.has(style), "%s is a light version of %s" % [style, base])
+		board.celebrate(Vector2(50, 50), style)
+		_check(float(paper.get_shader_parameter("wave_light")) == (1.0 if light else 0.0),
+			"%s %s the stones" % [style, "flashes" if light else "swells"])
+		_check(int(paper.get_shader_parameter("wave_kind")) == GemBoard3D.WAVE_KINDS.find(base),
+			"%s lights the paper in its own pattern" % style)
+		board.end_celebration()
+	for base: String in GemBoard3D.WAVE_KINDS:
+		_check(GemBoard3D.FINALES.has("light_" + base), "%s has a light version" % base)
+	_check(GemCatalog.STARTING_FINALES == ["light_shimmer"] and SaveStore.DEFAULT_SETTINGS["finale"] == "light_shimmer",
+		"Light shimmer is the starting finale")
+	var fresh := SaveStore.upgrade({})
+	_check(fresh["unlocks"]["finales"] == ["light_shimmer"], "A new player has only Light shimmer; Ripple is locked")
+	board.queue_free()
 	await process_frame
 
 
