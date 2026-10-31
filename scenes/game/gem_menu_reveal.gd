@@ -5,7 +5,7 @@ signal finished
 
 const MenuBackdrop := preload("res://scenes/game/menu_backdrop.gd")
 const SHADER := preload("res://render/gem_menu_reveal.gdshader")
-const DURATION := 0.55
+const DURATION := 1.0
 
 ## The live menu is reparented into the app after the reveal; it is never recreated.
 var menu: Control

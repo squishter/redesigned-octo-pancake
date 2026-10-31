@@ -98,8 +98,9 @@ mode for trying out new pattern generation.
     photos with 12.
 - **Launch cover.** A colorful jeweled butterfly and botanical craft cover
   introduces the game with a crisp typeset title. It holds for three seconds
-  (tap, Enter or Back to continue early), then a fast 0.55-second wave of
-  faceted gem tiles places the actual menu on screen. The live menu takes
+  (tap, Enter or Back to continue early), then a one-second sweep of faceted
+  gem tiles places the actual menu row by row, left to right and top to
+  bottom. The live menu takes
   over when the facets clear; the daily gift follows afterward. The splash
   only plays at launch. The cover also replaces the engine's boot image.
   The bundled DM Serif Display title font includes its SIL Open Font License

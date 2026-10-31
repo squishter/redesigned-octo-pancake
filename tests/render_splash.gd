@@ -4,6 +4,7 @@ extends SceneTree
 ## Use an isolated XDG_DATA_HOME: this writes a fixture profile for the capture.
 
 const AppScene := preload("res://scenes/game/app.tscn")
+const GemMenuReveal := preload("res://scenes/game/gem_menu_reveal.gd")
 var _out := "res://build/splash-renders"
 var _frames := false
 
@@ -33,8 +34,9 @@ func _capture() -> void:
 	var reveal: Control = app._reveal
 	reveal._motion.pause()
 	if _frames:
-		for frame in 18:
-			reveal._set_progress(float(frame) / 17.0)
+		var frames := ceili(GemMenuReveal.DURATION * 30.0) + 1
+		for frame in frames:
+			reveal._set_progress(float(frame) / float(frames - 1))
 			await _snapshot("reveal-%02d.png" % frame)
 	else:
 		reveal._set_progress(0.45)
