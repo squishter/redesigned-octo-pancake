@@ -71,6 +71,12 @@ const MIN_STONE := 0.25
 ## its stones. And the space between stones, in units.
 const UNIT := 0.0075
 const GAP := 0.3
+## Dense groups (see CollageGenerator's "dense" layout): the space between
+## their stones as a share of the gap, their stones as a share of the usual
+## size (so more rows fit, closer together), and how often they get spacer rows.
+const DENSE_GAP := 0.4
+const DENSE_SIZE := 0.8
+const DENSE_SPACERS := 0.5
 ## The region holding a mandala's center, when at most this deep (in
 ## units), holds a single stone: the picture's focus.
 const CENTERPIECE := 3.0
@@ -91,6 +97,11 @@ var tiers := false
 ## Thin rows of small stones between a pattern's main rows, each its own part,
 ## so a picture can use more gem types while every row keeps a single type.
 var spacers := false
+## Symmetry groups packed dense: smaller stones, closer together, more often
+## with spacer rows (see DENSE_GAP).
+var dense_groups := {}
+## The gap between stones of groups that aren't dense.
+var _base_gap := 2.0
 ## The picture is symmetric (radial or mirror): regions that map onto
 ## themselves (mirrored, or turned about the center) get patterns as
 ## symmetric (see SlotMirror).
@@ -133,6 +144,7 @@ var _part := 0
 ##   tiers (bool): some groups first get a few large, then a few medium stones,
 ##   spacers (bool): every row pattern gets thin rows of small stones between
 ##     its main rows (otherwise only some groups, picked per seed),
+##   dense_groups (Dictionary group -> true): groups packed dense (see DENSE_GAP),
 ##   styles (Dictionary region id -> style, to force a style or sparse fill),
 ##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
 ##     regions that map onto themselves get patterns as symmetric,
@@ -169,6 +181,7 @@ static func pack(region_map: RegionMap, options: Dictionary = {}) -> Array[Dicti
 		var mid: Dictionary = list[list.size() / 2]
 		list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			return absf(a["area"] - mid["area"]) < absf(b["area"] - mid["area"]))
+		p.gap = p._base_gap * (DENSE_GAP if p.dense_groups.has(g) else 1.0)
 		var design := p._design(list[0], forced.get(list[0]["id"], ""), g)
 		var masters := []
 		for region: Dictionary in list:
@@ -192,6 +205,8 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	rng.seed = seed_value
 	unit = options.get("unit", side * UNIT)
 	gap = options.get("gap", unit * GAP)
+	_base_gap = gap
+	dense_groups = options.get("dense_groups", {})
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
@@ -213,6 +228,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 	var g_rng := RandomNumberGenerator.new()
 	g_rng.seed = hash([seed_value, group, "pattern"])
 	var u := unit
+	var dense := dense_groups.has(group)
 	var max_d: float = region["max_dist"]
 	var compact: float = region["area"] / (PI * max_d * max_d)
 	var style := forced_style
@@ -232,7 +248,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 				weights["rosette"] = 0.12
 				weights["sunburst"] = 0.15
 			style = _pick(weights, g_rng)
-	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)]
+	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)] * (DENSE_SIZE if dense else 1.0)
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
 	var shape: String = ROW_SHAPES[g_rng.randi_range(0, ROW_SHAPES.size() - 1)]
@@ -244,7 +260,10 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"row_r": row_r,
 		"row_shape": shape,
 		# Every other row smaller, like alternating bead sizes.
-		"spacers": spacers or g_rng.randf() < 0.25,
+		"spacers": spacers or g_rng.randf() < (DENSE_SPACERS if dense else 0.25),
+		# Stones of the fills that go by the unit (pave, spine, solitaire's
+		# corners) shrink with the rows.
+		"scale": DENSE_SIZE if dense else 1.0,
 		"toning": TONINGS[g_rng.randi_range(0, TONINGS.size() - 1)],
 		"halo_rows": 1 if g_rng.randf() < 0.6 else 2,
 		"edge_row": g_rng.randf() < 0.5,
@@ -389,7 +408,7 @@ static func upright(shape: String) -> float:
 func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	var style: String = design["style"]
 	region["style"] = style
-	var u := unit
+	var u: float = unit * design.get("scale", 1.0)
 	var r_row: float = design["row_r"]
 	var toning: String = design["toning"]
 

@@ -21,6 +21,10 @@ extends RefCounted
 ##   none: no lines; the stones alone make the picture
 ## Hidden lines still separate the regions for slot packing; they just aren't
 ## drawn.
+##
+## Dense groups (the "dense" option, a share of the groups): packed with
+## smaller stones closer together (see SlotPacker.DENSE_GAP), and always
+## full, so only the other groups can go sparse.
 
 const FILLS := ["full", "scatter", "accent", "outline", "bare"]
 const LINE_STYLES := ["full", "partial", "outer", "none"]
@@ -46,8 +50,10 @@ const ACCENT_MAX_SPREAD := 2.5
 ##             picked from AUTO_SPARSITY by the seed)
 ##   line_style: one of LINE_STYLES or "auto" (default "auto")
 ##   unit: base stone radius in px, as for SlotPacker (default SlotPacker.UNIT of the picture)
+##   dense: 0..1, the share of groups packed dense (default 0)
 ## Returns {sparsity, line_style, fills: PackedStringArray per region,
-##          outlined: PackedByteArray per region, keep_outer: bool}.
+##          outlined: PackedByteArray per region, dense: PackedByteArray per
+##          region, keep_outer: bool}.
 static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, seed_value: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	# Its own stream, so the plan doesn't shift the packer's or colors' choices.
@@ -80,12 +86,26 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 		group_spread[g] = maxf(group_spread[g], r["area"] / (PI * r["max_dist"] * r["max_dist"]))
 		total_area += r["area"]
 
+	# Dense groups: that share of them, picked in an order of their own so the
+	# other choices stay as they were.
+	var group_dense := PackedByteArray()
+	group_dense.resize(n_groups)
+	var dense: float = options.get("dense", 0.0)
+	if dense > 0.0:
+		var dense_rng := RandomNumberGenerator.new()
+		dense_rng.seed = hash([seed_value, "dense"])
+		var order := _shuffled(n_groups, dense_rng)
+		for i in mini(n_groups, roundi(n_groups * dense)):
+			group_dense[order[i]] = 1
+
 	var group_fill := PackedStringArray()
 	group_fill.resize(n_groups)
 	group_fill.fill("full")
 	var sparse_area := 0.0
 	var bare_area := 0.0
 	for g in _shuffled(n_groups, rng):
+		if group_dense[g] == 1:
+			continue
 		if rng.randf() >= sparsity or sparse_area + group_area[g] > MAX_SPARSE_AREA * total_area:
 			continue
 		var depth := group_depth[g]
@@ -129,14 +149,17 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 
 	var fills := PackedStringArray()
 	var outlined := PackedByteArray()
+	var dense_regions := PackedByteArray()
 	for r in map.regions.size():
 		fills.append(group_fill[groups[r]])
 		outlined.append(group_outlined[groups[r]])
+		dense_regions.append(group_dense[groups[r]])
 	return {
 		"sparsity": sparsity,
 		"line_style": line_style,
 		"fills": fills,
 		"outlined": outlined,
+		"dense": dense_regions,
 		"keep_outer": line_style != "none",
 	}
 

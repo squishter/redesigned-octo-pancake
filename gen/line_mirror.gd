@@ -21,9 +21,11 @@ const SAMPLES := 1500
 
 ## stones: GemLines slots, in placing order (junctions first). mask: the line
 ## art (w x h, nonzero on lines). r, gap, cell: as in GemLines.place.
+## tight: {class: share of the gap} for dense classes of lines, whose stones
+## keep that smaller gap (see GemLines.DENSE_GAP).
 ## Returns the symmetric stones, renumbered.
 static func apply(stones: Array[Dictionary], mask: PackedByteArray, w: int, h: int, symmetry: String, r: float,
-		gap: float, cell: float) -> Array[Dictionary]:
+		gap: float, cell: float, tight: Dictionary = {}) -> Array[Dictionary]:
 	if symmetry == "none" or stones.is_empty():
 		return stones
 	var o := Vector2(w, h) / 2.0
@@ -46,10 +48,11 @@ static func apply(stones: Array[Dictionary], mask: PackedByteArray, w: int, h: i
 			sym = bands[b]
 		var rr: float = s["width"] / 2.0
 		var hh: float = s["size"] / 2.0 - rr
+		var g: float = gap * tight.get(s["part"], 1.0)
 		if sym["folds"] >= Symmetry.MAX_FOLDS or (sym["folds"] <= 1 and is_nan(sym["axis"])):
-			_place(out, hash, cell, gap, s, [c], [float(s["rotation"])], rr, hh)
+			_place(out, hash, cell, g, s, [c], [float(s["rotation"])], rr, hh)
 			continue
-		var kept := _keep(s, c, o, sym, rr, hh, gap)
+		var kept := _keep(s, c, o, sym, rr, hh, g)
 		if kept.is_empty():
 			continue
 		c = kept[0]
@@ -66,7 +69,7 @@ static func apply(stones: Array[Dictionary], mask: PackedByteArray, w: int, h: i
 			if not seen:
 				at.append(q)
 				turns.append(Symmetry.rotation(t, rot))
-		_place(out, hash, cell, gap, s, at, turns, rr, hh)
+		_place(out, hash, cell, g, s, at, turns, rr, hh)
 	for i in out.size():
 		out[i]["id"] = i
 	return out

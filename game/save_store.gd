@@ -4,7 +4,8 @@ extends RefCounted
 ##   profile.json: {version, unlocks (see GemCatalog), settings, wallet
 ##     {coins, picks}, daily {opened, completed}, powers {power: charges}
 ##     (see Packs), puzzles: [meta]}, where each meta is {id, type, seed,
-##     pattern_seed, theme, created, updated, total, filled, done, rewarded,
+##     pattern_seed, theme, layout (see PuzzleMaker.LAYOUT; none before
+##     layouts, meaning "classic"), created, updated, total, filled, done, rewarded,
 ##     powers (the whole-puzzle power-ups on for it)}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
 ##   <id>.progress: which stones are placed, one bit per slot;
@@ -159,6 +160,7 @@ static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
 		"pattern_seed": int(request.get("pattern_seed", 0)),
 		"theme": request.get("theme", ""),
 		"kit_size": request.get("kit_size", ""),
+		"layout": request.get("layout", "classic"),
 		"created": now,
 		"updated": now,
 		"total": picture["slots"].size(),

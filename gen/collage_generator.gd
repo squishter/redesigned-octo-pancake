@@ -13,9 +13,21 @@ extends RefCounted
 ## The same line art makes many different collages: `pattern_seed` changes
 ## the setting, patterns, sparse fills and colors while the lines stay put.
 ##
+## Layouts (how closely the stones sit):
+##   classic: every pattern and gem line spaced as SlotPacker.GAP says;
+##   dense: 2/3 to 3/4 of the groups of areas and of the classes of gem
+##     lines (DENSE_SHARE_MIN..MAX, picked per seed) are dense: lines' stones
+##     sit closer together (GemLines.DENSE_GAP), areas get smaller stones in
+##     more rows, closer together and more often with spacer rows
+##     (SlotPacker.DENSE_GAP), and dense areas are never sparse, so more
+##     areas are filled. Pictures may have more stones (DENSE_MAX_SLOTS).
+## A picture is made the same again only in its own layout: a puzzle
+## request without one (from before dense) stays classic.
+##
 ## Result format (saved as JSON through PatternIO):
 ## {
 ##   version, type: "collage", width, height, symmetry, source: {...},
+##   layout: one of LAYOUTS, dense: the share of groups and line classes made dense,
 ##   setting: "gems" | "metal", pattern_seed, line_gems: GemLines style or "",
 ##   bold_lines: how many classes of lines got medium or large stones,
 ##   dropped: how many elements (classes of gem lines, groups of areas) were
@@ -25,7 +37,7 @@ extends RefCounted
 ##   lines_visible: the part of `lines` to draw as the metal setting,
 ##   line_style, sparsity: the design choices (see DesignPlan),
 ##   regions: [{id, group, kind, color, gem_color_id, accent_color, accent_gem, fill,
-##              outlined, style, area, centroid, empty}],
+##              outlined, dense (areas only), style, area, centroid, empty}],
 ##   slots: [{id, region, shape, x, y, rotation, size, width, tone, part, target_color, target_gem}],
 ##   spacers: bool, thin rows of small stones between every pattern's main rows
 ##            (default: some groups; all when the picture is short of gem types)
@@ -57,6 +69,12 @@ const LINE_PAD := 0.5
 ## Gem types (shape + color, any size) a collage aims for.
 const GEM_TYPES_MIN := 25
 const GEM_TYPES_MAX := 30
+const LAYOUTS := ["classic", "dense"]
+## Dense layout: the share of groups of areas and of classes of gem lines
+## made dense (picked per seed in this range), and its most stones.
+const DENSE_SHARE_MIN := 0.67
+const DENSE_SHARE_MAX := 0.75
+const DENSE_MAX_SLOTS := 7500
 
 
 ## options:
@@ -91,13 +109,14 @@ const GEM_TYPES_MAX := 30
 ##   max_slots: the most stones (default MAX_SLOTS)
 ##   drop_lines, bare_at: classes of gem lines and centroids of areas to leave
 ##     out (set when over max_slots)
+##   layout: one of LAYOUTS (default "classic")
 ##   source: Dictionary describing where the lines came from, stored as is
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
 	var unit: float = options.get("unit", minf(w, h) * SlotPacker.UNIT)
 	var picture := _build(mask, w, h, options, unit)
 	if options.has("unit") and options.has("spacers"):
 		return picture
-	var max_slots: int = options.get("max_slots", MAX_SLOTS)
+	var max_slots: int = options.get("max_slots", DENSE_MAX_SLOTS if options.get("layout", "") == "dense" else MAX_SLOTS)
 	# Too many stones: leave out the element with the most stones (a class of
 	# gem lines, or a group of areas), all its symmetric copies at once, as a
 	# symmetric gap, rather than making every stone bigger.
@@ -151,6 +170,16 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var center := Vector2i(w / 2, h / 2) if symmetry != "none" else Vector2i(-1, -1)
 	var side := float(mini(w, h))
 	var gap: float = options.get("gap", unit * SlotPacker.GAP)
+	# The share of groups and line classes made dense, from a stream of its
+	# own so classic pictures come out as they always have.
+	var layout: String = options.get("layout", "classic")
+	if not layout in LAYOUTS:
+		layout = "classic"
+	var dense := 0.0
+	if layout == "dense":
+		var dense_rng := RandomNumberGenerator.new()
+		dense_rng.seed = hash([seed_value, "dense"])
+		dense = dense_rng.randf_range(DENSE_SHARE_MIN, DENSE_SHARE_MAX)
 
 	var setting: String = options.get("setting", "auto")
 	if not setting in SETTINGS:
@@ -178,7 +207,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
 		var bold: int = options.get("bold_lines", rng.randi_range(2, 3))
 		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold, mask,
-				options.get("drop_lines", []))
+				options.get("drop_lines", []), dense)
 		for sl in line_slots:
 			if sl["seq"] < 0 and sl["tone"] == 1:
 				bold_lines[sl["part"]] = true
@@ -193,6 +222,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	plan_options["unit"] = unit
 	if setting == "gems":
 		plan_options["line_style"] = "none"
+	plan_options["dense"] = dense
 	var plan := DesignPlan.make(map, groups, plan_options, seed_value)
 	# Areas left out to stay under max_slots (by where they are, as region
 	# numbers can shift between builds).
@@ -209,6 +239,12 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		pack_options["tiers"] = rng.randf() < 0.5
 	pack_options["unit"] = unit
 	pack_options["line_mask"] = mask
+	var dense_groups := {}
+	var dense_regions: PackedByteArray = plan["dense"]
+	for r in dense_regions.size():
+		if dense_regions[r] == 1:
+			dense_groups[groups[r]] = true
+	pack_options["dense_groups"] = dense_groups
 	var styles := DesignPlan.packer_styles(plan)
 	styles.merge(options.get("styles", {}), true)
 	pack_options["styles"] = styles
@@ -335,6 +371,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			"feature_gem": feature_ids[id] if not feature_ids.is_empty() else null,
 			"fill": fills[id],
 			"outlined": outlined[id] == 1,
+			"dense": dense_regions[id] == 1,
 			"style": r.get("style", ""),
 			"area": r["area"],
 			"centroid": r["centroid"],
@@ -370,6 +407,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"width": w,
 		"height": h,
 		"symmetry": symmetry,
+		"layout": layout,
+		"dense": dense,
 		"setting": setting,
 		"pattern_seed": pattern_seed,
 		"line_gems": line_gems,

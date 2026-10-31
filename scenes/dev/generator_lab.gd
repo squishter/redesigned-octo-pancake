@@ -31,6 +31,7 @@ var _sparsity: OptionButton
 var _line_style: OptionButton
 var _setting: OptionButton
 var _line_gems: OptionButton
+var _layout: OptionButton
 var _seed: SpinBox
 var _pattern: SpinBox
 var _wobble: HSlider
@@ -176,6 +177,9 @@ func _ready() -> void:
 	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)
 	_setting = _options(controls, "Setting", ["auto"] + CollageGenerator.SETTINGS)
 	_line_gems = _options(controls, "Line gems", ["auto"] + _unique(GemLines.STYLES))
+	# The game's layout first (see PuzzleMaker.LAYOUT).
+	_layout = _options(controls, "Layout", [PuzzleMaker.LAYOUT] + CollageGenerator.LAYOUTS.filter(
+			func(l: String) -> bool: return l != PuzzleMaker.LAYOUT))
 	_seed = _spin(controls, "Seed", 1, 999999, 1)
 	_pattern = _spin(controls, "Pattern", 0, 999999, 0)
 	_colors = _spin(controls, "Kit colors", 12, 40, 20)
@@ -394,6 +398,7 @@ func _generate() -> void:
 		"line_style": _selected(_line_style),
 		"setting": _selected(_setting),
 		"line_gems": _selected(_line_gems),
+		"layout": _selected(_layout),
 		"pattern_seed": int(_pattern.value),
 	}
 	_say("Generating…")
@@ -415,6 +420,7 @@ func _run_job(job: Dictionary) -> void:
 		"sparsity": job["sparsity"],
 		"line_style": job["line_style"],
 		"setting": job["setting"],
+		"layout": job["layout"],
 		"pattern_seed": job["pattern_seed"],
 	}
 	if job["line_gems"] != "auto":
@@ -493,6 +499,8 @@ func _process(_delta: float) -> void:
 				setting = "gem lines (%s, %s colors, %d bold)" % [p["line_gems"], p["line_colors"], p["bold_lines"]]
 			if p["dropped"] > 0:
 				setting += ", %d left out for stone count" % p["dropped"]
+			if p.get("layout", "classic") == "dense":
+				setting += ", dense layout (%.0f%% of patterns and lines)" % (p["dense"] * 100.0)
 			_say("Collage · %d stones · %d gem types · pattern %d · %d ms" % [p["slots"].size(), p["gem_types"],
 					p["pattern_seed"], ms], ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
 					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [

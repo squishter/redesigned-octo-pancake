@@ -337,7 +337,7 @@ permission; both are on in the committed Android export preset
 | `design_plan.gd` | Per-design variety, decided per symmetry group so symmetric copies match. **Fills:** some groups are made sparse on purpose (*scatter*: a few spaced-out stones; *accent*: one stone that nearly fills a compact region; *outline*: a rhinestone border only; *bare*: empty negative space). At most 60% of the area goes sparse and 30% bare (only regions at least 2 stone units deep, so bare reads as negative space rather than a gap), and something always stays fully packed. **Line styles:** *full*, *partial* (only some groups' borders), *outer* (silhouette only) or *none* (stones alone). Hidden lines still separate regions for packing; they just aren't drawn. Both are picked per seed unless `sparsity` (0..1) or `line_style` is passed. |
 | `region_paint.gd` | Finds symmetric copies of regions so they share theme colors, samples region colors from photos, snaps to gems, and renders flat images. |
 | `photo_line_art.gd` | Photo → closed line art: blur, quantize to 6–10 colors, majority filter, merge small areas, then trace the color boundaries. |
-| `collage_generator.gd` | Turns a mask into the full collage puzzle (regions, groups, slots and target colors). Picks the **setting** per pattern seed: *gems* (about 3 in 4; lines become gem lines, sized to how roomy the areas are, colored in one or two sparkly neutrals or each in the accent color of the area it borders; area stones sit as close to them as to each other) or *metal* (lines drawn as before). `pattern_seed` reseeds everything but the lines. The stone unit (a base stone's radius) is 0.75% of the picture's shorter side, so the line art's details are bigger than its stones, with 0.3 of a unit between stones. Collages land at 300–6000 stones. Over that, the element with the most stones (a class of gem lines or a group of areas, with all its symmetric copies) is left out as a symmetric gap, up to 6 times, before the stone unit is rescaled; under 300 the unit shrinks. |
+| `collage_generator.gd` | Turns a mask into the full collage puzzle (regions, groups, slots and target colors). Picks the **setting** per pattern seed: *gems* (about 3 in 4; lines become gem lines, sized to how roomy the areas are, colored in one or two sparkly neutrals or each in the accent color of the area it borders; area stones sit as close to them as to each other) or *metal* (lines drawn as before). `pattern_seed` reseeds everything but the lines. The stone unit (a base stone's radius) is 0.75% of the picture's shorter side, so the line art's details are bigger than its stones, with 0.3 of a unit between stones. Collages land at 300–6000 stones. Over that, the element with the most stones (a class of gem lines or a group of areas, with all its symmetric copies) is left out as a symmetric gap, up to 6 times, before the stone unit is rescaled; under 300 the unit shrinks. Two **layouts**: *classic* spaces everything as above; *dense* (what the game makes now) packs 2/3 to 3/4 of the groups of areas and of the classes of gem lines (picked per seed) dense: lines' stones sit 0.12 of a unit apart instead of 0.3, and areas get stones 0.8× the size in more rows, 0.12 of a unit apart and twice as often with spacer rows; dense areas never go sparse, so more areas are filled, and dense collages may have up to 7500 stones. A request without a layout (puzzles from before) is made classic, so recoloring an older puzzle still makes the same picture. |
 | `picture_sources.gd` | Convenience entry points for each source. |
 | `pattern_io.gd` | JSON save and load (colors as hex, grids as base64). |
 | `gem_cuts.gd` | The 3D **cuts** each shape comes in, so one outline makes several gem types: *brilliant* (a table ringed by kite and star facets), *step* (flat steps like an emerald cut), *rose* (a dome of triangles to a point), *checker* (a low dome of many small facets) and *cabochon* (a smooth dome). Each shape lists its classic cut first; a gem type takes it half the time. |
@@ -351,11 +351,13 @@ The generators touch no nodes, so they can run on `WorkerThreadPool`.
 Kit: `{type: "kit", width, height, drill, palette: [{symbol, color, gem_color_id, count}], cells}`.
 `cells` holds one palette index per cell, row-major.
 
-Collage: `{type: "collage", version: 2, width, height, symmetry, setting, pattern_seed, line_gems, line_colors, bold_lines, dropped, radial_size, tiers, unit, gem_types, gem_kinds, line_style, sparsity, source, lines, lines_visible, regions, slots}`.
+Collage: `{type: "collage", version: 2, width, height, symmetry, layout, dense, setting, pattern_seed, line_gems, line_colors, bold_lines, dropped, radial_size, tiers, unit, gem_types, gem_kinds, line_style, sparsity, source, lines, lines_visible, regions, slots}`.
 `lines` is every region boundary (with gem lines, the channel the line stones
 sit in) and `lines_visible` is the part drawn as the metal setting (none with
-gem lines). Each region has a `kind` (`area`, or `line` for gem-line stones),
-a `fill` (full, scatter, accent, outline, bare; `line` for line regions),
+gem lines). `layout` is `classic` or `dense` (missing on pictures from before layouts:
+classic) and `dense` the share of groups and line classes made dense.
+Each region has a `kind` (`area`, or `line` for gem-line stones),
+a `fill` (full, scatter, accent, outline, bare; `line` for line regions), `dense` (areas packed dense),
 `style` (its pattern), `color`, `accent_color` and `feature_color`, and `outlined`.
 Each slot is `{id, region, shape, cut, x, y, rotation, size, width, tone, part, target_color, target_gem}`
 (line stones also carry `seq`: their step in a line sequence, or -1),
@@ -466,6 +468,10 @@ frame.
   ```sh
   godot --headless -s res://tests/collage_sheet.gd -- --out=/tmp/sheet --seeds=1000,1003 --patterns=3
   ```
+
+  Add `--layout=both` to render each pattern in the classic and dense
+  layouts next to each other (or `--layout=dense` for dense only). The lab's
+  Options panel has a *Layout* choice too.
 
 - Menu and pack interaction checks (Godot 4.7). These exercise saved purchases,
   repeated presses, every reward kind, skip/back behavior, carousel wrapping

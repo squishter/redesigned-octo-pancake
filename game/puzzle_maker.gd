@@ -32,11 +32,16 @@ const PHOTO_DITHER := 0.85
 const PHOTO_OWN_DITHER := 0.5
 ## Picture features make() knows (GemCatalog.FEATURES must be among them).
 const FEATURES := ["frames", "backgrounds", "collars", "zoom", "wobble"]
+## How closely new collages' stones sit (CollageGenerator.LAYOUTS). Requests
+## from before layouts have none and stay "classic", so recoloring an older
+## puzzle makes the same picture again.
+const LAYOUT := "dense"
 
 
-## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme}.
+## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme, layout}.
 static func new_request(type_id: String, theme_id: String) -> Dictionary:
-	return {"type": type_id, "seed": randi_range(1, 999999), "pattern_seed": randi_range(1, 999999), "theme": theme_id}
+	return {"type": type_id, "seed": randi_range(1, 999999), "pattern_seed": randi_range(1, 999999), "theme": theme_id,
+			"layout": LAYOUT}
 
 
 ## The puzzle for `request` (see new_request), made from `unlocks` only:
@@ -67,6 +72,7 @@ static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		"shapes": unlocks.get("shapes", {}),
 		"pattern_seed": request["pattern_seed"],
 		"kit_size": request.get("kit_size", ""),
+		"layout": request.get("layout", "classic"),
 	}
 	# Picture features stay off until unlocked; unlocked, the generators pick
 	# them as they usually would.
@@ -96,6 +102,7 @@ static func _photo(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		"shapes": unlocks.get("shapes", {}),
 		"pattern_seed": request["pattern_seed"],
 		"seed": seed_value,
+		"layout": request.get("layout", "classic"),
 		"detail": 0.5,
 		# Edge detection, then the subject alone when the photo has a clear one
 		# ("on": always the likeliest subject, "off": the whole photo).
