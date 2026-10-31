@@ -130,6 +130,14 @@ vec3 as_tilted(vec3 d, vec2 tilt) {
 	return d * c + cross(axis, d) * s + axis * dot(axis, d) * (1.0 - c);
 }
 
+// A stone's tilt from its random number r: as GemBoard3D._tilt, which must
+// match it (TILT_MAX_DEG is 15). The gem shaders work it out here; the
+// shadow and sparkle shaders are handed it.
+vec2 stone_tilt(float r) {
+	float a = fract(r * 53.17) * 6.2831853;
+	return vec2(cos(a), sin(a)) * sin(radians(15.0) * fract(r * 37.91));
+}
+
 // Caustic light (bright webs) for phase t, about 0..1.
 float caustic(vec2 p, float t) {
 	vec2 q = mod(p * 6.2831853, 6.2831853) - 250.0;

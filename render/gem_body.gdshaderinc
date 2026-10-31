@@ -78,6 +78,10 @@ vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine, bool fir
 	if (n.y < 0.0) {
 		n = -n;
 	}
+	// The stone leans on the glue, its facets with it: the turn that stands
+	// its top upright, undone.
+	vec2 tilt = stone_tilt(stone.x);
+	n = as_tilted(n, -tilt);
 	// The light ripple: as its ring passes, the light swings once round the
 	// stone (its glints race over the facets) and burns brighter.
 	float burn = 1.0;
@@ -99,7 +103,7 @@ vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine, bool fir
 	vec3 inside;
 	if (cut > 3.5) {
 		// Cabochon: no facets inside; a soft glow that follows the light.
-		vec2 toward = -key_dir.xz * 0.45;
+		vec2 toward = -as_tilted(key_dir, tilt).xz * 0.45;
 		float glow = 1.0 - smoothstep(0.0, 0.9, length(p - toward));
 		inside = tint * (0.2 + 0.9 * glow) * light_strength;
 	} else {
