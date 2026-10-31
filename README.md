@@ -474,6 +474,16 @@ frame.
   godot --headless -s res://tests/run_gem_geometry.gd
   ```
 
+- GPU normal checks use both production shaders and compare their rendered
+  normals with the transformed mesh faces. These require a real renderer;
+  software Vulkan under Xvfb works. The render script saves three before/after
+  lighting comparisons of a 2.5:1 gem in `build/gem-normal-renders`:
+
+  ```sh
+  xvfb-run -a godot --rendering-method mobile -s res://tests/run_gem_normals.gd
+  xvfb-run -a godot --rendering-method mobile -s res://tests/render_gem_normals.gd
+  ```
+
 - One line art under several pattern seeds, side by side:
 
   ```sh

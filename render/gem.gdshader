@@ -17,7 +17,9 @@ varying vec4 stone;
 varying vec2 shine;
 
 void vertex() {
-	w_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
+	// Godot's MultiMesh normal matrix applies instance scale directly.
+	// Use the inverse transpose of the full instance transform instead.
+	w_normal = normalize(transpose(inverse(mat3(MODEL_MATRIX))) * NORMAL);
 	l_pos = VERTEX;
 	float cut = floor(INSTANCE_CUSTOM.w + 0.01);
 	stone = vec4(INSTANCE_CUSTOM.xyz, cut);
