@@ -96,6 +96,14 @@ mode for trying out new pattern generation.
     can instead use the photo's own 12, 20 or 30 colors (k-means in Lab,
     exact colors that aren't her gems, 50% carried on): 2-4 ΔE on the same
     photos with 12.
+- **Launch cover.** A colorful jeweled butterfly and botanical craft cover
+  introduces the game with a crisp typeset title. It holds for three seconds
+  (tap, Enter or Back to continue early), then a fast 0.55-second wave of
+  faceted gem tiles places the actual menu on screen. The live menu takes
+  over when the facets clear; the daily gift follows afterward. The splash
+  only plays at launch. The cover also replaces the engine's boot image.
+  The bundled DM Serif Display title font includes its SIL Open Font License
+  in `assets/fonts/OFL-DMSerifDisplay.txt`.
 - **Daily welcome gift.** The first menu visit each day celebrates the saved
   free pick with a jewel-framed card: floating foil packs, a gold halo and
   twinkling sparkles. *Choose my free pack* opens Collection & packs without

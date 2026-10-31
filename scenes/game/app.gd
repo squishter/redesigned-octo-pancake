@@ -10,13 +10,19 @@ const MenuBackdrop := preload("res://scenes/game/menu_backdrop.gd")
 const MainMenu := preload("res://scenes/game/main_menu.gd")
 const PlayScreen := preload("res://scenes/game/play_screen.gd")
 const CollectionScreen := preload("res://scenes/game/collection_screen.gd")
+const SplashScreen := preload("res://scenes/game/splash_screen.gd")
+const GemMenuReveal := preload("res://scenes/game/gem_menu_reveal.gd")
 const LAB_SCENE := preload("res://scenes/dev/generator_lab.tscn")
 
 var profile: Dictionary = {}
+## Tests of other screens can bypass the launch presentation.
+var show_splash := true
 var _screen: Control
 var _transitioning := false
 var _backdrop: Control
 var _veil: ColorRect
+var _splash: SplashScreen
+var _reveal: GemMenuReveal
 
 
 func _ready() -> void:
@@ -33,12 +39,23 @@ func _ready() -> void:
 	profile = SaveStore.load_profile()
 	SaveStore.apply_settings(profile)
 	PerfReadout.apply_settings(profile["settings"])
-	_show_menu()
+	if show_splash:
+		_splash = SplashScreen.new()
+		_splash.finished.connect(_reveal_menu)
+		add_child(_splash)
+		_screen = _splash
+		_backdrop.hide()
+	else:
+		_show_menu()
 
 
 func _show_menu() -> void:
 	if _transitioning:
 		return
+	_swap(_make_menu())
+
+
+func _make_menu() -> MainMenu:
 	# A new day (the game may have stayed open overnight): a free pick.
 	var daily_pick_awarded := Packs.daily_open(profile)
 	if daily_pick_awarded:
@@ -50,7 +67,33 @@ func _show_menu() -> void:
 	menu.lab_requested.connect(_show_lab)
 	menu.collection_requested.connect(_show_collection)
 	menu.reload_requested.connect(_show_menu)
-	_swap(menu)
+	return menu
+
+
+func _reveal_menu() -> void:
+	if _transitioning:
+		return
+	_transitioning = true
+	_reveal = GemMenuReveal.new()
+	_reveal.menu = _make_menu()
+	_reveal.finished.connect(_finish_reveal)
+	add_child(_reveal)
+
+
+func _finish_reveal() -> void:
+	var menu := _reveal.menu as MainMenu
+	menu.reparent(self, false)
+	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu.process_mode = Node.PROCESS_MODE_INHERIT
+	_screen = menu
+	_splash.queue_free()
+	_splash = null
+	_reveal.queue_free()
+	_reveal = null
+	_backdrop.show()
+	move_child(_veil, get_child_count() - 1)
+	_transitioning = false
+	menu.present_daily_gift()
 
 
 func _show_collection() -> void:
