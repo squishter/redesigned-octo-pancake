@@ -103,9 +103,14 @@ const DENSE_GAP := 0.4
 ## `dense` (0..1) is the share of classes whose stones sit closer together
 ## (see DENSE_GAP), picked by the seed among all the classes, so dropping
 ## some doesn't change which.
+## `families` (a family per pixel, -1 off the lines) classes the lines of a
+## free-form picture instead: every line of a family is one class, as if
+## they were symmetric copies, so they share a gem type, size profile and
+## sequence, and junctions are classed by the families meeting there.
 static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style: String,
 		symmetry: String = "none", seed_value: int = 1, bold: int = 0,
-		line_mask: PackedByteArray = PackedByteArray(), drop: Array = [], dense: float = 0.0) -> Array[Dictionary]:
+		line_mask: PackedByteArray = PackedByteArray(), drop: Array = [], dense: float = 0.0,
+		families: PackedInt32Array = PackedInt32Array()) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var hash := {}
 	var cell := r * 4.0
@@ -127,6 +132,8 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 			at /= pts.size()
 		path_keys.append(_sym_key(at, center, symmetry, Contours.length(pts, path["closed"])))
 	var all_class := _classes(path_keys, tol)
+	if not families.is_empty():
+		all_class = _family_classes(all_paths, all_class, families, map.width)
 	var tight := _dense_classes(all_class, dense, seed_value)
 	var paths := []
 	var path_class := PackedInt32Array()
@@ -163,6 +170,8 @@ static func place(graph: Dictionary, map: RegionMap, r: float, gap: float, style
 	for n in nodes.size():
 		node_keys.append(_sym_key(nodes[n], center, symmetry, 0.0))
 	var node_class := _classes(node_keys, tol)
+	if not families.is_empty():
+		node_class = _junction_classes(all_paths, all_class, nodes.size())
 	var bold_r := _bold_classes(paths, path_class, map, r, gap, center, far, bold, seed_value)
 	# Each line's stones fit the room beside it, so lines drawn close
 	# together (small curly details) still get a run of small stones instead
@@ -911,6 +920,52 @@ static func _sym_key(p: Vector2, center: Vector2, symmetry: String, size: float)
 		"mirror":
 			return [p.y, absf(p.x - center.x), size]
 	return [p.y, p.x, size]
+
+
+## Classes from line families: each line takes the family most of its points
+## lie on. Lines on no family keep their own class, numbered after.
+static func _family_classes(paths: Array, classes: PackedInt32Array, families: PackedInt32Array,
+		w: int) -> PackedInt32Array:
+	var voted := PackedInt32Array()
+	var top := 0
+	for path in paths:
+		var votes := {}
+		for q: Vector2 in path["points"]:
+			var f := families[int(q.y) * w + int(q.x)]
+			if f >= 0:
+				votes[f] = votes.get(f, 0) + 1
+		var best := -1
+		for f: int in votes:
+			if best < 0 or votes[f] > votes[best]:
+				best = f
+		voted.append(best)
+		top = maxi(top, best + 1)
+	var out := PackedInt32Array()
+	for k in paths.size():
+		out.append(voted[k] if voted[k] >= 0 else top + classes[k])
+	return out
+
+
+## Junctions classed by the classes of the lines that meet there, so every
+## leaf's tip, or every place a string crosses a ribbon, is one class.
+static func _junction_classes(paths: Array, classes: PackedInt32Array, n: int) -> PackedInt32Array:
+	var meets := []
+	for i in n:
+		meets.append([])
+	for k in paths.size():
+		for e: int in paths[k]["ends"]:
+			if e >= 0 and not classes[k] in meets[e]:
+				meets[e].append(classes[k])
+	var ids := {}
+	var out := PackedInt32Array()
+	for i in n:
+		var m: Array = meets[i]
+		m.sort()
+		var key := str(m)
+		if not ids.has(key):
+			ids[key] = ids.size()
+		out.append(ids[key])
+	return out
 
 
 ## Clusters keys that match within `tol` px (and 15% in size) into classes,

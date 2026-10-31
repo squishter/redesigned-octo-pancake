@@ -47,12 +47,58 @@ static func symmetry_groups(map: RegionMap, symmetry: String) -> PackedInt32Arra
 	return group_of
 
 
+## Joins the groups of regions that hold a mark of the same motif family
+## (`marks`: [{"at": px, "family"}], see PictureSources.mandala_lines), so
+## all of a free-form picture's leaves, say, share colors and a pattern
+## though they aren't copies of each other. Marks on lines are skipped.
+## Groups are renumbered in the order of their first regions.
+static func motif_groups(map: RegionMap, groups: PackedInt32Array, marks: Array) -> PackedInt32Array:
+	var n_groups := 0
+	for g in groups:
+		n_groups = maxi(n_groups, g + 1)
+	var parent := range(n_groups)
+	var find := func(g: int) -> int:
+		while parent[g] != g:
+			g = parent[g]
+		return g
+	var family_group := {}
+	for m: Dictionary in marks:
+		var at: Vector2 = m["at"]
+		var x := int(at.x)
+		var y := int(at.y)
+		if x < 0 or y < 0 or x >= map.width or y >= map.height:
+			continue
+		var label := map.labels[y * map.width + x]
+		if label < 0:
+			continue
+		var g: int = find.call(groups[label])
+		var f: int = m["family"]
+		if not family_group.has(f):
+			family_group[f] = g
+			continue
+		var other: int = find.call(family_group[f])
+		if other != g:
+			parent[maxi(g, other)] = mini(g, other)
+	var renumber := {}
+	var out := PackedInt32Array()
+	out.resize(groups.size())
+	for r in groups.size():
+		var root: int = find.call(groups[r])
+		if not renumber.has(root):
+			renumber[root] = renumber.size()
+		out[r] = renumber[root]
+	return out
+
+
 ## A theme color per region. Symmetric copies share a color, and each group
 ## avoids the colors of the two groups before it so neighboring rings differ.
-static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorArray, seed_value: int) -> PackedColorArray:
+## `groups` (default: symmetry_groups) says which regions share one.
+static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorArray, seed_value: int,
+		groups := PackedInt32Array()) -> PackedColorArray:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var groups := symmetry_groups(map, symmetry)
+	if groups.is_empty():
+		groups = symmetry_groups(map, symmetry)
 	var n_groups := 0
 	for g in groups:
 		n_groups = maxi(n_groups, g + 1)

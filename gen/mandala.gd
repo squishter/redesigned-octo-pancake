@@ -1,18 +1,22 @@
 class_name MandalaGenerator
 extends RefCounted
-## Seeded symmetric line art: mandalas, flowers, snowflakes, hearts and
-## butterflies. The same seed and options always give the same picture.
+## Seeded line art: symmetric mandalas, flowers, snowflakes, hearts and
+## butterflies, and free-form swirls. The same seed and options always give
+## the same picture.
 ##
 ## Output is vector polylines in unit space (x and y in -1..1, y down), so it
 ## is crisp at any size. LineRaster turns it into a mask for the slot packer,
 ## and RegionPaint fills it with a theme for Kit mode.
 ##
 ## Each variant has its own generator: MandalaDesign, FlowerGenerator,
-## SnowflakeGenerator, HeartGenerator and ButterflyGenerator. This class picks
+## SnowflakeGenerator, HeartGenerator, ButterflyGenerator and SwirlGenerator. This class picks
 ## one, frames most pictures with FrameDesign, and holds the small shape
 ## helpers they share.
 
-const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
+const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl"]
+## Swirls are framed less often than the rest (unless `frame` says), so
+## their own outlines show.
+const SWIRL_FRAME_CHANCE := 0.25
 
 
 ## options: variant (one of VARIANTS or "random", default "mandala"), wobble
@@ -24,8 +28,11 @@ const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly"]
 ## design's choices under the variant's name: "mandala"
 ## (folds, silhouette, center, rings, extras, zoom), "flower" (template,
 ## symmetric, rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
-## (shape, border, body, antennae, fore, hind) or "snowflake" (center, arm,
-## tip, between, details).
+## (shape, border, body, antennae, fore, hind), "snowflake" (center, arm,
+## tip, between, details) or "swirl" (layout, shape, patch, strings, ribbon, motifs).
+## Swirls aren't symmetric; instead they also return "families" (an id per
+## polyline; a frame's lines get one more) and "marks" ([{"at", "family"}],
+## points inside motif areas), see SwirlGenerator.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var variant: String = options.get("variant", "mandala")
 	if variant == "random":
@@ -50,6 +57,10 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			design = ButterflyGenerator.generate(seed_value, options)
 			symmetry = "mirror"
 			keys = ["shape", "border", "body", "antennae", "fore", "hind"]
+		"swirl":
+			design = SwirlGenerator.generate(seed_value, options)
+			symmetry = "none"
+			keys = ["layout", "shape", "patch", "strings", "ribbon", "motifs"]
 		_:
 			variant = "mandala"
 			design = MandalaDesign.generate(seed_value, options)
@@ -60,10 +71,16 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var info := {}
 	for key in keys:
 		info[key] = design[key]
-	var framing := {"polylines": design["polylines"], "closed": design["closed"], "frame": {}}
+	var framing := {"polylines": design["polylines"], "closed": design["closed"], "frame": {}, "scale": 1.0}
 	if _frameable(variant, design):
-		framing = FrameDesign.apply(design["polylines"], design["closed"], seed_value, options)
-	return {
+		var frame_options := options
+		if variant == "swirl" and not options.has("frame"):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([seed_value, "swirl frame"])
+			frame_options = options.duplicate()
+			frame_options["frame"] = rng.randf() < SWIRL_FRAME_CHANCE
+		framing = FrameDesign.apply(design["polylines"], design["closed"], seed_value, frame_options)
+	var out := {
 		"seed": seed_value,
 		"variant": variant,
 		"symmetry": symmetry,
@@ -72,6 +89,19 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		"frame": framing["frame"],
 		variant: info,
 	}
+	if design.has("families"):
+		# The frame's lines are one more family, and the marks move with the
+		# picture inside it.
+		var families: PackedInt32Array = design["families"].duplicate()
+		var frame_family: int = design["family_names"].size()
+		while families.size() < out["polylines"].size():
+			families.append(frame_family)
+		var marks := []
+		for m: Dictionary in design["marks"]:
+			marks.append({"at": m["at"] * framing["scale"], "family": m["family"]})
+		out["families"] = families
+		out["marks"] = marks
+	return out
 
 
 ## Mandalas that are zoomed in, or already have a frame or corner fans of

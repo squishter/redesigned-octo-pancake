@@ -26,6 +26,7 @@ func _init() -> void:
 	test_hearts()
 	test_butterflies()
 	test_snowflakes()
+	test_swirls()
 	test_frames()
 	test_collages()
 	test_design_plans()
@@ -289,6 +290,63 @@ func test_snowflakes() -> void:
 		check(seen.has(choice), "%s never showed up in %d snowflakes" % [choice, count])
 	check(bare <= count / 4, "%d of %d snowflakes have nothing between the arms" % [bare, count])
 	sheet.save_png(out_dir.path_join("snowflakes_contact_sheet.png"))
+
+
+## 30 swirls in a row: every layout and outline shows up, no outline repeats
+## within 8 pictures, every line has a family, and each has closed regions.
+## Families carry into the collage: a pebbles swirl's stones share groups,
+## and its gem lines form far fewer classes than lines. Writes a contact
+## sheet.
+func test_swirls() -> void:
+	print("Swirls")
+	var count := 30
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * 5, false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	for i in count:
+		var seed_value := 7000 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "swirl", "recent": recent, "frame": false})
+		var m: Dictionary = lines["mandala"]
+		var sw: Dictionary = m["swirl"]
+		var shapes := recent.slice(maxi(0, recent.size() - 8)).map(func(r: Dictionary) -> String: return r["shape"])
+		check(not sw["shape"] in shapes, "seed %d: %s outline again within 8" % [seed_value, sw["shape"]])
+		recent.append(sw)
+		seen[sw["layout"]] = true
+		seen[sw["shape"]] = true
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
+		print("  seed %d %-9s %-8s %-5s motifs %-26s %3d regions" % [seed_value, sw["layout"], sw["shape"],
+				"patch" if sw["patch"] else "", " + ".join(PackedStringArray(sw["motifs"])), map.regions.size()])
+		check(m["symmetry"] == "none", "seed %d: swirls aren't symmetric" % seed_value)
+		check(m["families"].size() == m["polylines"].size(), "seed %d: lines without a family" % seed_value)
+		check(map.regions.size() >= 5, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		sheet_cell(sheet, lines, i, cell)
+	for choice in SwirlGenerator.LAYOUTS + SwirlGenerator.SHAPES:
+		check(seen.has(choice), "%s never showed up in %d swirls" % [choice, count])
+	sheet.save_png(out_dir.path_join("swirls_contact_sheet.png"))
+
+	var opts := {"variant": "swirl", "layout": "pebbles", "frame": false, "setting": "gems", "line_gems": "beads"}
+	var pebbles := PictureSources.mandala_lines(7100, opts)
+	var p := PictureSources.mandala_collage(7100, opts, pebbles)
+	var areas := 0
+	var groups := {}
+	var classes := {}
+	for r in p["regions"]:
+		if r["kind"] == "area":
+			areas += 1
+			groups[r["group"]] = true
+	for sl in p["slots"]:
+		if p["regions"][sl["region"]]["kind"] == "line" and sl["part"] < GemLines.NODE_PARTS:
+			classes[sl["part"]] = true
+	var graph := Contours.centerlines(pebbles["mask"], p["width"], p["height"], p["unit"] * 1.5)
+	print("  pebbles collage: %d areas in %d groups, %d lines in %d classes" % [areas, groups.size(),
+			graph["paths"].size(), classes.size()])
+	check(groups.size() * 2 < areas, "pebbles: %d areas in %d groups" % [areas, groups.size()])
+	check(classes.size() * 3 < graph["paths"].size(), "pebbles: %d line classes for %d lines" % [classes.size(),
+			graph["paths"].size()])
 
 
 ## Frames: about three in four pictures are framed by default; 24 framed

@@ -45,6 +45,39 @@ static func rasterize(polylines: Array[PackedVector2Array], closed: PackedByteAr
 	return mask
 
 
+## Where a unit-space point lands in a raster of `size` px (as rasterize).
+static func to_px(p: Vector2, size: Vector2i, margin: float = 0.04) -> Vector2:
+	return Vector2(size) / 2.0 + p * minf(size.x, size.y) * (1.0 - 2.0 * margin) / 2.0
+
+
+## Like rasterize, but each pixel takes the label of the last polyline
+## drawn over it (`labels`, one per polyline), and -1 off every line.
+static func rasterize_labels(polylines: Array[PackedVector2Array], closed: PackedByteArray, labels: PackedInt32Array,
+		size: Vector2i, thickness: float, margin: float = 0.04) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	out.resize(size.x * size.y)
+	out.fill(-1)
+	var hr := thickness / 2.0
+	var hr2 := hr * hr
+	for li in polylines.size():
+		var src := polylines[li]
+		var n := src.size()
+		if n < 2:
+			continue
+		for i in (n if closed[li] else n - 1):
+			var a := to_px(src[i], size, margin)
+			var b := to_px(src[(i + 1) % n], size, margin)
+			var d := b - a
+			var ll := d.length_squared()
+			for y in range(maxi(0, floori(minf(a.y, b.y) - hr)), mini(size.y - 1, ceili(maxf(a.y, b.y) + hr)) + 1):
+				for x in range(maxi(0, floori(minf(a.x, b.x) - hr)), mini(size.x - 1, ceili(maxf(a.x, b.x) + hr)) + 1):
+					var q := Vector2(x + 0.5, y + 0.5) - a
+					var t := clampf(q.dot(d) / ll, 0.0, 1.0) if ll > 0.0 else 0.0
+					if (q - d * t).length_squared() <= hr2:
+						out[y * size.x + x] = labels[li]
+	return out
+
+
 ## Mask from a line-art image: dark, opaque pixels are lines.
 static func from_image(img: Image, threshold: float = 0.5) -> PackedByteArray:
 	var w := img.get_width()

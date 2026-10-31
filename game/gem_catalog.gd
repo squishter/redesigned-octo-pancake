@@ -173,6 +173,8 @@ const PUZZLES := {
 			"about": "Hearts filled with patterns and motifs."},
 	"butterfly": {"name": "Butterfly collage", "source": "Butterfly", "variant": "butterfly",
 			"about": "Mirrored wings with spots and veins."},
+	"swirl": {"name": "Swirl collage", "source": "Swirl", "variant": "swirl",
+			"about": "Free-flowing line art: waves, whirls, blooms, scales and more, no two alike."},
 	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,
 			"about": "A mandala as a grid of drills, one color per cell."},
 }

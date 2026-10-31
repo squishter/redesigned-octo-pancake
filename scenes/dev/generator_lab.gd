@@ -486,6 +486,10 @@ func _process(_delta: float) -> void:
 				var f: Dictionary = p["source"]["snowflake"]
 				flower = ", %s center, %s arms, %s tips, between %s, details %s" % [f["center"], f["arm"], f["tip"],
 						" + ".join(PackedStringArray(f["between"])), " + ".join(PackedStringArray(f["details"]))]
+			if p["source"].has("swirl"):
+				var sw: Dictionary = p["source"]["swirl"]
+				flower = ", %s swirl in %s outline%s, motifs %s" % [sw["layout"], sw["shape"],
+						" (patch)" if sw["patch"] else "", " + ".join(PackedStringArray(sw["motifs"]))]
 			if p["source"].has("frame"):
 				var fr: Dictionary = p["source"]["frame"]
 				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],

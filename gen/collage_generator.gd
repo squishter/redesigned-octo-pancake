@@ -110,6 +110,10 @@ const DENSE_MAX_SLOTS := 7500
 ##   drop_lines, bare_at: classes of gem lines and centroids of areas to leave
 ##     out (set when over max_slots)
 ##   layout: one of LAYOUTS (default "classic")
+##   motifs: a free-form picture's families of lines and areas (see
+##     PictureSources.mandala_lines): {"lines": a family per pixel, "areas":
+##     [{"at", "family"}]}. A family stands in for symmetric copies: its gem
+##     lines are one class (see GemLines) and its areas one group.
 ##   source: Dictionary describing where the lines came from, stored as is
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
 	var unit: float = options.get("unit", minf(w, h) * SlotPacker.UNIT)
@@ -207,7 +211,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
 		var bold: int = options.get("bold_lines", rng.randi_range(2, 3))
 		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold, mask,
-				options.get("drop_lines", []), dense)
+				options.get("drop_lines", []), dense,
+				options.get("motifs", {}).get("lines", PackedInt32Array()))
 		for sl in line_slots:
 			if sl["seq"] < 0 and sl["tone"] == 1:
 				bold_lines[sl["part"]] = true
@@ -218,6 +223,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 
 	var map := RegionMap.build(area_mask, w, h, min_area, center)
 	var groups := RegionPaint.symmetry_groups(map, symmetry)
+	if options.has("motifs"):
+		groups = RegionPaint.motif_groups(map, groups, options["motifs"]["areas"])
 	var plan_options := options.duplicate()
 	plan_options["unit"] = unit
 	if setting == "gems":
@@ -263,7 +270,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			accents.append(c.lightened(0.35) if c.get_luminance() < 0.6 else c.darkened(0.3))
 			features.append(c.darkened(0.45) if c.get_luminance() > 0.3 else c.lightened(0.6))
 	else:
-		colors = RegionPaint.theme_colors(map, symmetry, theme, seed_value)
+		colors = RegionPaint.theme_colors(map, symmetry, theme, seed_value, groups)
 		accents = RegionPaint.accent_colors(map, groups, colors, theme, seed_value)
 		features = RegionPaint.accent_colors(map, groups, accents, theme, seed_value + 1)
 
