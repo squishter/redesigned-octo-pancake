@@ -339,7 +339,7 @@ func _number_types(slots: Array) -> void:
 	for t: Dictionary in list:
 		var ratios: Array = t["ratios"]
 		ratios.sort()
-		t["ratio"] = clampf(ratios[ratios.size() / 2], 0.3, 1.0)
+		t["ratio"] = ratios[ratios.size() / 2]
 		t["left"] = t["count"]
 		t.erase("ratios")
 		index[t["key"]] = _types.size()

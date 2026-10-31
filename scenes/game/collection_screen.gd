@@ -301,7 +301,8 @@ func _build_sheet() -> void:
 
 
 static func _stone(shape: String, cut: String, color: Color, gem: String) -> Dictionary:
-	return GemIcons.stone(shape, cut, color, gem, 0.5, ICON_CELL, Vector2.ZERO)
+	var ratio := 0.5 if shape in GemVariety.LONG_FAMILY or shape in GemVariety.BOX_FAMILY else 1.0
+	return GemIcons.stone(shape, cut, color, gem, ratio, ICON_CELL, Vector2.ZERO)
 
 
 func _fill_collection() -> void:
