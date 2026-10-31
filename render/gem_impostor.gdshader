@@ -29,7 +29,8 @@ varying mat3 normal_matrix;
 
 void vertex() {
 	l_pos = VERTEX;
-	normal_matrix = MODEL_NORMAL_MATRIX;
+	// Match the mesh, including nonuniform scale in the MultiMesh instance.
+	normal_matrix = transpose(inverse(mat3(MODEL_MATRIX)));
 	float cut = floor(INSTANCE_CUSTOM.w + 0.01);
 	stone = vec4(INSTANCE_CUSTOM.xyz, cut);
 	float delay = (INSTANCE_CUSTOM.w - cut) * 2.0;
