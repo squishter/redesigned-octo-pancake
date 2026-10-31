@@ -212,8 +212,11 @@ const FINALES := {
 	"sweep": {"name": "Sweep", "about": "A wave from one side to the other."},
 	"shimmer": {"name": "Shimmer", "about": "Every gem twinkles in its own time."},
 	"light_ripple": {"name": "Light ripple", "about": "A ring of light spreads from the middle, and every gem it passes flashes."},
+	"light_spiral": {"name": "Light spiral", "about": "A beam of light sweeps round the center, and every gem it passes flashes."},
+	"light_sweep": {"name": "Light sweep", "about": "A band of light crosses from one side to the other, and every gem it passes flashes."},
+	"light_shimmer": {"name": "Light shimmer", "about": "Light dances over the picture, flashing every gem in its own time."},
 }
-const STARTING_FINALES := ["ripple"]
+const STARTING_FINALES := ["light_shimmer"]
 
 ## Power-ups: charges from packs, spent while playing. "puzzle" ones stay on
 ## for the whole puzzle once used; "now" ones act once per charge.

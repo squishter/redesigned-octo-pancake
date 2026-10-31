@@ -915,9 +915,9 @@ func _finish(celebrate: bool) -> void:
 	# Reward and progress are durable before any dialog or animation appears.
 	_save(true)
 	var center := Vector2(_picture["width"], _picture["height"]) / 2.0
-	var finale: String = profile["settings"].get("finale", "ripple")
-	if not finale in profile["unlocks"].get("finales", ["ripple"]):
-		finale = "ripple"
+	var finale: String = profile["settings"].get("finale", GemCatalog.STARTING_FINALES[0])
+	if not finale in profile["unlocks"].get("finales", GemCatalog.STARTING_FINALES):
+		finale = GemCatalog.STARTING_FINALES[0]
 	_board.celebrate(center, finale)
 	_done_label.text = "Your finale plays on. Pinch and pan to admire it."
 	_rewards_button.text = "End finale"

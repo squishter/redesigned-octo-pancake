@@ -470,15 +470,20 @@ func set_transparent() -> void:
 
 
 ## Finale styles celebrate() knows (GemCatalog.FINALES must be among them).
-const FINALES := ["ripple", "spiral", "sweep", "shimmer", "light_ripple"]
+const FINALES := ["ripple", "spiral", "sweep", "shimmer", "light_ripple", "light_spiral", "light_sweep",
+		"light_shimmer"]
+## The wave patterns, in the order the paper shader numbers them (wave_kind).
+const WAVE_KINDS := ["ripple", "spiral", "sweep", "shimmer"]
 
 
 ## Waves of pulses through every stone while the light sweeps over them,
 ## timed by `style`: "ripple" outward from board point `from`, "spiral"
 ## round it, "sweep" from left to right, "shimmer" at random. They repeat
-## until end_celebration(). "light_ripple" goes out like "ripple", but plays
+## until end_celebration(). A "light_" one ("light_ripple", "light_spiral",
+## "light_sweep", "light_shimmer") goes as the style without it, but plays
 ## light over the stones and paper instead of swelling them (wave_light in
-## gem_light.gdshaderinc).
+## gem_light.gdshaderinc; the paper follows the same pattern, wave_kind in
+## paper.gdshader).
 func celebrate(from: Vector2, style := "ripple") -> void:
 	_finale = style
 	_finale_from = from
@@ -504,7 +509,8 @@ func _finale_wave() -> void:
 		return  # the stones already hold this wave's delays
 	_wave_for = [_finale, _finale_from]
 	var from := _finale_from
-	var style := _finale
+	var light := _finale.begins_with("light_")
+	var style := _finale.trim_prefix("light_")
 	var far := 0.0
 	var at := []
 	var rng := RandomNumberGenerator.new()
@@ -529,9 +535,10 @@ func _finale_wave() -> void:
 		far = maxf(far, t)
 	far = maxf(far, 1e-6)
 	for m: ShaderMaterial in _materials():
-		m.set_shader_parameter("wave_light", 1.0 if style == "light_ripple" else 0.0)
+		m.set_shader_parameter("wave_light", 1.0 if light else 0.0)
 		m.set_shader_parameter("wave_from", from)
 		m.set_shader_parameter("wave_far", far)
+	_paper_material.set_shader_parameter("wave_kind", maxi(WAVE_KINDS.find(style), 0))
 	var delays := PackedFloat32Array()
 	delays.resize(at.size())
 	for i in at.size():

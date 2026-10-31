@@ -20,7 +20,7 @@ const DIR := "user://saves"
 const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
 ## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES), and frame cap.
-const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "ripple", "fps_cap": 30, "stroke_limit": 0}
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "light_shimmer", "fps_cap": 30, "stroke_limit": 0}
 ## Player frame caps, with 0 leaving the rate uncapped by the engine.
 const FPS_CAPS := [30, 45, 60, 90, 120, 0]
 ## Debug builds only: the setting that lends her everything for testing.
@@ -100,6 +100,8 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 		if not settings.has(key):
 			settings[key] = DEFAULT_SETTINGS[key]
 	settings["fps_cap"] = fps_cap(settings)
+	# Saved as JSON, it comes back a float; an int keeps upgrading idempotent.
+	settings["stroke_limit"] = int(settings["stroke_limit"])
 	profile["settings"] = settings
 	var wallet: Dictionary = profile.get("wallet", {})
 	for key in ["coins", "picks"]:
