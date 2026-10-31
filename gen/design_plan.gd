@@ -103,9 +103,9 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 	group_fill.fill("full")
 	var sparse_area := 0.0
 	var bare_area := 0.0
+	# Fills are picked as for a classic picture, so the random choices line
+	# up with it; dense groups are made full afterwards.
 	for g in _shuffled(n_groups, rng):
-		if group_dense[g] == 1:
-			continue
 		if rng.randf() >= sparsity or sparse_area + group_area[g] > MAX_SPARSE_AREA * total_area:
 			continue
 		var depth := group_depth[g]
@@ -125,6 +125,9 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 		sparse_area += group_area[g]
 		if fill == "bare":
 			bare_area += group_area[g]
+	for g in n_groups:
+		if group_dense[g] == 1:
+			group_fill[g] = "full"
 	# Something always stays fully packed: the biggest group if nothing else.
 	if n_groups > 0 and not "full" in group_fill:
 		var biggest := 0
