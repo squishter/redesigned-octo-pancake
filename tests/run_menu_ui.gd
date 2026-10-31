@@ -27,6 +27,7 @@ func _run() -> void:
 	await _test_carousel()
 	await _test_purchases()
 	await _test_reward_kinds()
+	await _test_daily_gift()
 	await _test_settings()
 	await _test_transitions()
 	await _test_completion_rewards()
@@ -315,6 +316,63 @@ func _test_reward_kinds() -> void:
 	_check(long_reward._card.get_global_rect().end.y <= long_reward._keep.get_global_rect().position.y,
 		"Many completed themes scroll inside the reward card")
 	long_reward.queue_free()
+	await process_frame
+
+
+func _test_daily_gift() -> void:
+	print("Daily gift fanfare, saved rewards, dismissal and once-per-day presentation")
+	var profile := SaveStore.upgrade({"wallet": {"coins": 17, "picks": 2}})
+	SaveStore.save_profile(profile)
+	var app = AppScene.instantiate()
+	root.add_child(app)
+	await create_timer(0.8).timeout
+	var menu: Control = app._screen
+	var gift: GameDialog = menu._daily_gift
+	_check(is_instance_valid(gift) and gift.visible, "The first menu visit celebrates the daily free pick")
+	var saved := SaveStore.load_profile()
+	_check(Packs.picks(saved) == 3 and saved["daily"]["opened"] == Packs.today(), "Daily reward is saved before the fanfare")
+	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_DISABLED, "Daily gift blocks the background menu")
+	_check(root.gui_get_focus_owner() == gift._choose, "The gift focuses its primary action")
+	_check_dialog(gift)
+	_check_button_widths(menu, menu.size.x)
+	root.content_scale_size = Vector2i(720, 1280)
+	await _layout_frames()
+	_check_dialog(gift)
+	_check_button_widths(gift, gift.size.x)
+	root.content_scale_size = Vector2i(1080, 2400)
+	await _layout_frames()
+	menu.go_back()
+	_check(not gift.visible and app._screen == menu, "Back dismisses the gift and stays on the menu")
+	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_INHERIT, "Dismissing the gift restores menu input")
+	menu.present_daily_gift()
+	_check(not gift.visible and Packs.picks(app.profile) == 3, "Repeated presentation cannot reopen or grant another pick")
+	app._show_menu()
+	await create_timer(0.8).timeout
+	_check(not is_instance_valid(app._screen._daily_gift), "Returning to the menu the same day shows no fanfare")
+	app.queue_free()
+	await process_frame
+	app = AppScene.instantiate()
+	root.add_child(app)
+	await create_timer(0.8).timeout
+	_check(not is_instance_valid(app._screen._daily_gift) and Packs.picks(app.profile) == 3,
+		"Restarting the app the same day neither shows the gift nor grants another pick")
+	app.profile["daily"]["opened"] = "2000-01-01"
+	app._show_menu()
+	app._show_menu()
+	await create_timer(0.8).timeout
+	menu = app._screen
+	_check(menu._daily_gift.visible and Packs.picks(app.profile) == 4, "A new day grants and celebrates exactly one more pick")
+	menu._daily_gift._choose.pressed.emit()
+	menu._daily_gift._choose.pressed.emit()
+	await create_timer(0.8).timeout
+	_check(app._screen.get_script() == CollectionScreen, "Choose my free pack opens Collection & packs")
+	_check(Packs.picks(app.profile) == 4 and Packs.coins(app.profile) == 17, "The fanfare opens the picker without spending currency")
+	_check(Packs.picks(SaveStore.load_profile()) == 4, "The next day's reward remains saved after choosing packs")
+	app._screen.go_back()
+	await create_timer(0.8).timeout
+	_check(app._screen.get_script() == MainMenu and not is_instance_valid(app._screen._daily_gift),
+		"Returning from packs does not repeat the gift")
+	app.queue_free()
 	await process_frame
 
 

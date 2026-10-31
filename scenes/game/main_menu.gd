@@ -21,6 +21,7 @@ signal reload_requested
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const UI := preload("res://scenes/game/ui_widgets.gd")
 const SettingsDialog := preload("res://scenes/game/settings_dialog.gd")
+const DailyGift := preload("res://scenes/game/daily_gift.gd")
 const THUMB_PX := 180
 ## Restart and Delete ask again; a second tap within this long confirms.
 const CONFIRM_MS := 3000
@@ -29,11 +30,14 @@ const CONFIRM_MS := 3000
 var profile: Dictionary = {}
 var show_developer_tools := OS.has_feature("editor")
 var show_debug_settings := OS.is_debug_build()
+## The app has granted and saved today's opening reward before creating this menu.
+var daily_pick_awarded := false
 
 var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
 var _new_panel: GameDialog
 var _settings_panel: SettingsDialog
+var _daily_gift: DailyGift
 var _mode_buttons: Array[Button] = []
 var _theme_preview: HBoxContainer
 var _photo_actions: HBoxContainer
@@ -251,11 +255,25 @@ func _ready() -> void:
 
 	for overlay: Control in [_new_panel, _settings_panel, _busy, _camera]:
 		overlay.visibility_changed.connect(_sync_menu_input)
+	if daily_pick_awarded:
+		_daily_gift = DailyGift.new()
+		_daily_gift.profile = profile
+		_daily_gift.packs_requested.connect(func() -> void: collection_requested.emit())
+		_daily_gift.visibility_changed.connect(_sync_menu_input)
+		add_child(_daily_gift)
 	_refresh_list()
 
 
+## Called after the app's menu transition, so the gift gets its own entrance.
+func present_daily_gift() -> void:
+	if daily_pick_awarded and is_instance_valid(_daily_gift):
+		daily_pick_awarded = false
+		_daily_gift.open()
+
+
 func _sync_menu_input() -> void:
-	var blocked := _new_panel.visible or _settings_panel.visible or _busy.visible or _camera.visible
+	var blocked := (_new_panel.visible or _settings_panel.visible or _busy.visible or _camera.visible
+			or (is_instance_valid(_daily_gift) and _daily_gift.visible))
 	_menu_scroll.process_mode = Node.PROCESS_MODE_DISABLED if blocked else Node.PROCESS_MODE_INHERIT
 
 
@@ -451,7 +469,9 @@ func _process(_delta: float) -> void:
 func go_back() -> void:
 	if _task_id >= 0:
 		return
-	if _camera.visible:
+	if is_instance_valid(_daily_gift) and _daily_gift.visible:
+		_daily_gift.close()
+	elif _camera.visible:
 		_camera.close()
 	elif _new_panel.visible:
 		_new_panel.close()

@@ -37,11 +37,15 @@ func _ready() -> void:
 
 
 func _show_menu() -> void:
+	if _transitioning:
+		return
 	# A new day (the game may have stayed open overnight): a free pick.
-	if Packs.daily_open(profile):
+	var daily_pick_awarded := Packs.daily_open(profile)
+	if daily_pick_awarded:
 		SaveStore.save_profile(profile)
 	var menu := MainMenu.new()
 	menu.profile = profile
+	menu.daily_pick_awarded = daily_pick_awarded
 	menu.play_requested.connect(_play)
 	menu.lab_requested.connect(_show_lab)
 	menu.collection_requested.connect(_show_collection)
@@ -102,7 +106,9 @@ func _swap(next: Control, debug := false) -> void:
 	tween.tween_callback(func() -> void:
 		next.process_mode = Node.PROCESS_MODE_INHERIT
 		_veil.hide()
-		_transitioning = false)
+		_transitioning = false
+		if next is MainMenu:
+			next.present_daily_gift())
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

@@ -95,6 +95,12 @@ mode for trying out new pattern generation.
     can instead use the photo's own 12, 20 or 30 colors (k-means in Lab,
     exact colors that aren't her gems, 50% carried on): 2-4 ΔE on the same
     photos with 12.
+- **Daily welcome gift.** The first menu visit each day celebrates the saved
+  free pick with a jewel-framed card: floating foil packs, a gold halo and
+  twinkling sparkles. *Choose my free pack* opens Collection & packs without
+  spending the pick; *Save it for later*, Close or Back returns to the menu.
+  The reward is saved before the fanfare and remains in the wallet after
+  dismissal or restart. Returning to the menu that day never repeats it.
 - **Collection & packs** (from the menu). *Packs*: each unlock pack (Color,
   Shape, Facet, Picture, Flourish, Sparkle) gives one thing she
   doesn't have yet from its category, never a repeat, and is sold out once

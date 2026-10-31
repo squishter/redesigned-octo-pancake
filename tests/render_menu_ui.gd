@@ -28,9 +28,14 @@ func _capture() -> void:
 	menu.profile = profile
 	menu.show_developer_tools = false
 	menu.show_debug_settings = false
+	menu.daily_pick_awarded = true
 	root.add_child(menu)
 	await create_timer(0.8).timeout
 	await _snapshot("01-main-menu.png")
+	menu.present_daily_gift()
+	await create_timer(0.8).timeout
+	await _snapshot("18-daily-gift.png")
+	menu.go_back()
 	menu._open_new({})
 	await create_timer(0.35).timeout
 	await _snapshot("05-puzzle-creation.png")
