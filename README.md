@@ -251,7 +251,7 @@ mode for trying out new pattern generation.
 | `scenes/game/pack_carousel.gd` | `PackCarousel`: a circular hanging display with swipe momentum, snapping, depth and pendulum motion. |
 | `scenes/game/pack_visual.gd`, `scenes/game/pack_opening.gd` | A foil wrapper with a detachable top and a skippable tear, card rise, flip and celebration sequence. |
 | `scenes/game/drag_scroll.gd` | `DragScroll`: makes a list scroll (and fling) wherever a drag starts, buttons included, without pressing them. |
-| `scenes/game/gem_icons.gd` | `GemIcons`: single gems laid out on an icon sheet, sized to stay inside their own cell. |
+| `scenes/game/gem_icons.gd` | `GemIcons`: single gems laid out on an icon sheet, preserving each type's saved width / length for every shape and sized uniformly to stay inside their own cell. |
 | `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
 | `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
 
@@ -482,6 +482,14 @@ frame.
   ```sh
   xvfb-run -a godot --rendering-method mobile -s res://tests/run_gem_normals.gd
   xvfb-run -a godot --rendering-method mobile -s res://tests/render_gem_normals.gd
+  ```
+
+- Saved-puzzle display checks reopen every shape at thin, stretched and wide
+  proportions through the actual play screen, compare its picker and outlines
+  with placed meshes, then place a stone and reopen to check progress:
+
+  ```sh
+  XDG_DATA_HOME=/tmp/gem-proportion-tests godot --headless -s res://tests/run_saved_gem_proportions.gd
   ```
 
 - One line art under several pattern seeds, side by side:

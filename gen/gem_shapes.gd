@@ -5,9 +5,10 @@ extends RefCounted
 ## They draw slots and flat previews, and GemMesh builds the 3D gems on
 ## them (one per cut, see GemCuts).
 ##
-## Shapes that fit a circle of diameter `length` (`width` is ignored):
+## Shapes whose native outline fits a circle of diameter `length`:
 ## round, square, hexagon, triangle, cushion, octagon, pentagon, heart,
-## trillion, star, flower. Shapes that fit a capsule `length` long and
+## trillion, star, flower. A different `width` stretches their second axis
+## just as the placed mesh does. Shapes that fit a capsule `length` long and
 ## `width` wide: oval, marquise, teardrop, kite, lozenge. Baguette and
 ## emerald fill the whole `length` x `width` box (only for gem lines).
 
@@ -15,6 +16,10 @@ extends RefCounted
 ## so it reads as big as the round stones beside it. Kits, whose square drills
 ## fill their cell, size their slots by it (see drill_length).
 const SQUARE_SIDE := 0.75
+## These outlines are built from their length, then scaled to the saved
+## width. Round/oval and long shapes already use both dimensions below.
+const WIDTH_SCALED := ["square", "hexagon", "triangle", "cushion", "octagon", "pentagon", "star", "flower",
+		"trillion", "heart"]
 
 
 static func outline(shape: String, length: float, width: float, segments: int = 24) -> PackedVector2Array:
@@ -117,6 +122,10 @@ static func outline(shape: String, length: float, width: float, segments: int = 
 			for i in segments:
 				var th := TAU * i / segments
 				pts.append(Vector2(a * cos(th), b * sin(th)))
+	if shape in WIDTH_SCALED:
+		var ratio := width / maxf(length, 0.001)
+		for i in pts.size():
+			pts[i].y *= ratio
 	return pts
 
 

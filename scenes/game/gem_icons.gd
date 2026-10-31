@@ -17,16 +17,22 @@ const FPS := 10.0
 
 
 ## A stone for an icon cell `cell` units wide, centered at `at`: `ratio` is
-## its width over its length (long shapes only).
+## its width over its length, including stretched round-family shapes.
 static func stone(shape: String, cut: String, color: Color, gem: Variant, ratio: float, cell: float,
 		at: Vector2) -> Dictionary:
 	var long := shape in GemVariety.LONG_FAMILY or shape in GemVariety.BOX_FAMILY
+	ratio = maxf(ratio, 0.000001)
 	var length := cell * ROUND
-	var width := length
+	var rotation := -PI / 4.0 if long else SlotPacker.upright(shape)
 	if long:
-		ratio = clampf(ratio, 0.2, 1.0)
-		length = cell * minf(LONG, FIT * sqrt(2.0) / (1.0 + ratio))
-		width = length * ratio
+		length = cell * LONG
+	# Fit the rotated bounding box by uniform scaling, preserving the actual
+	# proportions even for very thin or wider-than-long saved stones.
+	var c := absf(cos(rotation))
+	var s := absf(sin(rotation))
+	var reach := maxf(c + s * ratio, s + c * ratio)
+	length = minf(length, cell * FIT / reach)
+	var width := length * ratio
 	return {"x": at.x, "y": at.y, "size": length, "width": width,
-			"rotation": -PI / 4.0 if long else SlotPacker.upright(shape), "shape": shape, "cut": cut,
+			"rotation": rotation, "shape": shape, "cut": cut,
 			"target_color": color, "target_gem": gem}

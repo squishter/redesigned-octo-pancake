@@ -49,9 +49,11 @@ func _run() -> void:
 		_materials.append(material)
 	_materials[1].set_shader_parameter("samples", 1)
 	var checks := 0
-	for shape: String in ["oval", "kite", "emerald"]:
+	for shape: String in GemCuts.BY_SHAPE:
 		for cut: String in ["step", "brilliant"]:
-			for ratio: float in [0.4, 1.0]:
+			if cut not in GemCuts.for_shape(shape):
+				continue
+			for ratio: float in [0.4, 1.0, 1.4]:
 				checks += await _check_stone(shape, cut, ratio, 1.0, Vector3.ONE)
 	# Placement animations scale uniformly; a parent can also scale the board.
 	checks += await _check_stone("kite", "step", 0.625, 0.6, Vector3(1.2, 0.9, 1.1))
@@ -65,12 +67,12 @@ func _check_stone(shape: String, cut: String, ratio: float, animation: float, pa
 	var arrays := mesh.surface_get_arrays(0)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var flat_mesh := GemMesh.get_outline_mesh(shape, 0.25, ratio)
-	var flat_vertices: PackedVector3Array = flat_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-	var flat_points := PackedVector2Array()
-	for v in flat_vertices:
-		flat_points.append(Vector2(v.x, v.z))
-	var flat_outline := Geometry2D.convex_hull(flat_points)
-	var basis := Basis(Vector3.UP, 0.37) * Basis.from_scale(Vector3(10.0, 10.0 * ratio, 10.0 * ratio) * animation)
+	var flat_outline := PackedVector2Array()
+	for point: Array in GemMesh.girdle_points(shape, roundi(GemMesh.GIRDLE.get(shape, GemMesh.GIRDLE_DEFAULT)
+			* GemMesh.LOW_SHARE), 1, ratio):
+		flat_outline.append(point[1])
+	flat_outline.append(flat_outline[0])
+	var basis := Basis(Vector3.UP, 0.37) * Basis.from_scale(Vector3(10.0, 10.0 * minf(ratio, 1.0), 10.0 * ratio) * animation)
 	_instance.scale = parent_scale
 	var transform := _instance.transform * Transform3D(basis, Vector3.ZERO)
 	var mm := MultiMesh.new()
