@@ -8,6 +8,8 @@ const MainMenu := preload("res://scenes/game/main_menu.gd")
 const CollectionScreen := preload("res://scenes/game/collection_screen.gd")
 const AppScene := preload("res://scenes/game/app.tscn")
 const PlayScreen := preload("res://scenes/game/play_screen.gd")
+const SplashScreen := preload("res://scenes/game/splash_screen.gd")
+const GemMenuReveal := preload("res://scenes/game/gem_menu_reveal.gd")
 var _failures := 0
 var _checks := 0
 
@@ -27,6 +29,7 @@ func _run() -> void:
 	await _test_carousel()
 	await _test_purchases()
 	await _test_reward_kinds()
+	await _test_splash()
 	await _test_daily_gift()
 	await _test_settings()
 	await _test_transitions()
@@ -319,11 +322,62 @@ func _test_reward_kinds() -> void:
 	await process_frame
 
 
+func _test_splash() -> void:
+	print("Launch cover, automatic and tap exits, gem reveal and daily gift ordering")
+	SaveStore.save_profile(SaveStore.upgrade({"wallet": {"coins": 17, "picks": 2}}))
+	var app = AppScene.instantiate()
+	root.add_child(app)
+	await _layout_frames()
+	_check(app._screen.get_script() == SplashScreen, "The cover appears before the menu")
+	_check(Packs.picks(app.profile) == 2, "The daily gift waits for entering the menu")
+	_check(SplashScreen.COVER.get_width() > 800 and SplashScreen.COVER.get_height() > 1800, "Portrait cover art is bundled")
+	await app._splash.finished
+	_check(app._transitioning and is_instance_valid(app._reveal), "The splash automatically starts the gem reveal")
+	var menu: Control = app._reveal.menu
+	_check(menu.process_mode == Node.PROCESS_MODE_DISABLED, "The menu cannot receive input while its gems are being placed")
+	_check(is_instance_valid(menu._daily_gift) and not menu._daily_gift.visible, "The daily card waits until the gem reveal finishes")
+	_check(Packs.picks(SaveStore.load_profile()) == 3, "The daily reward saves before the menu is revealed")
+	await create_timer(GemMenuReveal.DURATION + 0.4).timeout
+	_check(app._screen == menu and not app._transitioning, "The reveal hands over the same live menu")
+	_check(not is_instance_valid(app._splash) and not is_instance_valid(app._reveal), "Launch textures and temporary viewport are released")
+	_check(menu._daily_gift.visible, "Daily welcome fanfare opens after the splash and gem reveal")
+	menu.go_back()
+	menu._settings_panel.open()
+	await _layout_frames()
+	_check_dialog(menu._settings_panel)
+	menu.go_back()
+	app._show_collection()
+	await create_timer(0.8).timeout
+	app._screen.go_back()
+	await create_timer(0.8).timeout
+	_check(app._screen.get_script() == MainMenu, "Returning from another screen skips the splash")
+	app.queue_free()
+	await process_frame
+	app = AppScene.instantiate()
+	root.add_child(app)
+	var splash: Control = app._screen
+	var exits := [0]
+	splash.finished.connect(func() -> void: exits[0] += 1)
+	await create_timer(SplashScreen.MIN_HOLD + 0.1).timeout
+	var tap := InputEventMouseButton.new()
+	tap.button_index = MOUSE_BUTTON_LEFT
+	tap.pressed = true
+	splash._gui_input(tap)
+	splash._gui_input(tap)
+	_check(exits[0] == 1 and app._transitioning, "Tapping skips the hold and repeated taps start only one reveal")
+	await create_timer(GemMenuReveal.DURATION + 0.4).timeout
+	_check(app._screen.get_script() == MainMenu and not app._transitioning, "The quick gem transition completes after skipping")
+	_check(not is_instance_valid(app._screen._daily_gift) and Packs.picks(app.profile) == 3, "Relaunching never grants a second daily gift")
+	app.queue_free()
+	await process_frame
+
+
 func _test_daily_gift() -> void:
 	print("Daily gift fanfare, saved rewards, dismissal and once-per-day presentation")
 	var profile := SaveStore.upgrade({"wallet": {"coins": 17, "picks": 2}})
 	SaveStore.save_profile(profile)
 	var app = AppScene.instantiate()
+	app.show_splash = false
 	root.add_child(app)
 	await create_timer(0.8).timeout
 	var menu: Control = app._screen
@@ -352,6 +406,7 @@ func _test_daily_gift() -> void:
 	app.queue_free()
 	await process_frame
 	app = AppScene.instantiate()
+	app.show_splash = false
 	root.add_child(app)
 	await create_timer(0.8).timeout
 	_check(not is_instance_valid(app._screen._daily_gift) and Packs.picks(app.profile) == 3,
@@ -437,6 +492,7 @@ func _test_settings() -> void:
 func _test_transitions() -> void:
 	print("Screen transitions and board entry")
 	var app = AppScene.instantiate()
+	app.show_splash = false
 	root.add_child(app)
 	await create_timer(0.65).timeout
 	_check(not app._transitioning and not app._veil.visible, "Initial menu transition completes")
