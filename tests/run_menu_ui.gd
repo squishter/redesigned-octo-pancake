@@ -159,6 +159,20 @@ func _test_creation_choices() -> void:
 	await _layout_frames()
 	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_DISABLED, "Workshop freezes the background menu")
 	_check_dialog(menu._new_panel)
+	# Her own color story, made from the workshop.
+	menu._story_editor.edit()
+	await _layout_frames()
+	_check_dialog(menu._story_editor)
+	_check_button_widths(menu._story_editor, menu.size.x)
+	_check(menu._story_editor._save.disabled, "A color story needs colors before it saves")
+	for gem: String in ["ruby", "sapphire"]:
+		(menu._story_editor._swatches[gem] as Button).pressed.emit()
+	_check(not menu._story_editor._save.disabled, "Two colors make a color story")
+	menu._story_editor._name.text = "Night and day"
+	menu._story_editor._on_save()
+	_check(not menu._story_editor.visible and menu._new_panel.visible, "Saving a story returns to the workshop")
+	_check(CustomThemes.is_custom(menu._selected_theme()) and menu._edit_story.visible,
+		"The new story is picked, and can be changed")
 	menu._mode_buttons[1].pressed.emit()
 	_check(menu._is_kit(), "Diamond kit card changes the puzzle mode")
 	_check((menu._kit_size.get_meta("row") as Control).is_visible_in_tree(), "Kits offer picture size")

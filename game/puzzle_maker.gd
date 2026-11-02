@@ -39,6 +39,8 @@ const LAYOUT := "dense"
 
 
 ## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme, layout}.
+## For one of her own color stories (CustomThemes) the caller adds its
+## theme_name and theme_gems, which make() colors with instead.
 static func new_request(type_id: String, theme_id: String) -> Dictionary:
 	return {"type": type_id, "seed": randi_range(1, 999999), "pattern_seed": randi_range(1, 999999), "theme": theme_id,
 			"layout": LAYOUT}
@@ -67,7 +69,8 @@ static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		"variant": info["variant"],
 		"size": SIZE,
 		"theme": theme_id,
-		"theme_colors": GemCatalog.theme_colors(theme_id),
+		"theme_colors": (GemCatalog.colors_of(request["theme_gems"]) if request.get("theme_gems") is Array
+				else GemCatalog.theme_colors(theme_id)),
 		"gems": GemCatalog.unlocked_gems(unlocks),
 		"shapes": unlocks.get("shapes", {}),
 		"pattern_seed": request["pattern_seed"],

@@ -384,6 +384,20 @@ func _collection_extras(unlocks: Dictionary) -> void:
 		var copy := UI.item(_collection_list, title, "%d / %d colors collected" % [found, gems.size()],
 			"palette" if have else "lock", have)
 		copy.add_child(_swatches(t, 44, not have, unlocks["colors"]))
+	# Her own color stories (made in the New puzzle panel).
+	var mine := CustomThemes.list(profile)
+	if not mine.is_empty():
+		_subheading(_collection_list, "Your color stories")
+		for t: Dictionary in mine:
+			var copy := UI.item(_collection_list, t["name"], "%d colors you picked" % t["gems"].size(), "palette")
+			var strip := HBoxContainer.new()
+			strip.add_theme_constant_override("separation", 4)
+			for gem: String in t["gems"]:
+				var swatch := ColorRect.new()
+				swatch.color = GemCatalog.color_of(gem)
+				swatch.custom_minimum_size = Vector2(44, 44)
+				strip.add_child(swatch)
+			copy.add_child(strip)
 
 	# Every other kind of unlockable, as a list (a new kind shows up here).
 	for kind: String in Unlockables.KINDS:

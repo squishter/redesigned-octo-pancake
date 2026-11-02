@@ -36,6 +36,10 @@ const BY_SHAPE := {
 	"lozenge": ["brilliant", "step"],
 	"baguette": ["step", "brilliant"],
 	"emerald": ["step", "brilliant"],
+	"clover": ["rose", "brilliant", "cabochon"],
+	"pebble": ["cabochon", "checker", "rose"],
+	"sunburst": ["brilliant", "step", "rose"],
+	"butterfly": ["brilliant", "checker", "cabochon"],
 }
 ## Chance a gem type takes its shape's classic cut; the rest pick evenly
 ## among the others.

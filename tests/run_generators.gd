@@ -40,6 +40,7 @@ func _init() -> void:
 	test_json_round_trip()
 	test_hints()
 	test_game_puzzles()
+	test_custom_themes()
 	test_saves()
 	test_packs()
 	test_catalog_complete()
@@ -937,6 +938,60 @@ func test_game_puzzles() -> void:
 	for s in restricted:
 		check(s["shape"] == "round" and s["size"] == s["width"], "restrict gave %s %.1f x %.1f" % [s["shape"], s["size"],
 				s["width"]])
+	# Newer shapes stand in only when nothing older of the family is unlocked:
+	# with the starting shapes, a locked star or triangle is still a heart.
+	for shape: String in ["star", "triangle"]:
+		var locked := [{"shape": shape, "size": 10.0, "width": 10.0}]
+		GemVariety.restrict(locked, unlocks["shapes"])
+		check(locked[0]["shape"] == "heart", "a locked %s became %s, not a heart" % [shape, locked[0]["shape"]])
+	var only_new := [{"shape": "star", "size": 10.0, "width": 10.0}]
+	GemVariety.restrict(only_new, {"pebble": ["cabochon"], "oval": ["brilliant"]})
+	check(only_new[0]["shape"] == "pebble", "a star with only a pebble in its family became %s" % only_new[0]["shape"])
+
+
+## Her own color stories: 2 to the most colors a theme holds, only real
+## colors, kept through saving and loading, and a puzzle made with one is
+## colored with it and remembers it.
+func test_custom_themes() -> void:
+	print("Custom color stories")
+	var profile := SaveStore.upgrade({})
+	check(CustomThemes.list(profile).is_empty(), "a new player has color stories")
+	check(CustomThemes.save(profile, "Too few", ["ruby"]) == "", "saved a one-color story")
+	var too_many := []
+	for g in GemCatalog.all_colors().slice(0, GemCatalog.MAX_THEME_COLORS + 1):
+		too_many.append(g["id"])
+	check(CustomThemes.save(profile, "Too many", too_many) == "", "saved a story with too many colors")
+	check(CustomThemes.save(profile, "Twice", ["ruby", "ruby"]) == "", "saved a story with a color twice")
+	check(CustomThemes.save(profile, "Unknown", ["ruby", "no_such_gem"]) == "", "saved a story with an unknown color")
+	var id := CustomThemes.save(profile, "  Sunrise  ", ["ruby", "sunflower"])
+	check(CustomThemes.is_custom(id) and not GemCatalog.THEMES.has(id), "story id %s" % id)
+	check(CustomThemes.find(profile, id)["name"] == "Sunrise", "story name not trimmed")
+	var big := CustomThemes.save(profile, "", too_many.slice(0, GemCatalog.MAX_THEME_COLORS))
+	check(big != "" and CustomThemes.find(profile, big)["name"] == "My colors 2", "a full story without a name")
+	check(CustomThemes.save(profile, "Dawn", ["snow", "ruby", "sunflower"], id) == id, "changing a story")
+	check(CustomThemes.find(profile, id)["gems"] == ["snow", "ruby", "sunflower"], "story colors not changed")
+	check(CustomThemes.usable(profile).size() == 1, "a story with locked colors is offered")
+	var loaded := SaveStore.upgrade(JSON.parse_string(JSON.stringify(profile)))
+	check(JSON.stringify(loaded["custom_themes"]) == JSON.stringify(profile["custom_themes"]), "stories changed on loading")
+	var broken := SaveStore.upgrade({"custom_themes": [{"id": "rainbow", "name": "x", "gems": ["ruby", "snow"]},
+			{"id": "mine_1", "name": "ok", "gems": ["ruby", "snow"]}, "junk", {"id": "mine_2", "gems": ["ruby"]}]})
+	check(broken["custom_themes"].size() == 1 and broken["custom_themes"][0]["id"] == "mine_1",
+			"malformed stories kept: %s" % [broken["custom_themes"]])
+	var story := CustomThemes.find(profile, id)
+	var request := {"type": "mandala", "seed": 5, "pattern_seed": 35, "theme": id, "theme_name": story["name"],
+			"theme_gems": story["gems"]}
+	var p := PuzzleMaker.make(request, profile["unlocks"])
+	check(p["slots"].size() >= CollageGenerator.MIN_SLOTS, "a puzzle in her own colors has %d slots" % p["slots"].size())
+	var used := {}
+	for s in p["slots"]:
+		used[str(s["target_gem"])] = true
+	check(story["gems"].any(func(g: String) -> bool: return used.has(g)), "her own colors aren't in the picture")
+	var meta := SaveStore.puzzle_meta(p, "p1", 0)
+	check(meta.get("theme_name") == "Dawn" and meta.get("theme_gems") == story["gems"], "the puzzle forgot its story")
+	check(not SaveStore.puzzle_meta(PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 35,
+			"theme": "rainbow"}, profile["unlocks"]), "p2", 0).has("theme_gems"), "a built-in theme's puzzle has a story")
+	CustomThemes.remove(profile, id)
+	check(CustomThemes.find(profile, id).is_empty(), "story not deleted")
 
 
 ## Packs give only new things, sell out once empty, take a pick or coins;
@@ -1004,9 +1059,14 @@ func test_catalog_complete() -> void:
 		for cut: String in GemCuts.for_shape(shape):
 			check(GemCuts.SHADER_STYLE.has(cut), "cut %s has no shader style" % cut)
 	for t: String in GemCatalog.THEMES:
-		for gem: String in GemCatalog.THEMES[t]["gems"]:
+		var gems: Array = GemCatalog.THEMES[t]["gems"]
+		check(gems.size() >= GemCatalog.MIN_THEME_COLORS and gems.size() <= GemCatalog.MAX_THEME_COLORS,
+				"theme %s has %d colors" % [t, gems.size()])
+		check(not CustomThemes.is_custom(t), "theme id %s looks like one of hers" % t)
+		for gem: String in gems:
 			check(GemCatalog.all_colors().any(func(g: Dictionary) -> bool: return g["id"] == gem),
 					"theme %s uses unknown gem %s" % [t, gem])
+			check(gems.count(gem) == 1, "theme %s lists %s twice" % [t, gem])
 	for id: String in GemCatalog.PUZZLES:
 		check(GemCatalog.PUZZLES[id]["variant"] in MandalaGenerator.VARIANTS, "puzzle %s has an unknown variant" % id)
 	var handled := {

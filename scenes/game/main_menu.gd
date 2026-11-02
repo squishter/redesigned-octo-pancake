@@ -5,7 +5,9 @@ extends Control
 ## has (colors, photo subject, kit colors, kit size). Every puzzle keeps its own save, so
 ## a new one never overwrites one in progress. Each saved puzzle can be
 ## continued, restarted, recolored (the same picture made again in another
-## unlocked theme, as a new puzzle beside it) or deleted. Collection & packs
+## unlocked theme, as a new puzzle beside it) or deleted. Beside the color
+## stories she has unlocked she can make her own (ColorStoryEditor), from
+## her gem colors, and change or delete them. Collection & packs
 ## shows what she has and opens packs for more (with her coins and free
 ## picks shown beside it). Photo puzzles start from one of her photos or one
 ## she takes right then with the camera. Settings (how placed gems go in, the
@@ -40,6 +42,9 @@ var _settings_panel: SettingsDialog
 var _daily_gift: DailyGift
 var _mode_buttons: Array[Button] = []
 var _theme_preview: HBoxContainer
+var _story_actions: HBoxContainer
+var _edit_story: Button
+var _story_editor: ColorStoryEditor
 var _photo_actions: HBoxContainer
 var _busy_art: TextureRect
 var _kind: OptionButton
@@ -161,6 +166,13 @@ func _ready() -> void:
 	_theme_preview = HBoxContainer.new()
 	_theme_preview.alignment = BoxContainer.ALIGNMENT_CENTER
 	form.add_child(_theme_preview)
+	_story_actions = HBoxContainer.new()
+	form.add_child(_story_actions)
+	var make_story := _small_button(_story_actions, "Make my own", func() -> void: _story_editor.edit())
+	make_story.icon = GameTheme.icon("palette")
+	make_story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_edit_story = _small_button(_story_actions, "Change it", func() -> void: _story_editor.edit(_selected_theme()))
+	_edit_story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_subject = _options(form, "Photo composition")
 	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
 		_subject.add_item(pair[1])
@@ -187,6 +199,11 @@ func _ready() -> void:
 	for button: Button in [_choose_photo, _take_photo_button]:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_button(_new_panel.actions, "Cancel", _new_panel.close).theme_type_variation = "QuietButton"
+	_story_editor = ColorStoryEditor.new()
+	_story_editor.profile = profile
+	_story_editor.hide()
+	_story_editor.saved.connect(_on_story_saved)
+	add_child(_story_editor)
 	_photo_dialog = FileDialog.new()
 	_photo_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_photo_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -253,7 +270,7 @@ func _ready() -> void:
 			_start_photo(photo, _photo_kind))
 	add_child(_camera)
 
-	for overlay: Control in [_new_panel, _settings_panel, _busy, _camera]:
+	for overlay: Control in [_new_panel, _story_editor, _settings_panel, _busy, _camera]:
 		overlay.visibility_changed.connect(_sync_menu_input)
 	if daily_pick_awarded:
 		_daily_gift = DailyGift.new()
@@ -272,7 +289,8 @@ func present_daily_gift() -> void:
 
 
 func _sync_menu_input() -> void:
-	var blocked := (_new_panel.visible or _settings_panel.visible or _busy.visible or _camera.visible
+	var blocked := (_new_panel.visible or _story_editor.visible or _settings_panel.visible or _busy.visible
+			or _camera.visible
 			or (is_instance_valid(_daily_gift) and _daily_gift.visible))
 	_menu_scroll.process_mode = Node.PROCESS_MODE_DISABLED if blocked else Node.PROCESS_MODE_INHERIT
 
@@ -282,15 +300,7 @@ func _sync_menu_input() -> void:
 ## fixed and only the colors can change.
 func _open_new(recolor: Dictionary) -> void:
 	_recolor = recolor
-	var unlocks: Dictionary = profile["unlocks"]
-	_theme.clear()
-	for th: String in GemCatalog.unlocked_themes(unlocks):
-		if not recolor.is_empty() and th == recolor["theme"]:
-			continue
-		_theme.add_item(GemCatalog.theme_name(th))
-		_theme.set_item_metadata(_theme.item_count - 1, th)
-	if _theme.item_count > 0:
-		_theme.select(randi() % _theme.item_count)
+	_fill_themes()
 	if not recolor.is_empty():
 		_kind.select(1 if GemCatalog.PUZZLES.get(recolor["type"], {}).get("kit", false) else 0)
 	_fill_sources()
@@ -303,6 +313,50 @@ func _open_new(recolor: Dictionary) -> void:
 	_new_title.text = "Recolor this picture" if not recolor.is_empty() else "A new puzzle"
 	_refresh_new()
 	_new_panel.open()
+
+
+## The color stories she can pick: her own first, then the unlocked ones
+## (not the one a recolored puzzle already has). Selects `select_id`, or
+## one at random.
+func _fill_themes(select_id := "") -> void:
+	_theme.clear()
+	var ids := []
+	var names := []
+	for t: Dictionary in CustomThemes.usable(profile):
+		ids.append(t["id"])
+		names.append("%s  (yours)" % t["name"])
+	for th: String in GemCatalog.unlocked_themes(profile["unlocks"]):
+		ids.append(th)
+		names.append(GemCatalog.theme_name(th))
+	for i in ids.size():
+		if not _recolor.is_empty() and ids[i] == _recolor.get("theme", ""):
+			continue
+		_theme.add_item(names[i])
+		_theme.set_item_metadata(_theme.item_count - 1, ids[i])
+	if _theme.item_count == 0:
+		return
+	_theme.select(randi() % _theme.item_count)
+	for i in _theme.item_count:
+		if _theme.get_item_metadata(i) == select_id:
+			_theme.select(i)
+
+
+func _selected_theme() -> String:
+	return str(_theme.get_item_metadata(_theme.selected)) if _theme.selected >= 0 else ""
+
+
+## A color story's gem colors: one of hers, or a built-in theme's.
+func _theme_gems(theme_id: String) -> Array:
+	if CustomThemes.is_custom(theme_id):
+		return CustomThemes.find(profile, theme_id).get("gems", [])
+	return GemCatalog.THEMES.get(theme_id, {}).get("gems", [])
+
+
+## Her color story was saved (or deleted, ""): show the stories afresh, with
+## that one picked.
+func _on_story_saved(theme_id: String) -> void:
+	_fill_themes(theme_id)
+	_refresh_new()
 
 
 ## The sources for the chosen kind: her unlocked picture types of that kind,
@@ -331,6 +385,7 @@ func _refresh_new() -> void:
 	var recoloring := not _recolor.is_empty()
 	_show_row(_theme, not photo)
 	_theme_preview.visible = not photo
+	_story_actions.visible = not photo
 	_show_row(_subject, photo and not kit)
 	_show_row(_kit_colors, photo and kit)
 	_show_row(_kit_size, kit and not recoloring)
@@ -354,10 +409,12 @@ func _update_theme_preview() -> void:
 	for child in _theme_preview.get_children():
 		_theme_preview.remove_child(child)
 		child.queue_free()
+	_edit_story.visible = false
 	if _theme.selected < 0:
 		return
-	var id: String = _theme.get_item_metadata(_theme.selected)
-	for gem: String in GemCatalog.THEMES.get(id, {}).get("gems", []):
+	var id := _selected_theme()
+	_edit_story.visible = CustomThemes.is_custom(id)
+	for gem: String in _theme_gems(id):
 		var swatch := UI.panel(false, 0)
 		var style := swatch.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
 		style.bg_color = GemCatalog.color_of(gem)
@@ -386,6 +443,10 @@ func _start_making() -> void:
 	var type_id: String = _source.get_item_metadata(_source.selected)
 	var theme_id: String = _theme.get_item_metadata(_theme.selected)
 	_request = PuzzleMaker.new_request(type_id, theme_id)
+	if CustomThemes.is_custom(theme_id):
+		var story := CustomThemes.find(profile, theme_id)
+		_request["theme_name"] = story.get("name", "My colors")
+		_request["theme_gems"] = (story.get("gems", []) as Array).duplicate()
 	_request["kit_size"] = _kit_size.get_item_metadata(maxi(_kit_size.selected, 0))
 	if not _recolor.is_empty():
 		# The same picture: same seeds, new colors.
@@ -475,6 +536,8 @@ func go_back() -> void:
 		_daily_gift.close()
 	elif _camera.visible:
 		_camera.close()
+	elif _story_editor.visible:
+		_story_editor.close()
 	elif _new_panel.visible:
 		_new_panel.close()
 	elif _settings_panel.visible:
@@ -538,7 +601,8 @@ func _card(meta: Dictionary) -> Control:
 	row.add_child(copy)
 	copy.add_child(UI.label("COMPLETE" if meta["done"] else "IN YOUR STUDIO", 25, GameTheme.MINT))
 	copy.add_child(UI.label(GemCatalog.puzzle_name(meta["type"]), 42, GameTheme.GOLD))
-	var colors: String = "From your photo" if GemCatalog.PHOTO_MODES.has(meta["type"]) else GemCatalog.theme_name(meta["theme"])
+	var colors: String = "From your photo" if GemCatalog.PHOTO_MODES.has(meta["type"]) else str(meta.get("theme_name",
+			GemCatalog.theme_name(meta["theme"])))
 	copy.add_child(UI.label("%s · %s" % [colors, _ago(meta["updated"])], 28, GameTheme.TEXT_DIM))
 	var fraction := float(meta["filled"]) / maxi(1, int(meta["total"]))
 	column.add_child(UI.progress(fraction))

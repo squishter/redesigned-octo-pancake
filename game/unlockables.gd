@@ -49,7 +49,8 @@ static func items(kind: String) -> Array:
 	match kind:
 		"color":
 			for g in GemCatalog.all_colors():
-				out.append({"id": g["id"], "name": g["name"], "color": g["color"], "about": "A new gem color."})
+				var about := "A new gem color." if g["finish"] == "" else "A shimmer stone that plays with the light."
+				out.append({"id": g["id"], "name": g["name"], "color": g["color"], "about": about})
 		"shape":
 			for shape: String in GemCatalog.ALL_SHAPES:
 				var cut: String = GemCuts.for_shape(shape)[0]

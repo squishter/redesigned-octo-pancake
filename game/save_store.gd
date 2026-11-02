@@ -3,8 +3,10 @@ extends RefCounted
 ## Her saved games, under user://saves:
 ##   profile.json: {version, unlocks (see GemCatalog), settings, wallet
 ##     {coins, picks}, daily {opened, completed}, powers {power: charges}
-##     (see Packs), puzzles: [meta]}, where each meta is {id, type, seed,
-##     pattern_seed, theme, layout (see PuzzleMaker.LAYOUT; none before
+##     (see Packs), custom_themes (her own color stories, see CustomThemes),
+##     puzzles: [meta]}, where each meta is {id, type, seed,
+##     pattern_seed, theme (with theme_name and theme_gems for her own
+##     color stories), layout (see PuzzleMaker.LAYOUT; none before
 ##     layouts, meaning "classic"), created, updated, total, filled, done, rewarded,
 ##     powers (the whole-puzzle power-ups on for it)}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
@@ -92,6 +94,7 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 		powers[key] = int(powers[key])
 	profile["powers"] = powers
 	Unlockables.normalize(profile)
+	CustomThemes.upgrade(profile)
 	var settings: Dictionary = profile.get("settings", {})
 	# Keep an old debug frame-cap choice when moving to the shared player setting.
 	if not settings.has("fps_cap") and OS.is_debug_build() and settings.has(PerfReadout.CAP_KEY):
@@ -150,9 +153,24 @@ static func save_profile(profile: Dictionary) -> Error:
 ## Adds a new puzzle (its picture made by PuzzleMaker) to the profile, newest
 ## first, and writes it. Returns its meta.
 static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
-	var request: Dictionary = picture.get("puzzle", {})
 	var now := int(Time.get_unix_time_from_system())
 	var id := "p%d_%d" % [now, randi() % 100000]
+	var meta := puzzle_meta(picture, id, now)
+	# Kits save as their grid, not their (many) slots.
+	var kept := picture
+	if picture.has("kit_grid"):
+		kept = picture.duplicate()
+		kept.erase("slots")
+	_write(_path(id, "json"), PatternIO.to_json(kept).to_utf8_buffer())
+	save_progress(id, PackedByteArray())
+	(profile["puzzles"] as Array).push_front(meta)
+	save_profile(profile)
+	return meta
+
+
+## A new puzzle's meta (see the top) for its picture, made by PuzzleMaker.
+static func puzzle_meta(picture: Dictionary, id: String, now: int) -> Dictionary:
+	var request: Dictionary = picture.get("puzzle", {})
 	var meta := {
 		"id": id,
 		"type": request.get("type", "mandala"),
@@ -169,15 +187,10 @@ static func add_puzzle(profile: Dictionary, picture: Dictionary) -> Dictionary:
 		"hints": Hints.START,
 		"hint_ms": 0,
 	}
-	# Kits save as their grid, not their (many) slots.
-	var kept := picture
-	if picture.has("kit_grid"):
-		kept = picture.duplicate()
-		kept.erase("slots")
-	_write(_path(id, "json"), PatternIO.to_json(kept).to_utf8_buffer())
-	save_progress(id, PackedByteArray())
-	(profile["puzzles"] as Array).push_front(meta)
-	save_profile(profile)
+	# Her own color stories travel with the puzzle (see CustomThemes).
+	for key in ["theme_name", "theme_gems"]:
+		if request.has(key):
+			meta[key] = request[key]
 	return meta
 
 
