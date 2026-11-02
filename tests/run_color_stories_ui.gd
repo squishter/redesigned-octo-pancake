@@ -99,6 +99,36 @@ func _test_picker(menu: Control) -> void:
 	picker._search.text = "no matching story"
 	picker._search.text_changed.emit(picker._search.text)
 	_check(picker._empty.visible, "An empty story search explains the result")
+	picker._search.text = ""
+	picker._search.text_changed.emit(picker._search.text)
+	var sorted := true
+	for k in range(1, picker.stories.size()):
+		var x: Dictionary = picker.stories[k - 1]
+		var y: Dictionary = picker.stories[k]
+		if x["gems"].size() > y["gems"].size() or (x["gems"].size() == y["gems"].size()
+				and x["name"].to_lower() > y["name"].to_lower()):
+			sorted = false
+	_check(sorted, "Stories are shown by color count, then by name")
+	var shown_order := []
+	for section_count: int in picker._sections:
+		for card: Button in (picker._sections[section_count]["cards"] as Control).get_children():
+			shown_order.append(card)
+	var expected_order := picker.stories.map(func(story: Dictionary) -> Button: return picker._buttons[story["id"]])
+	_check(shown_order == expected_order, "Cards appear in that order on screen")
+	_check(picker._sections.keys() == [3, 4, 5, 6, 7, 8], "There is a section per color count: %s" % [picker._sections.keys()])
+	var three: Dictionary = picker._sections[3]
+	(three["header"] as Button).pressed.emit()
+	_check(picker.is_collapsed(3) and not (three["cards"] as Control).visible
+		and (picker._buttons["primary"] as Button).is_visible_in_tree() == false, "A color count's section folds away")
+	picker._search.text = "primary"
+	picker._search.text_changed.emit(picker._search.text)
+	_check((three["cards"] as Control).visible and (picker._buttons["primary"] as Button).is_visible_in_tree()
+		and not (picker._sections[8]["header"] as Button).visible, "A search opens sections it matches in and hides the rest")
+	picker._search.text = ""
+	picker._search.text_changed.emit(picker._search.text)
+	_check(not (three["cards"] as Control).visible, "Clearing the search folds it away again")
+	(three["header"] as Button).pressed.emit()
+	_check(not picker.is_collapsed(3) and (three["cards"] as Control).visible, "Tapping the heading again opens it")
 	menu.go_back()
 	_check(not picker.visible and menu._new_panel.can_process(), "Back returns to the workshop")
 	for id: String in ["primary", "kaleidoscope"]:

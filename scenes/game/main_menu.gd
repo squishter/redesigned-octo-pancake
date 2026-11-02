@@ -11,7 +11,8 @@ extends Control
 ## shows what she has and opens packs for more (with her coins and free
 ## picks shown beside it). Photo puzzles start from one of her photos or one
 ## she takes right then with the camera. Settings (how placed gems go in, the
-## finale) and the generator lab, a debug mode, are at the bottom. Debug
+## finale) is at the top right; the generator lab, a debug mode, is at the
+## bottom. Debug
 ## builds also offer a setting that lends her everything, for testing.
 
 signal play_requested(id: String)
@@ -42,6 +43,7 @@ var _completed: CompletedPuzzles
 var _completed_panel: CompletedPuzzleDialog
 var _new_panel: GameDialog
 var _settings_panel: SettingsDialog
+var _settings_button: Button
 var _daily_gift: DailyGift
 var _mode_buttons: Array[Button] = []
 var _story_picker: ColorStoryPicker
@@ -88,6 +90,13 @@ func _ready() -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 28)
 	_menu_scroll.add_child(root)
+	# Settings sits at the top right; the dialog itself is made further down.
+	var top_bar := HBoxContainer.new()
+	root.add_child(top_bar)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_bar.add_child(spacer)
+	_settings_button = _small_button(top_bar, "Settings", func() -> void: _settings_panel.open())
 	var eyebrow := Label.new()
 	eyebrow.text = "A LITTLE SPARKLE. A LITTLE YOU."
 	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -256,10 +265,9 @@ func _ready() -> void:
 	_settings_panel.done_text = "Lovely, let's create"
 	_settings_panel.reload_requested.connect(func() -> void: reload_requested.emit())
 	add_child(_settings_panel)
-	var footer := HFlowContainer.new()
-	root.add_child(footer)
-	_small_button(footer, "Settings", _settings_panel.open).theme_type_variation = "QuietButton"
 	if show_developer_tools:
+		var footer := HFlowContainer.new()
+		root.add_child(footer)
 		var lab := _small_button(footer, "Generator lab (debug)", func() -> void: lab_requested.emit())
 		lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lab.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
