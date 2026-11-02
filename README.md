@@ -57,18 +57,24 @@ mode for trying out new pattern generation.
   soft blue glow that floats across them; labradorite flashes blue, teal
   and gold along its streaks; mother of pearl and abalone show wavy soft
   rainbows; aurora is clear crystal with a rainbow coating, like AB drills.
-  52 themes of 3 to 8 colors (`GemCatalog.MIN_THEME_COLORS`,
+  86 themes of 3 to 8 colors (`GemCatalog.MIN_THEME_COLORS`,
   `MAX_THEME_COLORS`): one per hue, the starting rainbow ones and mixes
   like Tropical, Galaxy and Seaside, three of shimmer stones (Opaline,
   Northern Lights, Mermaid), small calm ones of 3 to 5 colors (Primary,
   Bumblebee, Candy Cane, Mint Chip, Moonlit, Coral Reef, Lavender Fields,
   Sakura, Wildflower Meadow, Jewel Box, Rose Gold) and lively ones of 7 or
-  8 (Full Spectrum, Festival, Aurora Sky, Kaleidoscope, Opal Dreams). A theme is hers as soon as she has all its colors; themes don't
+  8 (Full Spectrum, Festival, Aurora Sky, Kaleidoscope, Opal Dreams), and
+  more of every size but six, so each of 3, 4, 5, 7 and 8 colors has ten
+  (Tuxedo and Pink Lemonade to Monochrome and Cosmic; six-color themes
+  number 36). New themes go at the end of `GemCatalog.THEMES` and existing
+  ones never change, so puzzles made in them stay as they are. A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Her own color stories.** Under *Color story* in the New puzzle panel,
   one field shows the selected palette and color count. Tapping it opens
   `ColorStoryPicker`, a searchable story list that scrolls with a finger or
-  mouse wheel. Every story shows its colors; *Create my own story* and
+  mouse wheel. Stories are shown by color count, then by name, in one
+  collapsible section per count (tap a heading to fold it away or open it;
+  a search opens every section it matches in). Every story shows its colors; *Create my own story* and
   *Edit story* live inside that selector.
   Creation opens `ColorStoryEditor`: she can name a story and
   choose 2 to 8 of her gem colors, with search and color-family filters.
@@ -76,7 +82,8 @@ mode for trying out new pattern generation.
   with space reserved for all eight so adding or removing one never shifts
   the list. Tapping a selected color removes it; *Reverse order* and
   *Clear colors* help adjust the palette. Limits and save readiness stay
-  visible. Her stories come first in the list, labeled "Your story".
+  visible. Her stories sit among the others by color count and name,
+  labeled "Your story".
   Saving or cancelling returns to color selection. They are kept
   in the profile (`CustomThemes`, `custom_themes`), and a puzzle made with
   one carries its name and colors in its request and meta (`theme_name`,
@@ -241,7 +248,7 @@ mode for trying out new pattern generation.
   The Power-ups dialog in debug builds also has *Complete puzzle (debug)*,
   which places every open stone at once, fits the whole picture in view
   and plays the finale, for testing finales.
-- **Settings.** Open Settings from the menu or the gear button beside Fit
+- **Settings.** Open Settings from the top right of the menu or the gear button beside Fit
   on the game board, including completed pictures. Placement animations,
   the grand finale and the FPS cap share one dialog; changes save immediately,
   and placement changes take effect on the active puzzle. The FPS cap is
@@ -285,7 +292,7 @@ mode for trying out new pattern generation.
 | `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/color_story_editor.gd` | `ColorStoryEditor`: the dialog where she makes, changes or deletes one of her own color stories. |
-| `scenes/game/color_story_picker.gd` | `ColorStoryPicker`: a scrollable story selector with palette previews, search, and the entry points for creating and editing stories. |
+| `scenes/game/color_story_picker.gd` | `ColorStoryPicker`: a scrollable story selector with palette previews in collapsible sections by color count, search, and the entry points for creating and editing stories. |
 | `scenes/game/completed_puzzles.gd`, `scenes/game/completed_puzzle_dialog.gd` | Three-column completed gallery, admire/restart/recolor actions, and restart confirmation. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
 | `scenes/game/collection_screen.gd` | Collection & packs: the selected pack's stock and payment controls, and everything unlocked or still hidden. |

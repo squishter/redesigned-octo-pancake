@@ -1,6 +1,8 @@
 class_name ColorStoryPicker
 extends GameDialog
 ## Scrollable color-story browsing; creation and editing live in this selector.
+## Stories are shown by how many colors they have, then by name, one
+## collapsible section per count (a search opens every section it matches in).
 
 signal chosen(theme_id: String)
 signal cancelled
@@ -16,6 +18,10 @@ var _make: Button
 var _edit: Button
 var _empty: Label
 var _buttons := {}
+## Each color count's section: {header, cards, label}, by count.
+var _sections := {}
+## Color counts she has folded away, kept while the menu is up.
+var _collapsed := {}
 
 
 func _init() -> void:
@@ -39,7 +45,13 @@ func _init() -> void:
 
 
 func set_stories(choices: Array, select_id := "") -> void:
-	stories = choices
+	stories = choices.duplicate()
+	stories.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["gems"].size() != b["gems"].size():
+			return a["gems"].size() < b["gems"].size()
+		var x: String = a["name"].to_lower()
+		var y: String = b["name"].to_lower()
+		return x < y if x != y else str(a["id"]) < str(b["id"]))
 	selected_id = ""
 	for story: Dictionary in stories:
 		if story["id"] == select_id:
@@ -50,9 +62,13 @@ func set_stories(choices: Array, select_id := "") -> void:
 		body.remove_child(child)
 		child.queue_free()
 	_buttons.clear()
+	_sections.clear()
 	for story: Dictionary in stories:
+		var count: int = story["gems"].size()
+		if not _sections.has(count):
+			_sections[count] = _section(count)
 		var button := _story_card(story)
-		body.add_child(button)
+		(_sections[count]["cards"] as VBoxContainer).add_child(button)
 		_buttons[story["id"]] = button
 	_empty = UI.label("No stories match. Try another name or color.", 28, GameTheme.TEXT_DIM)
 	body.add_child(_empty)
@@ -74,6 +90,37 @@ func close() -> void:
 	super.close()
 	if was_visible:
 		cancelled.emit()
+
+
+## A color count's heading, tapped to fold its stories away or open them.
+func _section(count: int) -> Dictionary:
+	var header := Button.new()
+	header.custom_minimum_size.y = GameTheme.TAP_HEIGHT
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.theme_type_variation = "QuietButton"
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 24
+	row.offset_right = -20
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(row)
+	var label := UI.label("", 28, GameTheme.MINT)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label)
+	var chevron := UI.icon("chevron_down", 40)
+	chevron.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chevron.resized.connect(func() -> void: chevron.pivot_offset = chevron.size / 2.0)
+	row.add_child(chevron)
+	body.add_child(header)
+	var cards := VBoxContainer.new()
+	cards.add_theme_constant_override("separation", 12)
+	body.add_child(cards)
+	var section := {"header": header, "cards": cards, "label": label, "chevron": chevron}
+	header.pressed.connect(func() -> void:
+		_collapsed[count] = not _collapsed.get(count, false)
+		_filter())
+	return section
 
 
 func _story_card(story: Dictionary) -> Button:
@@ -121,6 +168,11 @@ func _choose(theme_id: String) -> void:
 	chosen.emit(theme_id)
 
 
+## Whether the stories with `colors` colors are folded away.
+func is_collapsed(colors: int) -> bool:
+	return _collapsed.get(colors, false)
+
+
 func _update_selection() -> void:
 	for id: String in _buttons:
 		(_buttons[id] as Button).set_pressed_no_signal(id == selected_id)
@@ -133,11 +185,23 @@ func _update_selection() -> void:
 func _filter() -> void:
 	var query := _search.text.strip_edges().to_lower()
 	var count := 0
+	var shown := {}
 	for story: Dictionary in stories:
 		var button: Button = _buttons[story["id"]]
 		button.visible = query == "" or query in button.tooltip_text.to_lower()
 		if button.visible:
 			count += 1
+			shown[story["gems"].size()] = shown.get(story["gems"].size(), 0) + 1
+	for colors: int in _sections:
+		var section: Dictionary = _sections[colors]
+		var n: int = shown.get(colors, 0)
+		# A search shows every match, folded away or not.
+		var open: bool = query != "" or not _collapsed.get(colors, false)
+		(section["header"] as Button).visible = n > 0
+		(section["cards"] as Control).visible = n > 0 and open
+		(section["label"] as Label).text = "%d COLORS  ·  %d %s" % [colors, n, "story" if n == 1 else "stories"]
+		(section["chevron"] as Control).rotation = 0.0 if open else -PI / 2.0
+		(section["header"] as Button).tooltip_text = ("Hide" if open else "Show") + " %d-color stories" % colors
 	if is_instance_valid(_empty):
 		_empty.visible = count == 0
 	contain_focus.call_deferred()
