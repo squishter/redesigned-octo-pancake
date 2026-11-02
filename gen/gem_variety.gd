@@ -27,6 +27,10 @@ const ROUND_FAMILY := ["round", "cushion", "octagon", "hexagon", "flower", "squa
 		"triangle", "star", "pebble", "clover", "sunburst", "butterfly"]  # most fitting first
 const LONG_FAMILY := ["oval", "marquise", "lozenge", "kite", "teardrop"]
 const BOX_FAMILY := ["baguette", "emerald"]
+## Shapes that only stand in for a locked shape when nothing else of its
+## family is unlocked: a locked star should become a heart, say, rather
+## than a soft pebble, and stand-ins stay as they were before these came.
+const STAND_IN_LAST := ["pebble", "clover", "sunburst", "butterfly"]
 
 
 ## slots: the collage's slots, each with shape, part, target_color and
@@ -205,16 +209,19 @@ static func restrict(slots: Array, allowed: Dictionary) -> void:
 
 
 ## The allowed shape nearest `shape`: its family's neighbors first (the
-## families list their shapes most alike next to each other), then the
-## other families; "" if nothing is allowed.
+## families list their shapes most alike next to each other; STAND_IN_LAST
+## shapes after the rest of their family), then the other families; "" if
+## nothing is allowed.
 static func _stand_in(shape: String, allowed: Dictionary) -> String:
 	var order := []
-	for fam: Array in [_whole_family(shape), LONG_FAMILY, ROUND_FAMILY, BOX_FAMILY]:
+	for whole: Array in [_whole_family(shape), LONG_FAMILY, ROUND_FAMILY, BOX_FAMILY]:
+		var fam := whole.filter(func(f: String) -> bool: return not f in STAND_IN_LAST or f == shape)
 		var at := fam.find(shape)
 		var by_near := fam.duplicate()
 		if at >= 0:
 			by_near.sort_custom(func(a: String, b: String) -> bool:
 				return absi(fam.find(a) - at) < absi(fam.find(b) - at))
+		by_near.append_array(whole.filter(func(f: String) -> bool: return f in STAND_IN_LAST))
 		for f: String in by_near:
 			if not f in order:
 				order.append(f)

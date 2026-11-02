@@ -136,7 +136,11 @@ const ALL_SHAPES := ["round", "square", "hexagon", "triangle", "cushion", "octag
 
 ## Color themes, as gem colors. Order matters as in Palettes.THEMES: rings
 ## and region groups walk the list, so neighbors should look good together.
-## A theme is hers as soon as she has every one of its colors.
+## A theme is hers as soon as she has every one of its colors. Themes hold
+## MIN_THEME_COLORS to MAX_THEME_COLORS colors; her own color stories
+## (CustomThemes) as few as CustomThemes.MIN_COLORS.
+const MIN_THEME_COLORS := 3
+const MAX_THEME_COLORS := 8
 const THEMES := {
 	"rainbow": {"name": "Rainbow", "gems": ["ruby", "tangerine", "sunflower", "leaf", "sapphire", "amethyst"]},
 	"sunset": {"name": "Sunset", "gems": ["sunflower", "tangerine", "ruby", "amethyst", "snow", "indigo"]},
@@ -179,6 +183,27 @@ const THEMES := {
 	"northern_lights": {"name": "Northern Lights", "gems": ["black_opal", "labradorite", "abalone", "aurora",
 			"fire_opal", "opal"]},
 	"mermaid": {"name": "Mermaid", "gems": ["abalone", "seafoam", "mother_of_pearl", "lagoon", "opal", "lilac"]},
+	# Small ones: three to five colors, for calmer pictures.
+	"primary": {"name": "Primary", "gems": ["ruby", "sunflower", "sapphire"]},
+	"bumblebee": {"name": "Bumblebee", "gems": ["sunflower", "onyx", "snow"]},
+	"candy_cane": {"name": "Candy Cane", "gems": ["scarlet", "snow", "mint"]},
+	"mint_chip": {"name": "Mint Chip", "gems": ["mint", "chocolate", "cream"]},
+	"moonlit": {"name": "Moonlit", "gems": ["midnight", "silver", "moonstone"]},
+	"coral_reef": {"name": "Coral Reef", "gems": ["coral", "turquoise", "sand", "sea_glass"]},
+	"lavender_fields": {"name": "Lavender Fields", "gems": ["lavender", "sage", "lilac", "cream"]},
+	"sakura": {"name": "Sakura", "gems": ["cherry_blossom", "blush", "snow", "moss"]},
+	"meadow": {"name": "Wildflower Meadow", "gems": ["leaf", "poppy", "sunflower", "cornflower", "snow"]},
+	"jewel_box": {"name": "Jewel Box", "gems": ["ruby", "emerald", "sapphire", "amethyst", "topaz"]},
+	"rose_gold": {"name": "Rose Gold", "gems": ["rose_quartz", "gold", "blush", "ivory", "copper"]},
+	# Big ones: seven or eight colors, for lively pictures.
+	"full_spectrum": {"name": "Full Spectrum", "gems": ["ruby", "tangerine", "sunflower", "leaf", "sky", "sapphire",
+			"amethyst"]},
+	"festival": {"name": "Festival", "gems": ["hot_pink", "tangerine", "lemon", "lime", "turquoise", "violet", "snow"]},
+	"aurora_sky": {"name": "Aurora Sky", "gems": ["navy", "teal", "emerald", "aurora", "violet", "lilac", "midnight"]},
+	"kaleidoscope": {"name": "Kaleidoscope", "gems": ["ruby", "coral", "sunflower", "lime", "turquoise", "cobalt",
+			"violet", "fuchsia"]},
+	"opal_dreams": {"name": "Opal Dreams", "gems": ["opal", "pink_opal", "fire_opal", "black_opal", "moonstone",
+			"aurora", "mother_of_pearl", "abalone"]},
 }
 const STARTING_THEMES := ["rainbow", "sunset", "ocean", "garden", "night", "ember"]
 
@@ -316,8 +341,13 @@ static func color_name(gem_id: String) -> String:
 
 
 static func theme_colors(theme_id: String) -> PackedColorArray:
+	return colors_of(THEMES.get(theme_id, THEMES["rainbow"])["gems"])
+
+
+## Gem colors' colors, in order (for her own color stories too).
+static func colors_of(gems: Array) -> PackedColorArray:
 	var out := PackedColorArray()
-	for gem_id: String in THEMES.get(theme_id, THEMES["rainbow"])["gems"]:
+	for gem_id: String in gems:
 		out.append(color_of(gem_id))
 	return out
 
