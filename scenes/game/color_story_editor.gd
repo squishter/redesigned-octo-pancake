@@ -15,7 +15,7 @@ const CONFIRM_MS := 3000
 var profile: Dictionary = {}
 
 var _name: LineEdit
-var _strip: HFlowContainer
+var _strip: GridContainer
 var _search: LineEdit
 var _hue: OptionButton
 var _empty: Label
@@ -36,7 +36,11 @@ var _delete_asked := -1
 func _init() -> void:
 	super("Create a color story", "Bring your favorite gem colors together.", "palette")
 	preferred_height = 1980
+	subtitle_label.hide()
+	pinned.show()
+	pinned.add_theme_constant_override("separation", 8)
 	body.add_theme_constant_override("separation", 20)
+	actions.add_theme_constant_override("separation", 12)
 	body.add_child(UI.label("NAME", 26, GameTheme.MINT))
 	_name = LineEdit.new()
 	_name.max_length = CustomThemes.MAX_NAME
@@ -46,25 +50,31 @@ func _init() -> void:
 	_name.add_theme_font_size_override("font_size", 36)
 	body.add_child(_name)
 	body.add_child(UI.label("Optional. Leave blank for an automatic name.", 25, GameTheme.TEXT_DIM))
-	var selection := UI.panel(false, 20)
-	body.add_child(selection)
+	var selection := UI.panel(false, 16)
+	pinned.add_child(selection)
 	var selected := VBoxContainer.new()
-	selected.add_theme_constant_override("separation", 14)
+	selected.add_theme_constant_override("separation", 10)
 	selection.add_child(selected)
-	_count = UI.label("", 27, GameTheme.MINT)
+	_count = UI.label("", 25, GameTheme.MINT)
 	selected.add_child(_count)
-	selected.add_child(UI.label("Colors follow this order in your picture. Tap a selected color to remove it.",
-		25, GameTheme.TEXT_DIM))
-	_strip = ColorStorySwatches.flow()
+	_strip = GridContainer.new()
+	_strip.columns = 4
+	_strip.add_theme_constant_override("h_separation", 8)
+	_strip.add_theme_constant_override("v_separation", 8)
 	selected.add_child(_strip)
 	var tools := HBoxContainer.new()
 	selected.add_child(tools)
 	_reverse = _quiet(tools, "Reverse order", _reverse_colors)
 	_clear = _quiet(tools, "Clear colors", _clear_colors)
+	for button: Button in [_reverse, _clear]:
+		button.custom_minimum_size.y = 80
 	_reverse.icon = GameTheme.icon("replay")
 	_clear.icon = GameTheme.icon("close")
-	_note = UI.label("", 27, GameTheme.TEXT_DIM)
-	body.add_child(_note)
+	_note = UI.label("", 25, GameTheme.TEXT_DIM)
+	# Reserve two lines even when the status changes between one and two lines.
+	_note.custom_minimum_size.y = 80
+	_note.max_lines_visible = 2
+	pinned.add_child(_note)
 	body.add_child(UI.label("ADD FROM YOUR GEM COLORS", 26, GameTheme.MINT))
 	_search = LineEdit.new()
 	_search.placeholder_text = "Search colors by name"
@@ -87,7 +97,7 @@ func _init() -> void:
 	_palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(_palette)
 	_save = GameTheme.button("Save color story", true)
-	_save.custom_minimum_size.y = GameTheme.TAP_HEIGHT
+	_save.custom_minimum_size.y = 96
 	_save.theme_type_variation = "PrimaryButton"
 	_save.pressed.connect(_on_save)
 	actions.add_child(_save)
@@ -112,6 +122,7 @@ func edit(theme_id := "") -> void:
 	_hue.select(0)
 	_build_palette()
 	_refresh()
+	body_scroll.scroll_vertical = 0
 	open()
 
 
@@ -196,11 +207,14 @@ func _refresh() -> void:
 	for child in _strip.get_children():
 		_strip.remove_child(child)
 		child.queue_free()
-	for i in _picked.size():
+	for i in GemCatalog.MAX_THEME_COLORS:
+		if i >= _picked.size():
+			_strip.add_child(ColorStorySwatches.empty_slot(i + 1))
+			continue
 		var gem: String = _picked[i]
-		var chip := ColorStorySwatches.tile(gem, true)
-		(chip.find_child("Order", true, false) as Label).text = str(i + 1)
-		chip.tooltip_text = "Remove " + GemCatalog.color_name(gem)
+		var chip := ColorStorySwatches.tile(gem, true, true)
+		(chip.find_child("Order", true, false) as Label).text = "%d  ×" % (i + 1)
+		chip.tooltip_text = "Tap to remove " + GemCatalog.color_name(gem)
 		chip.pressed.connect(func() -> void: _toggle(gem))
 		_strip.add_child(chip)
 	_count.text = "%d / %d COLORS  ·  MINIMUM %d" % [_picked.size(), GemCatalog.MAX_THEME_COLORS, CustomThemes.MIN_COLORS]
@@ -217,6 +231,7 @@ func _refresh() -> void:
 		_note.text = "All %d colors selected. Remove a color before adding another." % GemCatalog.MAX_THEME_COLORS
 	else:
 		_note.text = "Ready to save. You can add %d more colors." % (GemCatalog.MAX_THEME_COLORS - _picked.size())
+	_note.tooltip_text = _note.text
 	contain_focus.call_deferred()
 
 
@@ -252,7 +267,7 @@ func _on_delete() -> void:
 
 func _quiet(parent: Control, text: String, action: Callable) -> Button:
 	var b := GameTheme.button(text)
-	b.custom_minimum_size.y = GameTheme.TAP_HEIGHT
+	b.custom_minimum_size.y = 96
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.add_theme_font_size_override("font_size", 28)
 	b.add_theme_constant_override("icon_max_width", 32)

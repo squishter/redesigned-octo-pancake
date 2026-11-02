@@ -7,6 +7,9 @@ signal closed
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const UI := preload("res://scenes/game/ui_widgets.gd")
 var body: VBoxContainer
+## Optional fixed content above the scrolling body (hidden until used).
+var pinned: VBoxContainer
+var body_scroll: ScrollContainer
 var actions: VBoxContainer
 var title_label: Label
 var subtitle_label: Label
@@ -47,14 +50,17 @@ func _init(title := "", subtitle := "", glyph := "sparkle") -> void:
 	_close.tooltip_text = "Close"
 	_close.pressed.connect(close)
 	header.add_child(_close)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	column.add_child(scroll)
-	DragScroll.attach(scroll)
+	pinned = VBoxContainer.new()
+	pinned.hide()
+	column.add_child(pinned)
+	body_scroll = ScrollContainer.new()
+	body_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(body_scroll)
+	DragScroll.attach(body_scroll)
 	body = VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(body)
+	body_scroll.add_child(body)
 	actions = VBoxContainer.new()
 	column.add_child(actions)
 

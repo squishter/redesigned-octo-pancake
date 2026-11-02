@@ -66,14 +66,18 @@ mode for trying out new pattern generation.
   8 (Full Spectrum, Festival, Aurora Sky, Kaleidoscope, Opal Dreams). A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Her own color stories.** Under *Color story* in the New puzzle panel,
-  every choice shows its palette and color count. The selected story also
-  shows larger, named color swatches that wrap to fit the screen.
-  *Create color story* opens `ColorStoryEditor`: she can name a story and
+  one field shows the selected palette and color count. Tapping it opens
+  `ColorStoryPicker`, a searchable story list that scrolls with a finger or
+  mouse wheel. Every story shows its colors; *Create my own story* and
+  *Edit story* live inside that selector.
+  Creation opens `ColorStoryEditor`: she can name a story and
   choose 2 to 8 of her gem colors, with search and color-family filters.
-  Numbered selected swatches show their order; tapping one removes it,
-  and *Reverse order* and *Clear colors* help adjust the palette. The
-  limits and save readiness stay visible. Her stories come first in the
-  list, marked "(yours)", and *Edit story* edits or deletes the one picked. They are kept
+  The numbered selected colors stay pinned above the scrolling color list,
+  with space reserved for all eight so adding or removing one never shifts
+  the list. Tapping a selected color removes it; *Reverse order* and
+  *Clear colors* help adjust the palette. Limits and save readiness stay
+  visible. Her stories come first in the list, labeled "Your story".
+  Saving or cancelling returns to color selection. They are kept
   in the profile (`CustomThemes`, `custom_themes`), and a puzzle made with
   one carries its name and colors in its request and meta (`theme_name`,
   `theme_gems`), so it keeps them even if the story changes later.
@@ -272,6 +276,7 @@ mode for trying out new pattern generation.
 | `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/color_story_editor.gd` | `ColorStoryEditor`: the dialog where she makes, changes or deletes one of her own color stories. |
+| `scenes/game/color_story_picker.gd` | `ColorStoryPicker`: a scrollable story selector with palette previews, search, and the entry points for creating and editing stories. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
 | `scenes/game/collection_screen.gd` | Collection & packs: the selected pack's stock and payment controls, and everything unlocked or still hidden. |
 | `scenes/game/game_theme.gd`, `assets/ui/` | The player UI: original illustrated buttons, icons, foil packs, colors and press/fade animations. The lab retains its own theme. |

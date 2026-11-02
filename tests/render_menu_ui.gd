@@ -39,7 +39,10 @@ func _capture() -> void:
 	menu._open_new({})
 	await create_timer(0.35).timeout
 	await _snapshot("05-puzzle-creation.png")
-	menu._story_editor.edit()
+	menu._theme.pressed.emit()
+	await create_timer(0.35).timeout
+	await _snapshot("21-color-story-selector.png")
+	menu._story_picker._make.pressed.emit()
 	menu._story_editor._name.text = "Jewel garden"
 	for gem: String in GemCatalog.STARTING_COLORS.slice(0, GemCatalog.MAX_THEME_COLORS):
 		menu._story_editor._toggle(gem)
@@ -47,7 +50,8 @@ func _capture() -> void:
 	await _snapshot("19-color-story-editor.png")
 	menu._story_editor._on_save()
 	await create_timer(0.35).timeout
-	await _snapshot("20-color-story-preview.png")
+	await _snapshot("20-color-story-saved.png")
+	menu.go_back()
 	menu._new_panel.close()
 	menu._settings_panel.open()
 	await create_timer(0.35).timeout

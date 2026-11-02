@@ -115,7 +115,8 @@ func _test_unlock_all() -> void:
 	_check(SaveStore.free_purchases_enabled(profile) and free.text.ends_with("On"), "Free-purchase toggle turns on immediately")
 	_check(SaveStore.free_purchases_enabled(SaveStore.load_profile()), "Free-purchase toggle persists after reloading")
 	free.pressed.emit()
-	_check(not SaveStore.free_purchases_enabled(profile) and free.text.ends_with("Off"), "Free-purchase toggle turns off immediately")
+	_check(not SaveStore.free_purchases_enabled(profile) and free.text.ends_with("Off"),
+		"Free-purchase toggle turns off immediately")
 	_check(not SaveStore.free_purchases_enabled(SaveStore.load_profile()), "Turning free purchases off persists")
 	var reloads := [0]
 	menu.reload_requested.connect(func() -> void: reloads[0] += 1)
@@ -159,8 +160,11 @@ func _test_creation_choices() -> void:
 	await _layout_frames()
 	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_DISABLED, "Workshop freezes the background menu")
 	_check_dialog(menu._new_panel)
-	# Her own color story, made from the workshop.
-	menu._story_editor.edit()
+	# Story browsing and creation stay inside color selection.
+	menu._theme.pressed.emit()
+	await _layout_frames()
+	_check_dialog(menu._story_picker)
+	menu._story_picker._make.pressed.emit()
 	await _layout_frames()
 	_check_dialog(menu._story_editor)
 	_check_button_widths(menu._story_editor, menu.size.x)
@@ -170,9 +174,10 @@ func _test_creation_choices() -> void:
 	_check(not menu._story_editor._save.disabled, "Two colors make a color story")
 	menu._story_editor._name.text = "Night and day"
 	menu._story_editor._on_save()
-	_check(not menu._story_editor.visible and menu._new_panel.visible, "Saving a story returns to the workshop")
-	_check(CustomThemes.is_custom(menu._selected_theme()) and menu._edit_story.visible,
+	_check(not menu._story_editor.visible and menu._story_picker.visible, "Saving a story returns to color selection")
+	_check(CustomThemes.is_custom(menu._selected_theme()) and menu._story_picker._edit.visible,
 		"The new story is picked, and can be changed")
+	menu.go_back()
 	menu._mode_buttons[1].pressed.emit()
 	_check(menu._is_kit(), "Diamond kit card changes the puzzle mode")
 	_check((menu._kit_size.get_meta("row") as Control).is_visible_in_tree(), "Kits offer picture size")
@@ -350,11 +355,13 @@ func _test_splash() -> void:
 	_check(app._transitioning and is_instance_valid(app._reveal), "The splash automatically starts the gem reveal")
 	var menu: Control = app._reveal.menu
 	_check(menu.process_mode == Node.PROCESS_MODE_DISABLED, "The menu cannot receive input while its gems are being placed")
-	_check(is_instance_valid(menu._daily_gift) and not menu._daily_gift.visible, "The daily card waits until the gem reveal finishes")
+	_check(is_instance_valid(menu._daily_gift) and not menu._daily_gift.visible,
+		"The daily card waits until the gem reveal finishes")
 	_check(Packs.picks(SaveStore.load_profile()) == 3, "The daily reward saves before the menu is revealed")
 	await create_timer(GemMenuReveal.DURATION + 0.4).timeout
 	_check(app._screen == menu and not app._transitioning, "The reveal hands over the same live menu")
-	_check(not is_instance_valid(app._splash) and not is_instance_valid(app._reveal), "Launch textures and temporary viewport are released")
+	_check(not is_instance_valid(app._splash) and not is_instance_valid(app._reveal),
+		"Launch textures and temporary viewport are released")
 	_check(menu._daily_gift.visible, "Daily welcome fanfare opens after the splash and gem reveal")
 	menu.go_back()
 	menu._settings_panel.open()
@@ -382,7 +389,8 @@ func _test_splash() -> void:
 	_check(exits[0] == 1 and app._transitioning, "Tapping skips the hold and repeated taps start only one reveal")
 	await create_timer(GemMenuReveal.DURATION + 0.4).timeout
 	_check(app._screen.get_script() == MainMenu and not app._transitioning, "The quick gem transition completes after skipping")
-	_check(not is_instance_valid(app._screen._daily_gift) and Packs.picks(app.profile) == 3, "Relaunching never grants a second daily gift")
+	_check(not is_instance_valid(app._screen._daily_gift) and Packs.picks(app.profile) == 3,
+		"Relaunching never grants a second daily gift")
 	app.queue_free()
 	await process_frame
 
@@ -436,7 +444,8 @@ func _test_daily_gift() -> void:
 	menu._daily_gift._choose.pressed.emit()
 	await create_timer(0.8).timeout
 	_check(app._screen.get_script() == CollectionScreen, "Choose my free pack opens Collection & packs")
-	_check(Packs.picks(app.profile) == 4 and Packs.coins(app.profile) == 17, "The fanfare opens the picker without spending currency")
+	_check(Packs.picks(app.profile) == 4 and Packs.coins(app.profile) == 17,
+		"The fanfare opens the picker without spending currency")
 	_check(Packs.picks(SaveStore.load_profile()) == 4, "The next day's reward remains saved after choosing packs")
 	app._screen.go_back()
 	await create_timer(0.8).timeout
