@@ -41,7 +41,9 @@ var _new_panel: GameDialog
 var _settings_panel: SettingsDialog
 var _daily_gift: DailyGift
 var _mode_buttons: Array[Button] = []
-var _theme_preview: HBoxContainer
+var _theme_preview: HFlowContainer
+var _theme_count: Label
+var _make_story: Button
 var _story_actions: HBoxContainer
 var _edit_story: Button
 var _story_editor: ColorStoryEditor
@@ -162,16 +164,21 @@ func _ready() -> void:
 	_source = _options(form, "Picture")
 	_source.item_selected.connect(func(_i: int) -> void: _refresh_new())
 	_theme = _options(form, "Color story")
+	_theme.clip_text = true
 	_theme.item_selected.connect(func(_i: int) -> void: _update_theme_preview())
-	_theme_preview = HBoxContainer.new()
-	_theme_preview.alignment = BoxContainer.ALIGNMENT_CENTER
+	_theme.add_theme_constant_override("icon_max_width", GemCatalog.MAX_THEME_COLORS * 32)
+	_theme.add_theme_font_size_override("font_size", 32)
+	_theme.get_popup().add_theme_font_size_override("font_size", 30)
+	_theme_count = UI.label("", 26, GameTheme.TEXT_DIM)
+	form.add_child(_theme_count)
+	_theme_preview = ColorStorySwatches.flow()
 	form.add_child(_theme_preview)
 	_story_actions = HBoxContainer.new()
 	form.add_child(_story_actions)
-	var make_story := _small_button(_story_actions, "Make my own", func() -> void: _story_editor.edit())
-	make_story.icon = GameTheme.icon("palette")
-	make_story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_edit_story = _small_button(_story_actions, "Change it", func() -> void: _story_editor.edit(_selected_theme()))
+	_make_story = _small_button(_story_actions, "Create color story", func() -> void: _story_editor.edit())
+	_make_story.icon = GameTheme.icon("palette")
+	_make_story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_edit_story = _small_button(_story_actions, "Edit story", func() -> void: _story_editor.edit(_selected_theme()))
 	_edit_story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_subject = _options(form, "Photo composition")
 	for pair: Array in [["auto", "Subject if there's one"], ["on", "Subject only"], ["off", "Whole photo"]]:
@@ -331,8 +338,12 @@ func _fill_themes(select_id := "") -> void:
 	for i in ids.size():
 		if not _recolor.is_empty() and ids[i] == _recolor.get("theme", ""):
 			continue
-		_theme.add_item(names[i])
-		_theme.set_item_metadata(_theme.item_count - 1, ids[i])
+		var gems := _theme_gems(ids[i])
+		_theme.add_icon_item(ColorStorySwatches.thumbnail(gems), "%s · %d colors" % [names[i], gems.size()])
+		var index := _theme.item_count - 1
+		_theme.set_item_metadata(index, ids[i])
+		_theme.get_popup().set_item_tooltip(index, "%s · %d colors\n%s" %
+			[names[i], gems.size(), ColorStorySwatches.names(gems)])
 	if _theme.item_count == 0:
 		return
 	_theme.select(randi() % _theme.item_count)
@@ -385,6 +396,7 @@ func _refresh_new() -> void:
 	var recoloring := not _recolor.is_empty()
 	_show_row(_theme, not photo)
 	_theme_preview.visible = not photo
+	_theme_count.visible = not photo
 	_story_actions.visible = not photo
 	_show_row(_subject, photo and not kit)
 	_show_row(_kit_colors, photo and kit)
@@ -410,18 +422,19 @@ func _update_theme_preview() -> void:
 		_theme_preview.remove_child(child)
 		child.queue_free()
 	_edit_story.visible = false
+	_make_story.disabled = CustomThemes.list(profile).size() >= CustomThemes.MAX_THEMES
+	_make_story.tooltip_text = "Edit or delete a story to make room for another." if _make_story.disabled else ""
 	if _theme.selected < 0:
+		_theme_count.text = "No color stories available. Create one with your gem colors."
 		return
 	var id := _selected_theme()
 	_edit_story.visible = CustomThemes.is_custom(id)
-	for gem: String in _theme_gems(id):
-		var swatch := UI.panel(false, 0)
-		var style := swatch.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
-		style.bg_color = GemCatalog.color_of(gem)
-		style.set_corner_radius_all(10)
-		swatch.add_theme_stylebox_override("panel", style)
-		swatch.custom_minimum_size = Vector2(48, 34)
-		_theme_preview.add_child(swatch)
+	var gems := _theme_gems(id)
+	_theme.tooltip_text = ColorStorySwatches.names(gems)
+	_theme_count.text = "%d colors · %s" % [gems.size(), "Your color story" if CustomThemes.is_custom(id) else "Collection story"]
+	for gem: String in gems:
+		_theme_preview.add_child(ColorStorySwatches.tile(gem))
+	_new_panel.contain_focus.call_deferred()
 
 
 func _is_kit() -> bool:

@@ -66,10 +66,14 @@ mode for trying out new pattern generation.
   8 (Full Spectrum, Festival, Aurora Sky, Kaleidoscope, Opal Dreams). A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Her own color stories.** Under *Color story* in the New puzzle panel,
-  *Make my own* opens `ColorStoryEditor`: she names a story and taps 2 to 8
-  of her gem colors, in the order she likes (numbers show the order; a
-  second tap takes one out). Her stories come first in the list, marked
-  "(yours)", and *Change it* edits or deletes the one picked. They are kept
+  every choice shows its palette and color count. The selected story also
+  shows larger, named color swatches that wrap to fit the screen.
+  *Create color story* opens `ColorStoryEditor`: she can name a story and
+  choose 2 to 8 of her gem colors, with search and color-family filters.
+  Numbered selected swatches show their order; tapping one removes it,
+  and *Reverse order* and *Clear colors* help adjust the palette. The
+  limits and save readiness stay visible. Her stories come first in the
+  list, marked "(yours)", and *Edit story* edits or deletes the one picked. They are kept
   in the profile (`CustomThemes`, `custom_themes`), and a puzzle made with
   one carries its name and colors in its request and meta (`theme_name`,
   `theme_gems`), so it keeps them even if the story changes later.
@@ -532,6 +536,7 @@ frame.
 
   ```sh
   XDG_DATA_HOME=/tmp/paint-with-gems-ui-tests godot --headless -s res://tests/run_menu_ui.gd
+  XDG_DATA_HOME=/tmp/paint-with-gems-color-tests godot --headless -s res://tests/run_color_stories_ui.gd
   XDG_DATA_HOME=/tmp/paint-with-gems-bundle-tests godot --headless -s res://tests/run_pack_bundles.gd
   ```
 
