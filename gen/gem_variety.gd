@@ -15,7 +15,7 @@ extends RefCounted
 ##
 ## Shapes only swap within a family whose outlines fit the same slot:
 ## round, cushion, octagon, hexagon, flower, square, pentagon, heart,
-## trillion, triangle and star fit a circle; oval, marquise, lozenge, kite and
+## trillion, triangle, star, pebble, clover, sunburst and butterfly fit a circle; oval, marquise, lozenge, kite and
 ## teardrop fit a capsule (baguette and emerald corners don't, so nothing
 ## becomes one).
 ##
@@ -24,7 +24,7 @@ extends RefCounted
 ## resized to fit its slot, and balance() only swaps among allowed ones.
 
 const ROUND_FAMILY := ["round", "cushion", "octagon", "hexagon", "flower", "square", "pentagon", "heart", "trillion",
-		"triangle", "star"]  # most fitting first
+		"triangle", "star", "pebble", "clover", "sunburst", "butterfly"]  # most fitting first
 const LONG_FAMILY := ["oval", "marquise", "lozenge", "kite", "teardrop"]
 const BOX_FAMILY := ["baguette", "emerald"]
 

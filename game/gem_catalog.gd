@@ -107,15 +107,32 @@ const EXTRA_COLORS := [
 	{"id": "ash", "name": "Ash", "color": "#77787b", "hue": "neutral"},
 	{"id": "graphite", "name": "Graphite", "color": "#505154", "hue": "neutral"},
 	{"id": "gunmetal", "name": "Gunmetal", "color": "#2c2d31", "hue": "neutral"},
+	# Shimmer: stones that aren't classic gems, each with a special finish
+	# that plays with the light (see GemBoard3D.FINISH_ALPHA): opal's flashing
+	# patches of color, moonstone's floating blue glow, labradorite's flash,
+	# nacre's soft rainbows (mother of pearl, abalone) and aurora's
+	# rainbow-coated crystal.
+	{"id": "opal", "name": "Opal", "color": "#eef0f0", "hue": "shimmer", "finish": "opal"},
+	{"id": "black_opal", "name": "Black Opal", "color": "#23263a", "hue": "shimmer", "finish": "opal"},
+	{"id": "fire_opal", "name": "Fire Opal", "color": "#f2722e", "hue": "shimmer", "finish": "opal"},
+	{"id": "pink_opal", "name": "Pink Opal", "color": "#f4c3cf", "hue": "shimmer", "finish": "opal"},
+	{"id": "moonstone", "name": "Moonstone", "color": "#dfe5ec", "hue": "shimmer", "finish": "moonstone"},
+	{"id": "peach_moonstone", "name": "Peach Moonstone", "color": "#f2cdb4", "hue": "shimmer", "finish": "moonstone"},
+	{"id": "labradorite", "name": "Labradorite", "color": "#4c5862", "hue": "shimmer", "finish": "labradorite"},
+	{"id": "mother_of_pearl", "name": "Mother of Pearl", "color": "#efe8e2", "hue": "shimmer", "finish": "nacre"},
+	{"id": "abalone", "name": "Abalone", "color": "#2c5f6e", "hue": "shimmer", "finish": "nacre"},
+	{"id": "aurora", "name": "Aurora", "color": "#eaf0f4", "hue": "shimmer", "finish": "aurora"},
 ]
 ## The primaries she starts with: the rainbow, black, white and clear.
 const STARTING_COLORS := ["ruby", "tangerine", "sunflower", "leaf", "sapphire", "indigo", "amethyst", "onyx", "snow",
 		"diamond"]
 ## About half the shapes, each in its classic cut (GemCuts.BY_SHAPE's first),
 ## covering every kind of slot: round ones, long ones and gem-line boxes.
-const STARTING_SHAPES := ["round", "oval", "cushion", "square", "hexagon", "heart", "marquise", "teardrop", "baguette"]
+const STARTING_SHAPES := ["round", "oval", "cushion", "square", "hexagon", "heart", "marquise", "teardrop", "baguette",
+		"clover", "pebble"]
 const ALL_SHAPES := ["round", "square", "hexagon", "triangle", "cushion", "octagon", "pentagon", "heart", "trillion",
-		"star", "flower", "oval", "teardrop", "marquise", "kite", "lozenge", "baguette", "emerald"]
+		"star", "flower", "oval", "teardrop", "marquise", "kite", "lozenge", "baguette", "emerald", "clover", "pebble",
+		"sunburst", "butterfly"]
 
 ## Color themes, as gem colors. Order matters as in Palettes.THEMES: rings
 ## and region groups walk the list, so neighbors should look good together.
@@ -156,6 +173,12 @@ const THEMES := {
 	"royal": {"name": "Royal", "gems": ["gold", "wine", "navy", "pearl", "emerald", "amethyst"]},
 	"fiesta": {"name": "Fiesta", "gems": ["hot_pink", "amber", "turquoise", "scarlet", "lime", "violet"]},
 	"seaside": {"name": "Seaside", "gems": ["navy", "sand", "cerulean", "ivory", "coral", "seafoam"]},
+	# Shimmer stones.
+	"opaline": {"name": "Opaline", "gems": ["opal", "pink_opal", "moonstone", "mother_of_pearl", "aurora",
+			"peach_moonstone"]},
+	"northern_lights": {"name": "Northern Lights", "gems": ["black_opal", "labradorite", "abalone", "aurora",
+			"fire_opal", "opal"]},
+	"mermaid": {"name": "Mermaid", "gems": ["abalone", "seafoam", "mother_of_pearl", "lagoon", "opal", "lilac"]},
 }
 const STARTING_THEMES := ["rainbow", "sunset", "ocean", "garden", "night", "ember"]
 
@@ -243,17 +266,33 @@ static func default_unlocks() -> Dictionary:
 
 
 ## Hues in the order Collection shows them.
-const HUE_ORDER := ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "brown", "neutral"]
+const HUE_ORDER := ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "brown", "neutral",
+		"shimmer"]
+
+static var _finishes := {}
 
 
-## Every gem color, parsed: [{id, name, color, hue}].
+## Every gem color, parsed: [{id, name, color, hue, finish}]; finish is ""
+## for plain gems (see EXTRA_COLORS' shimmer stones).
 static func all_colors() -> Array:
 	var out := Palettes.starter_gems()
 	for g in out:
 		g["hue"] = HUES.get(g["id"], "neutral")
+		g["finish"] = ""
 	for g in EXTRA_COLORS:
-		out.append({"id": g["id"], "name": g["name"], "color": Color(g["color"]), "hue": g["hue"]})
+		out.append({"id": g["id"], "name": g["name"], "color": Color(g["color"]), "hue": g["hue"],
+				"finish": g.get("finish", "")})
 	return out
+
+
+## A gem color's special finish ("opal", "moonstone", "labradorite",
+## "nacre" or "aurora"), or "" for a plain gem or an unknown id.
+static func finish_of(gem_id: String) -> String:
+	if _finishes.is_empty():
+		for g in EXTRA_COLORS:
+			if g.has("finish"):
+				_finishes[g["id"]] = g["finish"]
+	return _finishes.get(gem_id, "")
 
 
 ## The unlocked gem colors, in the shape the generators expect.

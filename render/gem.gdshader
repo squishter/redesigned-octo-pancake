@@ -8,8 +8,9 @@ render_mode unshaded, cull_disabled;
 
 // Per stone (INSTANCE_CUSTOM): x random 0..1, y refractive index,
 // z dispersion, w cut (its style, GemCuts.SHADER_STYLE) plus half its
-// finale delay (see wave_scale). COLOR is the gem color; its alpha is 0 for
-// opaque stones.
+// finale delay (see wave_scale). COLOR is the gem color; its alpha says
+// what the stone is made of: 0 opaque, 1 see-through, or a special finish
+// between (GemBoard3D.FINISH_ALPHA).
 varying vec3 w_normal;
 varying vec3 l_pos;
 varying vec4 stone;

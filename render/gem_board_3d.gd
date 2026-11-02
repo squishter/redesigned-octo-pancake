@@ -56,6 +56,14 @@ const OVERSHOOT := 1.70158
 ## so white reads apart from clear diamond.
 ## Only ever add to it: changing a color already in use would change old puzzles.
 const OPAQUE_GEMS := ["snow", "pearl", "ivory", "cream", "jade", "turquoise"]
+## Gem colors with a special finish (GemCatalog's "finish"), as the gem
+## shaders tell them apart: a code in the stone's color alpha (in tenths;
+## 0 is opaque, 1 see-through; gem_body.gdshaderinc's FINISH_ codes), and
+## its refractive index and dispersion. Aurora is a see-through stone, so
+## its optics come from its color as other clear stones' do.
+const FINISH_ALPHA := {"opal": 0.2, "moonstone": 0.3, "labradorite": 0.4, "nacre": 0.5, "aurora": 0.6}
+const FINISH_OPTICS := {"opal": Vector2(1.45, 0.0), "moonstone": Vector2(1.52, 0.0),
+		"labradorite": Vector2(1.56, 0.0), "nacre": Vector2(1.53, 0.0)}
 ## A stone's girdle stands this high above the paper, and its crown rises
 ## about this much above that, in its half-widths.
 const GIRDLE_HEIGHT := 0.45
@@ -821,11 +829,17 @@ func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array
 			"gem":
 				at.y = GIRDLE_HEIGHT * small
 				xf = Transform3D(turn * Basis.from_scale(Vector3(half_len, small, half_wid)), at)
-				# Opaque stones say so in their color's alpha.
-				var opaque: bool = str(s.get("target_gem", "")) in OPAQUE_GEMS
+				# Opaque stones and special finishes say so in their color's alpha.
+				var gem_id := str(s.get("target_gem", ""))
+				var finish := GemCatalog.finish_of(gem_id)
+				var opaque: bool = gem_id in OPAQUE_GEMS
 				var optics := Vector2(1.55, 0.0) if opaque else _optics(color)
+				var alpha := 0.0 if opaque else 1.0
+				if FINISH_ALPHA.has(finish):
+					optics = FINISH_OPTICS.get(finish, optics)
+					alpha = FINISH_ALPHA[finish]
 				mm.set_instance_custom_data(k, Color(random, optics.x, optics.y, cut))
-				color = Color(color, 0.0 if opaque else 1.0)
+				color = Color(color, alpha)
 			"shadow":
 				at.y = 0.02
 				xf = Transform3D(turn * Basis.from_scale(Vector3(half_len, 1.0, half_wid)), at)

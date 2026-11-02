@@ -30,6 +30,99 @@ float hash12(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+// The special finishes (GemCatalog's "finish"), as GemBoard3D.FINISH_ALPHA
+// codes them: tenths in a stone's color alpha. Opal and the rest are opaque
+// stones with light playing in them; aurora is a see-through one, coated.
+const int FINISH_OPAL = 2;
+const int FINISH_MOONSTONE = 3;
+const int FINISH_LABRADORITE = 4;
+const int FINISH_NACRE = 5;
+const int FINISH_AURORA = 6;
+
+vec2 hash22(vec2 p) {
+	return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+}
+
+// A rainbow: hue h (wrapping every 1) as a fully saturated color.
+vec3 spectrum(float h) {
+	return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+}
+
+// Opal's play of color: patches (each a grating of tiny silica spheres)
+// that each flash their own hue when the light and the facet over them
+// meet at its angle, and change hue as they turn. Local point p, facet
+// normal n, the key light k as the stone sees it.
+vec3 opal_fire(vec2 p, vec3 n, vec3 k, float seed) {
+	vec2 q = p * 3.2 + seed * 17.0;
+	vec2 cell = floor(q);
+	vec2 f = fract(q);
+	float best = 8.0;
+	vec2 id = cell;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 r = g + hash22(cell + g) - f;
+			float d = dot(r, r);
+			if (d < best) {
+				best = d;
+				id = cell + g;
+			}
+		}
+	}
+	vec2 rnd = hash22(id + 3.7);
+	vec2 dir = vec2(cos(rnd.x * TAU), sin(rnd.x * TAU));
+	float a = dot(k.xz - n.xz * 1.5, dir);
+	float flash = pow(0.5 + 0.5 * cos(a * 9.0 + rnd.y * TAU), 3.0);
+	return spectrum(a * 1.6 + rnd.y) * flash;
+}
+
+// An opaque stone's glazed color `inside` with its finish's light added.
+vec3 finished(int finish, vec3 inside, vec3 tint, vec2 p, vec3 n, vec3 k, float seed) {
+	float bright = max(tint.r, max(tint.g, tint.b));
+	if (finish == FINISH_OPAL) {
+		// Black opals show their fire boldest; white ones in a milky veil.
+		vec3 fire = opal_fire(p, n, k, seed);
+		float dark = 1.0 - smoothstep(0.05, 0.6, bright);
+		float veil = max(fire.r, max(fire.g, fire.b));
+		return inside * (1.0 - 0.3 * veil) + fire * (0.45 + 0.6 * dark) * light_strength;
+	}
+	if (finish == FINISH_MOONSTONE) {
+		// Adularescence: a soft blue glow floating under the surface,
+		// drifting across the stone as the light moves, and a milky depth.
+		vec2 toward = -k.xz * 0.55 + n.xz * 0.35;
+		float d = length(p - toward);
+		float glow = exp(-d * d * 3.5);
+		vec3 milky = inside * 0.85 + tint * 0.15 * (1.0 - smoothstep(0.0, 1.0, length(p)));
+		return milky + vec3(0.45, 0.65, 1.0) * glow * 0.75 * light_strength;
+	}
+	if (finish == FINISH_LABRADORITE) {
+		// Labradorescence: streaky layers inside flash blue, teal and gold
+		// when the light catches them just so, and go dark again.
+		float ang = seed * TAU * 3.0;
+		vec2 dir = vec2(cos(ang), sin(ang));
+		vec2 across = vec2(-dir.y, dir.x);
+		float streak = dot(p, across) * 4.0 + sin(dot(p, dir) * 3.0 + seed * 11.0) * 0.6;
+		float band = 0.5 + 0.5 * sin(streak * 2.2);
+		float facing = dot(k.xz * 1.2 + n.xz * 1.6, dir) + band * 0.5 + seed;
+		float flash = pow(0.5 + 0.5 * cos(facing * 4.0), 4.0) * (0.4 + 0.6 * band);
+		float hue = 0.62 - 0.35 * fract(facing * 0.37 + band * 0.3);
+		return inside + spectrum(hue) * flash * 0.9 * light_strength;
+	}
+	if (finish == FINISH_NACRE) {
+		// Mother of pearl and abalone: wavy growth layers that split the
+		// light into soft rainbows, sliding as the light and facets turn.
+		// Darker shells (abalone) show bolder color.
+		vec2 q = p * 2.2 + seed * 7.0;
+		float layers = q.x * 1.3 + sin(q.y * 2.3 + sin(q.x * 1.7) * 1.2) * 0.9 + sin(q.y * 5.1 + q.x * 3.0) * 0.15;
+		float hue = layers * 0.45 + dot(n.xz, vec2(1.3, 0.9)) * 0.8 + dot(k.xz, vec2(0.7, -0.5)) * 1.2;
+		float vivid = 1.0 - smoothstep(0.2, 0.7, bright);
+		vec3 iri = mix(vec3(1.0), spectrum(hue), 0.35 + 0.5 * vivid);
+		float lustre = 0.75 + 0.25 * sin(layers * 6.0);
+		return inside * iri * lustre * 1.15 + iri * vivid * 0.35 * lustre * light_strength;
+	}
+	return inside;
+}
+
 // The pavilion facet under local point p: its outward direction (xz) and a
 // random number for it.
 vec3 pavilion(vec2 p, vec3 n, float cut, float seed) {
@@ -100,32 +193,45 @@ vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine, bool fir
 	vec3 refl = studio_at(reflect(-v, n)) * 1.4;
 
 	float rim = 1.0 - smoothstep(0.62, 1.02, length(p));
+	// What the stone is made of, from its color's alpha (GemBoard3D.FINISH_ALPHA):
+	// 0 opaque, 10 see-through, and the special finishes between.
+	int finish = int(color.a * 10.0 + 0.5);
 	vec3 inside;
-	if (cut > 3.5) {
-		// Cabochon: no facets inside; a soft glow that follows the light.
-		vec2 toward = -as_tilted(key_dir, tilt).xz * 0.45;
-		float glow = 1.0 - smoothstep(0.0, 0.9, length(p - toward));
-		inside = tint * (0.2 + 0.9 * glow) * light_strength;
-	} else {
-		vec3 pav = pavilion(p, n, cut, stone.x);
-		vec3 body;
-		if (fire) {
-			body.r = studio_at(through(n, pav, ior - disp)).r;
-			body.g = studio_at(through(n, pav, ior)).g;
-			body.b = studio_at(through(n, pav, ior + disp)).b;
+	if (finish >= FINISH_AURORA) {
+		if (cut > 3.5) {
+			// Cabochon: no facets inside; a soft glow that follows the light.
+			vec2 toward = -as_tilted(key_dir, tilt).xz * 0.45;
+			float glow = 1.0 - smoothstep(0.0, 0.9, length(p - toward));
+			inside = tint * (0.2 + 0.9 * glow) * light_strength;
 		} else {
-			body = studio_at(through(n, pav, ior));
+			vec3 pav = pavilion(p, n, cut, stone.x);
+			vec3 body;
+			if (fire) {
+				body.r = studio_at(through(n, pav, ior - disp)).r;
+				body.g = studio_at(through(n, pav, ior)).g;
+				body.b = studio_at(through(n, pav, ior + disp)).b;
+			} else {
+				body = studio_at(through(n, pav, ior));
+			}
+			// Colored stones soak up light on the way through, deepest in the middle.
+			float depth = 1.0 + 0.7 * rim;
+			vec3 absorb = pow(max(tint, vec3(0.001)), vec3(depth));
+			inside = absorb * (0.18 + body);
 		}
-		// Colored stones soak up light on the way through, deepest in the middle.
-		float depth = 1.0 + 0.7 * rim;
-		vec3 absorb = pow(max(tint, vec3(0.001)), vec3(depth));
-		inside = absorb * (0.18 + body);
-	}
-	// Light playing on the underside, moving as the light moves.
-	float drift = glow_drift(p * 1.3 + stone.x * 9.0 + light_shift() * 0.5, light_phase() * 1.4 + stone.x * 5.0);
-	inside += tint * drift * 0.3 * light_strength;
-	inside *= 0.45 + 0.55 * rim;
-	if (color.a < 0.5) {
+		// Light playing on the underside, moving as the light moves.
+		float drift = glow_drift(p * 1.3 + stone.x * 9.0 + light_shift() * 0.5, light_phase() * 1.4 + stone.x * 5.0);
+		inside += tint * drift * 0.3 * light_strength;
+		inside *= 0.45 + 0.55 * rim;
+		if (finish == FINISH_AURORA) {
+			// Aurora: a clear crystal under a thin coating that turns its
+			// reflections into rainbows, shifting with every facet's slope.
+			float film = n.y * 2.2 + dot(n.xz, vec2(0.8, 0.6)) + dot(p, vec2(0.25, -0.2)) + stone.x;
+			vec3 coat = mix(vec3(1.0), spectrum(film), 0.8);
+			refl *= coat * 1.3;
+			fres = mix(fres, 1.0, 0.15);
+			inside = inside * mix(vec3(1.0), coat, 0.45) + coat * 0.06 * light_strength;
+		}
+	} else {
 		// Opaque stones (white): no light through them, just a soft glaze lit
 		// by the key and fill, with a faint pearly sheen that drifts with the light.
 		float lit = clamp(dot(n, key_dir), 0.0, 1.0);
@@ -134,6 +240,9 @@ vec3 gem_color(vec3 facing, vec2 p, vec4 stone, vec4 color, vec2 shine, bool fir
 		inside = tint * (0.3 + 0.5 * lit + 0.2 * fl) * light_strength;
 		inside += vec3(0.05, 0.04, 0.07) * sheen * light_strength;
 		inside *= 0.75 + 0.25 * rim;
+		if (finish > 0) {
+			inside = finished(finish, inside, tint, p, n, as_tilted(key_dir, tilt), stone.x);
+		}
 	}
 
 	return (refl * fres + inside * (1.0 - fres)) * burn;
