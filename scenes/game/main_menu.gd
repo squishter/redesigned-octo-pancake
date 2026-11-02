@@ -37,6 +37,9 @@ var daily_pick_awarded := false
 
 var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
+var _studio_scroll: ScrollContainer
+var _completed: CompletedPuzzles
+var _completed_panel: CompletedPuzzleDialog
 var _new_panel: GameDialog
 var _settings_panel: SettingsDialog
 var _daily_gift: DailyGift
@@ -62,6 +65,9 @@ var _camera: CameraCapture
 var _photo_kind := ""
 ## The puzzle being recolored, or empty for a brand new one.
 var _recolor: Dictionary = {}
+## Recoloring a finished picture chooses colors directly and keeps its saved layout.
+var _direct_recolor := false
+var _saved_recolor: Dictionary = {}
 var _busy: Control
 var _busy_label: Label
 var _task_id := -1
@@ -99,6 +105,7 @@ func _ready() -> void:
 	var title := Label.new()
 	title.text = "Paint With Gems"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.add_theme_font_size_override("font_size", 78)
 	title.add_theme_color_override("font_color", GameTheme.GOLD)
 	root.add_child(title)
@@ -129,6 +136,9 @@ func _ready() -> void:
 		packs.text = "Collection & packs · %d free pick%s" % [Packs.picks(profile), "" if Packs.picks(profile) == 1 else "s"]
 		packs.add_theme_color_override("font_color", GameTheme.GOLD)
 	packs.add_theme_font_size_override("font_size", 36)
+	packs.clip_text = true
+	packs.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	packs.tooltip_text = packs.text
 
 	# Creation is a focused workshop, with the same jewel framing as packs.
 	_new_panel = GameDialog.new("Create a new puzzle", "Make a little time for something beautiful.", "picture")
@@ -198,7 +208,8 @@ func _ready() -> void:
 	_button(_new_panel.actions, "Cancel", _new_panel.close).theme_type_variation = "QuietButton"
 	_story_picker = ColorStoryPicker.new()
 	_story_picker.hide()
-	_story_picker.chosen.connect(func(_id: String) -> void: _update_theme_selection())
+	_story_picker.chosen.connect(_on_story_chosen)
+	_story_picker.cancelled.connect(_cancel_completed_recolor)
 	_story_picker.create_requested.connect(func() -> void: _story_editor.edit())
 	_story_picker.edit_requested.connect(func(id: String) -> void: _story_editor.edit(id))
 	add_child(_story_picker)
@@ -216,19 +227,28 @@ func _ready() -> void:
 	add_child(_photo_dialog)
 
 	var saved := Label.new()
-	saved.text = "Your puzzles"
+	saved.text = "In your studio"
 	saved.add_theme_color_override("font_color", GameTheme.GOLD)
 	saved.add_theme_font_size_override("font_size", 48)
 	root.add_child(saved)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size.y = 470
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	root.add_child(scroll)
-	DragScroll.attach(scroll)
+	_studio_scroll = ScrollContainer.new()
+	_studio_scroll.custom_minimum_size.y = 470
+	_studio_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_studio_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_studio_scroll)
+	DragScroll.attach(_studio_scroll)
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_list)
+	_studio_scroll.add_child(_list)
+	_completed = CompletedPuzzles.new()
+	_completed.chosen.connect(_open_completed)
+	root.add_child(_completed)
+	_completed_panel = CompletedPuzzleDialog.new()
+	_completed_panel.hide()
+	_completed_panel.admired.connect(func(id: String) -> void: play_requested.emit(id))
+	_completed_panel.restarted.connect(_restart_completed)
+	_completed_panel.recolored.connect(_begin_completed_recolor)
+	add_child(_completed_panel)
 
 	_settings_panel = SettingsDialog.new()
 	_settings_panel.profile = profile
@@ -236,7 +256,7 @@ func _ready() -> void:
 	_settings_panel.done_text = "Lovely, let's create"
 	_settings_panel.reload_requested.connect(func() -> void: reload_requested.emit())
 	add_child(_settings_panel)
-	var footer := HBoxContainer.new()
+	var footer := HFlowContainer.new()
 	root.add_child(footer)
 	_small_button(footer, "Settings", _settings_panel.open).theme_type_variation = "QuietButton"
 	if show_developer_tools:
@@ -273,7 +293,7 @@ func _ready() -> void:
 			_start_photo(photo, _photo_kind))
 	add_child(_camera)
 
-	for overlay: Control in [_new_panel, _story_picker, _story_editor, _settings_panel, _busy, _camera]:
+	for overlay: Control in [_new_panel, _story_picker, _story_editor, _completed_panel, _settings_panel, _busy, _camera]:
 		overlay.visibility_changed.connect(_sync_menu_input)
 	if daily_pick_awarded:
 		_daily_gift = DailyGift.new()
@@ -293,7 +313,7 @@ func present_daily_gift() -> void:
 
 func _sync_menu_input() -> void:
 	var blocked := (_new_panel.visible or _story_picker.visible or _story_editor.visible or _settings_panel.visible or _busy.visible
-			or _camera.visible
+			or _camera.visible or _completed_panel.visible
 			or (is_instance_valid(_daily_gift) and _daily_gift.visible))
 	_menu_scroll.process_mode = Node.PROCESS_MODE_DISABLED if blocked else Node.PROCESS_MODE_INHERIT
 	_new_panel.process_mode = (Node.PROCESS_MODE_DISABLED if _story_picker.visible or _story_editor.visible
@@ -305,6 +325,8 @@ func _sync_menu_input() -> void:
 ## recoloring that one in another theme: then the kind and picture are
 ## fixed and only the colors can change.
 func _open_new(recolor: Dictionary) -> void:
+	_direct_recolor = false
+	_saved_recolor = {}
 	_recolor = recolor
 	_fill_themes()
 	if not recolor.is_empty():
@@ -351,7 +373,42 @@ func _theme_gems(theme_id: String) -> Array:
 ## that one picked.
 func _on_story_saved(theme_id: String) -> void:
 	_fill_themes(theme_id)
-	_refresh_new()
+	if _direct_recolor:
+		_update_theme_selection()
+	else:
+		_refresh_new()
+
+
+func _on_story_chosen(_theme_id: String) -> void:
+	_update_theme_selection()
+	if not _direct_recolor:
+		return
+	_direct_recolor = false
+	var theme_id := _selected_theme()
+	_request = PuzzleMaker.new_request(_recolor["type"], theme_id)
+	for key: String in ["seed", "pattern_seed", "kit_size", "layout"]:
+		if _recolor.has(key):
+			_request[key] = _recolor[key]
+	_request["layout"] = _recolor.get("layout", "classic")
+	_request["theme_gems"] = _theme_gems(theme_id).duplicate()
+	_request["theme_name"] = (CustomThemes.find(profile, theme_id)["name"] if CustomThemes.is_custom(theme_id)
+		else GemCatalog.theme_name(theme_id))
+	_busy_label.text = "Giving your picture new colors…"
+	_busy.visible = true
+	_task_id = WorkerThreadPool.add_task(_recolor_saved.bind(_saved_recolor, _request.duplicate(true)),
+		false, "recolor completed puzzle")
+	_saved_recolor = {}
+
+
+func _cancel_completed_recolor() -> void:
+	if _direct_recolor:
+		_direct_recolor = false
+		_saved_recolor = {}
+		_recolor = {}
+
+
+func _recolor_saved(picture: Dictionary, request: Dictionary) -> void:
+	_result = PuzzleRecolor.make(picture, request)
 
 
 ## The sources for the chosen kind: her unlocked picture types of that kind,
@@ -532,6 +589,8 @@ func go_back() -> void:
 		_story_editor.close()
 	elif _story_picker.visible:
 		_story_picker.close()
+	elif _completed_panel.visible:
+		_completed_panel.go_back()
 	elif _new_panel.visible:
 		_new_panel.close()
 	elif _settings_panel.visible:
@@ -542,8 +601,16 @@ func go_back() -> void:
 
 func _refresh_list() -> void:
 	for child in _list.get_children():
+		_list.remove_child(child)
 		child.queue_free()
-	var puzzles: Array = profile["puzzles"]
+	var all_puzzles: Array = profile["puzzles"]
+	_completed.set_puzzles(all_puzzles)
+	var puzzles := all_puzzles.filter(func(meta: Dictionary) -> bool: return not meta.get("done", false))
+	_studio_scroll.custom_minimum_size.y = 470 if not puzzles.is_empty() or all_puzzles.is_empty() else 160
+	if puzzles.is_empty() and not all_puzzles.is_empty():
+		_list.add_child(UI.label("Your studio is clear. Start a new puzzle or revisit your finished pictures below.",
+			30, GameTheme.TEXT_DIM))
+		return
 	if puzzles.is_empty():
 		var welcome := PanelContainer.new()
 		welcome.custom_minimum_size.y = 310
@@ -575,6 +642,34 @@ func _refresh_list() -> void:
 		_list.add_child(_card(meta))
 
 
+func _open_completed(id: String) -> void:
+	var meta := SaveStore.find(profile, id)
+	if not meta.is_empty() and meta.get("done", false):
+		_completed_panel.open_puzzle(meta)
+
+
+func _restart_completed(id: String) -> void:
+	var meta := SaveStore.find(profile, id)
+	if meta.is_empty():
+		return
+	_restart(meta)
+	play_requested.emit(id)
+
+
+func _begin_completed_recolor(id: String) -> void:
+	var meta := SaveStore.find(profile, id)
+	var picture := SaveStore.load_picture(id)
+	if meta.is_empty() or picture.is_empty():
+		_completed_panel.subtitle_label.text = "This picture couldn't be loaded. Try another puzzle."
+		return
+	_completed_panel.close()
+	_recolor = meta.duplicate(true)
+	_saved_recolor = picture
+	_direct_recolor = true
+	_fill_themes()
+	_story_picker.open()
+
+
 func _card(meta: Dictionary) -> Control:
 	var card := UI.panel(bool(meta["done"]))
 	var column := VBoxContainer.new()
@@ -595,8 +690,7 @@ func _card(meta: Dictionary) -> Control:
 	row.add_child(copy)
 	copy.add_child(UI.label("COMPLETE" if meta["done"] else "IN YOUR STUDIO", 25, GameTheme.MINT))
 	copy.add_child(UI.label(GemCatalog.puzzle_name(meta["type"]), 42, GameTheme.GOLD))
-	var colors: String = "From your photo" if GemCatalog.PHOTO_MODES.has(meta["type"]) else str(meta.get("theme_name",
-			GemCatalog.theme_name(meta["theme"])))
+	var colors := CompletedPuzzles.color_name(meta)
 	copy.add_child(UI.label("%s · %s" % [colors, _ago(meta["updated"])], 28, GameTheme.TEXT_DIM))
 	var fraction := float(meta["filled"]) / maxi(1, int(meta["total"]))
 	column.add_child(UI.progress(fraction))

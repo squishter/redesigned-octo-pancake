@@ -3,6 +3,7 @@ extends GameDialog
 ## Scrollable color-story browsing; creation and editing live in this selector.
 
 signal chosen(theme_id: String)
+signal cancelled
 signal create_requested
 signal edit_requested(theme_id: String)
 
@@ -68,6 +69,13 @@ func open() -> void:
 	super.open()
 
 
+func close() -> void:
+	var was_visible := visible
+	super.close()
+	if was_visible:
+		cancelled.emit()
+
+
 func _story_card(story: Dictionary) -> Button:
 	var button := Button.new()
 	button.custom_minimum_size.y = 204
@@ -109,7 +117,7 @@ func _choose(theme_id: String) -> void:
 		return
 	selected_id = theme_id
 	_update_selection()
-	close()
+	super.close()
 	chosen.emit(theme_id)
 
 

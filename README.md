@@ -102,8 +102,8 @@ mode for trying out new pattern generation.
   a CameraTexture with no feed yet is only a placeholder, which read as CbCr
   turns the preview green and blue. The line above the preview names the
   camera (*Back camera 1*, *Front camera*, ...). The main back camera (the
-  lowest id, "0" on Android) opens first; higher ids are extra lenses. Photo puzzles can't be
-  recolored: their colors come from the photo.
+  lowest id, "0" on Android) opens first; higher ids are extra lenses. Photo puzzles initially use
+  the photo's colors; once completed, they can be recolored from their saved layout.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
     edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
     edge detector over Lab, thin ridges, thresholds from the photo with a
@@ -214,7 +214,15 @@ mode for trying out new pattern generation.
   new one never touches the others. Each saved puzzle shows a thumbnail and
   how far along it is, and can be continued, restarted (asks "Sure?"
   first), recolored (the same picture made again in another unlocked theme,
-  saved as a new puzzle beside the original) or deleted. *Generator lab
+  saved as a new puzzle beside the original) or deleted.
+  **Completed puzzles** have their own gallery, in rows of three. Tapping
+  one offers *Admire*, *Restart* and *Recolor*. Restart asks for confirmation;
+  cancelling keeps the finished picture, while confirming returns it to
+  the studio and opens it to play again. Recolor opens color selection
+  directly. Choosing a story makes a new playable copy with the exact saved
+  gem layout, including for photo collages and kits. Cancelling the color
+  selector leaves the original's picture, progress, thumbnail and metadata
+  untouched. *Generator lab
   (debug)* at the bottom opens the lab in editor builds only; exported apps
   omit that launcher. The generator and its camera retain their developer UI.
   Debug builds (the editor and `tools/build_apk.sh` APKs, not release
@@ -268,6 +276,7 @@ mode for trying out new pattern generation.
 | --- | --- |
 | `game/gem_catalog.gd` | `GemCatalog`: every unlockable (gem colors, shapes and cuts, themes as gem colors, puzzle types) and what she starts with. |
 | `game/custom_themes.gd` | `CustomThemes`: her own named color stories (2 to 8 of her gem colors) in the profile: saving, changing, deleting, which she can use, and tidying them on load. |
+| `game/puzzle_recolor.gd` | `PuzzleRecolor`: a new color story on an exact copy of a saved collage or kit layout, including photo puzzles. |
 | `game/unlockables.gd` | `Unlockables`: the table of every kind of unlockable, its items, starting items, and granting and upgrading profiles. |
 | `game/packs.gd` | `Packs`: what each pack can still give, opening packs with picks or coins, daily picks, puzzle rewards and power-up charges. |
 | `game/puzzle_maker.gd` | `PuzzleMaker`: a puzzle request (type, seed, pattern seed, theme) → a collage made from her unlocks only. Safe on worker threads. |
@@ -277,6 +286,7 @@ mode for trying out new pattern generation.
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
 | `scenes/game/color_story_editor.gd` | `ColorStoryEditor`: the dialog where she makes, changes or deletes one of her own color stories. |
 | `scenes/game/color_story_picker.gd` | `ColorStoryPicker`: a scrollable story selector with palette previews, search, and the entry points for creating and editing stories. |
+| `scenes/game/completed_puzzles.gd`, `scenes/game/completed_puzzle_dialog.gd` | Three-column completed gallery, admire/restart/recolor actions, and restart confirmation. |
 | `scenes/game/play_screen.gd` | One puzzle: the gem row (cut from a small off-screen `GemBoard3D` of single stones, so the icons are real lit gems), tapping and dragging to place, buzzes, the finale and saving. |
 | `scenes/game/collection_screen.gd` | Collection & packs: the selected pack's stock and payment controls, and everything unlocked or still hidden. |
 | `scenes/game/game_theme.gd`, `assets/ui/` | The player UI: original illustrated buttons, icons, foil packs, colors and press/fade animations. The lab retains its own theme. |
@@ -542,6 +552,7 @@ frame.
   ```sh
   XDG_DATA_HOME=/tmp/paint-with-gems-ui-tests godot --headless -s res://tests/run_menu_ui.gd
   XDG_DATA_HOME=/tmp/paint-with-gems-color-tests godot --headless -s res://tests/run_color_stories_ui.gd
+  XDG_DATA_HOME=/tmp/paint-with-gems-completed-tests godot --headless -s res://tests/run_completed_puzzles_ui.gd
   XDG_DATA_HOME=/tmp/paint-with-gems-bundle-tests godot --headless -s res://tests/run_pack_bundles.gd
   ```
 

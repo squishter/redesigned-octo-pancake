@@ -173,7 +173,49 @@ func _capture_studio(profile: Dictionary) -> void:
 	await _snapshot("10-completion-rewards.png")
 	play.queue_free()
 	await process_frame
+	await _capture_completed(profile, meta["id"])
 	SaveStore.delete_puzzle(profile, meta["id"])
+
+
+func _capture_completed(profile: Dictionary, original_id: String) -> void:
+	var source := SaveStore.load_picture(original_id)
+	var copies := []
+	for theme: String in ["sunset", "ocean", "garden", "night", "ember"]:
+		var request: Dictionary = source["puzzle"].duplicate(true)
+		request["theme"] = theme
+		request["theme_name"] = GemCatalog.theme_name(theme)
+		var picture := PuzzleRecolor.make(source, request)
+		var meta := SaveStore.add_puzzle(profile, picture)
+		copies.append(meta["id"])
+		var placed := PackedByteArray()
+		placed.resize(picture["slots"].size())
+		placed.fill(1)
+		meta["done"] = true
+		meta["filled"] = placed.size()
+		meta["rewarded"] = true
+		SaveStore.save_progress(meta["id"], placed)
+		SaveStore.save_thumbnail(meta["id"], Thumbnail.render(picture, placed, 400))
+	SaveStore.save_profile(profile)
+	var gallery := MainMenu.new()
+	gallery.profile = profile
+	gallery.show_developer_tools = false
+	root.add_child(gallery)
+	await create_timer(0.4).timeout
+	gallery._menu_scroll.scroll_vertical = 100000
+	await _snapshot("22-completed-gallery.png")
+	gallery._open_completed(original_id)
+	await create_timer(0.35).timeout
+	await _snapshot("23-completed-actions.png")
+	gallery._completed_panel._restart.pressed.emit()
+	await _snapshot("24-completed-restart-confirmation.png")
+	gallery._completed_panel._cancel.pressed.emit()
+	gallery._completed_panel._recolor.pressed.emit()
+	await create_timer(0.35).timeout
+	await _snapshot("25-completed-recolor.png")
+	gallery.queue_free()
+	await process_frame
+	for id: String in copies:
+		SaveStore.delete_puzzle(profile, id)
 
 
 func _snapshot(filename: String) -> void:
