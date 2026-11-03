@@ -109,6 +109,27 @@ func _test_gallery(menu: Control, completed: Array) -> void:
 	_check(menu._list.get_child_count() == 2, "The studio contains only unfinished puzzles")
 	_check(menu._completed._tiles.size() == completed.size(), "Finished puzzles have their own section")
 	_check(menu._completed._grid.columns == 3, "The completed gallery always has three columns")
+	var scrolls := menu.find_children("*", "ScrollContainer", true, false).filter(
+		func(sc: ScrollContainer) -> bool: return sc.is_visible_in_tree())
+	_check(scrolls == [menu._menu_scroll], "The menu is one scroll, with no list scrolling inside it")
+	var order: Array = (menu._list.get_parent() as Control).get_children()
+	_check(order.find(menu._studio_heading) < order.find(menu._list) and order.find(menu._list) < order.find(menu._completed),
+		"In-progress puzzles come first, then the completed ones")
+	_check(menu._studio_heading.title == "In your studio · 2" and menu._completed._heading.title.ends_with("· %d" % completed.size()),
+		"Each section's heading counts its puzzles")
+	menu._studio_heading.pressed.emit()
+	_check(not menu._list.visible and menu.profile["settings"][menu.STUDIO_OPEN_KEY] == false,
+		"In your studio folds away, and remembers it")
+	_check(SaveStore.load_profile()["settings"].get(menu.STUDIO_OPEN_KEY) == false, "The folded section is saved")
+	menu._completed._heading.pressed.emit()
+	_check(not menu._completed._body.visible and menu.profile["settings"][menu.COMPLETED_OPEN_KEY] == false,
+		"Completed puzzles fold away, and remember it")
+	menu._refresh_list()
+	_check(not menu._list.visible and not menu._completed._body.visible, "Refreshing the list keeps folded sections folded")
+	menu._studio_heading.pressed.emit()
+	menu._completed._heading.pressed.emit()
+	_check(menu._list.visible and menu._completed._body.visible and menu.profile["settings"][menu.STUDIO_OPEN_KEY]
+		and menu.profile["settings"][menu.COMPLETED_OPEN_KEY], "Tapping the headings opens both again")
 	for viewport: Vector2i in [Vector2i(1080, 2400), Vector2i(900, 1600), Vector2i(720, 1280)]:
 		root.content_scale_size = viewport
 		await _frames()

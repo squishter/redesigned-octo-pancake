@@ -195,6 +195,18 @@ func _test_creation_choices() -> void:
 		"Recoloring keeps the original puzzle mode fixed")
 	menu.go_back()
 	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_INHERIT, "Closing a dialog restores menu input")
+	var menu_profile: Dictionary = SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0},
+		"settings": {"menu_studio_open": false, "menu_completed_open": false}})
+	var folded := MainMenu.new()
+	folded.profile = menu_profile
+	root.add_child(folded)
+	await _layout_frames()
+	_check(not folded._studio_heading.open and not folded._list.visible and not folded._completed.open,
+		"A new menu opens its sections as she left them")
+	_check(JSON.stringify(SaveStore.upgrade(JSON.parse_string(JSON.stringify(menu_profile)))) == JSON.stringify(menu_profile),
+		"Remembered sections survive saving and loading unchanged")
+	folded.queue_free()
+	await process_frame
 	var gear: Rect2 = menu._settings_button.get_global_rect()
 	_check(gear.position.y < menu.size.y * 0.15 and gear.end.x > menu.size.x * 0.8, "Settings sits at the top right (%s)" % gear)
 	menu._settings_button.pressed.emit()

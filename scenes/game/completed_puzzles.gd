@@ -1,12 +1,24 @@
 class_name CompletedPuzzles
 extends VBoxContainer
-## Finished pictures form a three-column gallery in the main page's scroll area.
+## Finished pictures form a three-column gallery in the main page's scroll area,
+## under a heading that folds the gallery away or opens it (`open_changed`).
 
 signal chosen(puzzle_id: String)
+## The heading was tapped: the gallery is now `open` or folded away.
+signal open_changed(open: bool)
 
 const GameTheme := preload("res://scenes/game/game_theme.gd")
 const UI := preload("res://scenes/game/ui_widgets.gd")
-var _heading: Label
+## Whether the gallery shows, or is folded away under its heading.
+var open: bool:
+	get:
+		return _heading.open
+	set(value):
+		_heading.open = value
+		_body.visible = value
+var _heading: SectionHeading
+## Everything under the heading.
+var _body: VBoxContainer
 var _empty: Label
 var _grid: GridContainer
 var _tiles := {}
@@ -14,17 +26,23 @@ var _tiles := {}
 
 func _init() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_heading = UI.label("Completed puzzles", 48, GameTheme.GOLD)
+	_heading = SectionHeading.new("Completed puzzles")
+	_heading.open_changed.connect(func(shown: bool) -> void:
+		_body.visible = shown
+		open_changed.emit(shown))
 	add_child(_heading)
-	add_child(UI.label("Tap a picture to admire it, restart it, or give it new colors.", 28, GameTheme.TEXT_DIM))
+	_body = VBoxContainer.new()
+	_body.add_theme_constant_override("separation", 12)
+	add_child(_body)
+	_body.add_child(UI.label("Tap a picture to admire it, restart it, or give it new colors.", 28, GameTheme.TEXT_DIM))
 	_empty = UI.label("Your finished pictures will appear here.", 28, GameTheme.TEXT_DIM)
-	add_child(_empty)
+	_body.add_child(_empty)
 	_grid = GridContainer.new()
 	_grid.columns = 3
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid.add_theme_constant_override("h_separation", 20)
 	_grid.add_theme_constant_override("v_separation", 20)
-	add_child(_grid)
+	_body.add_child(_grid)
 
 
 func set_puzzles(puzzles: Array) -> void:
@@ -38,7 +56,7 @@ func set_puzzles(puzzles: Array) -> void:
 		var tile := _tile(meta)
 		_grid.add_child(tile)
 		_tiles[meta["id"]] = tile
-	_heading.text = "Completed puzzles · %d" % _tiles.size()
+	_heading.title = "Completed puzzles · %d" % _tiles.size()
 	_empty.visible = _tiles.is_empty()
 	_grid.visible = not _tiles.is_empty()
 

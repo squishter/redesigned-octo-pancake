@@ -221,7 +221,11 @@ mode for trying out new pattern generation.
   new one never touches the others. Each saved puzzle shows a thumbnail and
   how far along it is, and can be continued, restarted (asks "Sure?"
   first), recolored (the same picture made again in another unlocked theme,
-  saved as a new puzzle beside the original) or deleted.
+  saved as a new puzzle beside the original) or deleted. The menu is one
+  scroll: *In your studio* (puzzles in progress) and then *Completed
+  puzzles*, each under a heading with its count that folds the section
+  away or opens it again when tapped; the menu remembers which are open
+  (`menu_studio_open`, `menu_completed_open` in her settings).
   **Completed puzzles** have their own gallery, in rows of three. Tapping
   one offers *Admire*, *Restart* and *Recolor*. Restart asks for confirmation;
   cancelling keeps the finished picture, while confirming returns it to
@@ -230,8 +234,11 @@ mode for trying out new pattern generation.
   gem layout, including for photo collages and kits. Cancelling the color
   selector leaves the original's picture, progress, thumbnail and metadata
   untouched. *Generator lab
-  (debug)* at the bottom opens the lab in editor builds only; exported apps
-  omit that launcher. The generator and its camera retain their developer UI.
+  (debug)* at the bottom opens the lab in editor builds and in **Gem Lab**,
+  a debug-only app of its own (the *Android Lab* export preset: package
+  `com.squishter.paintwithgems.lab`, the "lab" feature, a teal gem icon with
+  a flask) that installs beside the game and opens straight into the lab
+  from its own launcher icon; the game's APKs omit that launcher. The generator and its camera retain their developer UI.
   Debug builds (the editor and `tools/build_apk.sh` APKs, not release
   exports) add *Unlock everything* to Settings, for testing: while it's on,
   every color, shape, cut, theme, picture type, flourish, placement style
@@ -291,6 +298,7 @@ mode for trying out new pattern generation.
 | `game/thumbnail.gd` | Small flat pictures for the menu: placed stones in color, open slots as pale dots. |
 | `scenes/game/app.tscn` | The main scene: shows the menu, a puzzle or the lab, and passes Android's back button on. |
 | `scenes/game/main_menu.gd` | New puzzle, the saved puzzles and the way into the lab. |
+| `scenes/game/section_heading.gd` | `SectionHeading`: a section title that folds its section away or opens it when tapped (the menu's studio and completed sections). |
 | `scenes/game/color_story_editor.gd` | `ColorStoryEditor`: the dialog where she makes, changes or deletes one of her own color stories. |
 | `scenes/game/color_story_picker.gd` | `ColorStoryPicker`: a scrollable story selector with palette previews in collapsible sections by color count, search, and the entry points for creating and editing stories. |
 | `scenes/game/completed_puzzles.gd`, `scenes/game/completed_puzzle_dialog.gd` | Three-column completed gallery, admire/restart/recolor actions, and restart confirmation. |
@@ -620,7 +628,7 @@ Linux x86_64, with nothing set up beforehand but a JDK 17+ (`java` and
 tools/build_apk.sh           # build/paint-with-gems-debug.apk
 ```
 
-It uses the committed `export_presets.cfg` (one *Android* preset: package
+It uses the committed `export_presets.cfg` (the *Android* preset: package
 `com.squishter.paintwithgems`, arm64-v8a, no Gradle build, camera and vibrate
 permissions, tests and tools left out) and keeps everything else in a cache
 folder (`~/.cache/paint-with-gems-build`, or `BUILD_CACHE`), never touching
@@ -651,3 +659,9 @@ For a release APK, make a keystore (never commit it; `*.keystore` and
 `GODOT_ANDROID_KEYSTORE_RELEASE_USER` and
 `GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD`, raise `version/code` in the
 preset, and run `tools/build_apk.sh release`.
+
+`tools/build_apk.sh lab` builds **Gem Lab** (`build/gem-lab-debug.apk`), a
+debug-only app from the *Android Lab* preset: its own package and launcher
+icon (`assets/lab/`), so it installs beside the game and opens straight into
+the generator lab. One APK can't carry a second launcher icon without a
+Gradle build, which this script doesn't use.
