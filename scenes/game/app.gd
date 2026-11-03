@@ -3,6 +3,8 @@ extends Control
 ## packs, or the generator lab (a debug mode for trying out new pattern
 ## generation), one at a time. Holds her profile (SaveStore), shared by all
 ## of them, and gives the day's free pick for opening the game (see Packs).
+## Gem Lab, the debug-only "Android Lab" export (its own app and launcher
+## icon, with the "lab" feature), opens straight into the lab.
 
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
 const GameTheme := preload("res://scenes/game/game_theme.gd")
@@ -39,7 +41,9 @@ func _ready() -> void:
 	profile = SaveStore.load_profile()
 	SaveStore.apply_settings(profile)
 	PerfReadout.apply_settings(profile["settings"])
-	if show_splash:
+	if OS.has_feature("lab"):
+		_show_lab()
+	elif show_splash:
 		_splash = SplashScreen.new()
 		_splash.finished.connect(_reveal_menu)
 		add_child(_splash)
@@ -64,6 +68,7 @@ func _make_menu() -> MainMenu:
 	menu.profile = profile
 	menu.daily_pick_awarded = daily_pick_awarded
 	menu.play_requested.connect(_play)
+	menu.show_developer_tools = menu.show_developer_tools or OS.has_feature("lab")
 	menu.lab_requested.connect(_show_lab)
 	menu.collection_requested.connect(_show_collection)
 	menu.reload_requested.connect(_show_menu)

@@ -3,6 +3,8 @@
 #
 #   tools/build_apk.sh            # debug APK  -> build/paint-with-gems-debug.apk
 #   tools/build_apk.sh release    # release APK (needs a release keystore, see below)
+#   tools/build_apk.sh lab        # Gem Lab, a debug-only app with its own launcher
+#                                 # icon that opens the generator lab -> build/gem-lab-debug.apk
 #
 # Everything it needs goes in a cache folder (default ~/.cache/paint-with-gems-build,
 # or $BUILD_CACHE) and nothing touches your own Godot settings:
@@ -24,7 +26,7 @@
 set -euo pipefail
 
 MODE="${1:-debug}"
-case "$MODE" in debug | release) ;; *) echo "usage: $0 [debug|release]" >&2; exit 2 ;; esac
+case "$MODE" in debug | release | lab) ;; *) echo "usage: $0 [debug|release|lab]" >&2; exit 2 ;; esac
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT_VERSION="${GODOT_VERSION:-4.7-stable}"
@@ -155,8 +157,17 @@ echo "Importing the project (registers class names)"
 "$GODOT" --headless --import --path "$ROOT" >/dev/null 2>&1 || "$GODOT" --headless --import --path "$ROOT"
 echo "Checking that every script compiles"
 "$GODOT" --headless --path "$ROOT" -s res://tools/check_scripts.gd
-APK="$OUT_DIR/paint-with-gems-$MODE.apk"
+if [ "$MODE" = lab ]; then
+	# Its own package and icon (the "Android Lab" preset), always a debug build.
+	APK="$OUT_DIR/gem-lab-debug.apk"
+	PRESET="Android Lab"
+	EXPORT="debug"
+else
+	APK="$OUT_DIR/paint-with-gems-$MODE.apk"
+	PRESET="Android"
+	EXPORT="$MODE"
+fi
 echo "Exporting $APK"
-"$GODOT" --headless --path "$ROOT" "--export-$MODE" "Android" "$APK"
+"$GODOT" --headless --path "$ROOT" "--export-$EXPORT" "$PRESET" "$APK"
 [ -s "$APK" ] || { echo "Export failed: no APK written" >&2; exit 1; }
 echo "Built $APK ($(du -h "$APK" | cut -f1))"

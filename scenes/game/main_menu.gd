@@ -28,6 +28,9 @@ const DailyGift := preload("res://scenes/game/daily_gift.gd")
 const THUMB_PX := 180
 ## Restart and Delete ask again; a second tap within this long confirms.
 const CONFIRM_MS := 3000
+## Settings keys that keep whether the menu's sections are open.
+const STUDIO_OPEN_KEY := "menu_studio_open"
+const COMPLETED_OPEN_KEY := "menu_completed_open"
 
 ## The player's profile (SaveStore), shared with the app; set before adding.
 var profile: Dictionary = {}
@@ -38,7 +41,7 @@ var daily_pick_awarded := false
 
 var _menu_scroll: ScrollContainer
 var _list: VBoxContainer
-var _studio_scroll: ScrollContainer
+var _studio_heading: SectionHeading
 var _completed: CompletedPuzzles
 var _completed_panel: CompletedPuzzleDialog
 var _new_panel: GameDialog
@@ -235,22 +238,21 @@ func _ready() -> void:
 	_photo_dialog.file_selected.connect(_on_photo_picked)
 	add_child(_photo_dialog)
 
-	var saved := Label.new()
-	saved.text = "In your studio"
-	saved.add_theme_color_override("font_color", GameTheme.GOLD)
-	saved.add_theme_font_size_override("font_size", 48)
-	root.add_child(saved)
-	_studio_scroll = ScrollContainer.new()
-	_studio_scroll.custom_minimum_size.y = 470
-	_studio_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_studio_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	root.add_child(_studio_scroll)
-	DragScroll.attach(_studio_scroll)
+	# Puzzles in progress, then finished ones, all in the menu's one scroll;
+	# each section folds away under its heading, and stays as she left it.
+	var settings: Dictionary = profile.get("settings", {})
+	_studio_heading = SectionHeading.new("In your studio")
+	_studio_heading.open_changed.connect(func(shown: bool) -> void: _keep_open(STUDIO_OPEN_KEY, shown))
+	root.add_child(_studio_heading)
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_studio_scroll.add_child(_list)
+	root.add_child(_list)
+	_studio_heading.open = settings.get(STUDIO_OPEN_KEY, true) == true
+	_list.visible = _studio_heading.open
 	_completed = CompletedPuzzles.new()
 	_completed.chosen.connect(_open_completed)
+	_completed.open_changed.connect(func(shown: bool) -> void: _keep_open(COMPLETED_OPEN_KEY, shown))
+	_completed.open = settings.get(COMPLETED_OPEN_KEY, true) == true
 	root.add_child(_completed)
 	_completed_panel = CompletedPuzzleDialog.new()
 	_completed_panel.hide()
@@ -607,6 +609,14 @@ func go_back() -> void:
 		get_tree().quit()
 
 
+## Remembers whether a menu section is open (settings `key`).
+func _keep_open(key: String, shown: bool) -> void:
+	if key == STUDIO_OPEN_KEY:
+		_list.visible = shown
+	profile["settings"][key] = shown
+	SaveStore.save_profile(profile)
+
+
 func _refresh_list() -> void:
 	for child in _list.get_children():
 		_list.remove_child(child)
@@ -614,7 +624,7 @@ func _refresh_list() -> void:
 	var all_puzzles: Array = profile["puzzles"]
 	_completed.set_puzzles(all_puzzles)
 	var puzzles := all_puzzles.filter(func(meta: Dictionary) -> bool: return not meta.get("done", false))
-	_studio_scroll.custom_minimum_size.y = 470 if not puzzles.is_empty() or all_puzzles.is_empty() else 160
+	_studio_heading.title = "In your studio · %d" % puzzles.size()
 	if puzzles.is_empty() and not all_puzzles.is_empty():
 		_list.add_child(UI.label("Your studio is clear. Start a new puzzle or revisit your finished pictures below.",
 			30, GameTheme.TEXT_DIM))
