@@ -114,7 +114,9 @@ mode for trying out new pattern generation.
   - *Photo collages* find the photo's edges (`gen/photo_edges.gd`: an
     edge-preserving Kuwahara smoothing so fur and cloth flatten, a color
     edge detector over Lab, thin ridges, thresholds from the photo with a
-    floor, short specks dropped, loose ends reaching on to close shapes),
+    floor, edges that are soft along their length dropped so shading on
+    rounded things isn't traced, short specks dropped, loose ends reaching
+    on to close shapes),
     then become a collage like any line art, with every area filled. If the
     photo has a clear subject (boundary connectivity saliency: sky, ground
     and walls connect to the photo's border, a subject hardly does; it must
@@ -368,6 +370,46 @@ permission; both are on in the committed Android export preset
 | Seeded mandala | `PictureSources.mandala_image()` → `KitGenerator.generate()` | `PictureSources.mandala_collage()` |
 | Photo (picked or from the camera) | `KitGenerator.generate(photo)` | `PictureSources.photo_collage()` |
 | Bundled line art | render with its colors → `KitGenerator.generate()` | `PictureSources.line_art_collage()` |
+| Web catalog (lab only for now) | `KitGenerator.generate()` of its color crop | `WebArtCatalog.line_art()` → `PictureSources.photo_collage()` |
+
+### Web line-art catalog (`tools/web_art/`, `assets/web_art/`)
+
+A prototype catalog of line art made from open-access museum pictures,
+searchable in the generator lab (*Options → Catalog…*: type to filter, tap a
+card to make it the source). `assets/web_art/` holds 57 pictures from The
+Met (all CC0): `index.json` (title, tags, credit, license, link, stats per
+picture), the line art, a color crop and a thumbnail of each.
+`game/web_art_catalog.gd` loads and searches it (every query word must start
+a word of the title, tags, artist, classification or source).
+
+It's built in two steps by `tools/web_art/build_catalog.py`:
+
+1. **Fetch and cut out** (Python: numpy, pillow, requests, onnxruntime; see
+   `tools/web_art/requirements.txt`): searches The Met (v1.1 search API) and
+   the Art Institute of Chicago for public-domain works on ~20 themes,
+   downloads ~1000 px images and cuts out the subject with IS-Net
+   (rembg's `isnet-general-use`, downloaded once to `~/.cache/web_art/`).
+   A clear subject (4–85% of the picture, touching at most 25% of the
+   border) keeps the mask as alpha; otherwise the whole picture is used.
+2. **Trace** (`tools/web_art/trace_catalog.gd`, Godot headless):
+   `PhotoEdges.line_art(..., {subject: "alpha"})` makes the line art, then a
+   trial collage (the game's dense layout) must have at least 4 areas and
+   300 stones. Rejects go to `build/web_art/rejected/`, and
+   `build/web_art/review.jpg` shows every cutout beside its line art.
+
+```bash
+pip install -r tools/web_art/requirements.txt
+```
+
+```bash
+python3 tools/web_art/build_catalog.py --godot /path/to/godot --per-query 3
+```
+
+`--sources met` or `aic`, `--themes bird,vase`, `--local-dir folder` (your
+own images, no network), `--skip-fetch` (retrace), `--detail 0.3` and
+`--strict-inside` pass through to PhotoEdges. The AIC's servers answer
+cloud machines with a bot challenge, so run it from a home connection for
+AIC pictures.
 
 ## Generators (`gen/`)
 

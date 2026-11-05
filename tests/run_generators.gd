@@ -1224,6 +1224,26 @@ func test_photo_edges() -> void:
 	check(not land["subject"], "a landscape was cut down to a subject: %s" % land.get("scores"))
 	check(not PhotoEdges.line_art(subject, {"subject": "off"})["subject"], "subject off still cut one out")
 	check(PhotoEdges.line_art(scenery, {"subject": "on"})["subject"], "subject on found none")
+	# A cutout (a segmentation model's alpha): the hills alone, though the
+	# picture runs edge to edge and saliency would call it scenery.
+	var cutout := scenery.duplicate() as Image
+	cutout.convert(Image.FORMAT_RGBA8)
+	for y in 360:
+		for x in 480:
+			if Vector2(x, y).distance_to(Vector2(150, 200)) > 90.0:
+				cutout.set_pixel(x, y, Color(cutout.get_pixel(x, y), 0.0))
+	var cut := PhotoEdges.line_art(cutout, {"subject": "alpha"})
+	check(cut["subject"] and cut["scores"].get("alpha", false), "alpha subject not used: %s" % cut.get("scores"))
+	check(cut["width"] < 260 and cut["height"] < 260, "alpha subject not cropped: %dx%d" % [cut["width"], cut["height"]])
+	# No transparency: nothing was cut out, so it falls back to saliency.
+	check(not PhotoEdges.line_art(scenery, {"subject": "alpha"})["subject"], "opaque picture took an alpha subject")
+	# The catalog: search by any words, title matches first.
+	var catalog := WebArtCatalog.new()
+	catalog.items = [{"id": "a", "title": "Vase with birds", "tags": ["ceramic"]},
+			{"id": "b", "title": "Peony", "tags": ["flower", "bird"]}, {"id": "c", "title": "Cat", "tags": []}]
+	check(catalog.search("bird").map(func(i: Dictionary) -> String: return i["id"]) == ["a", "b"], "catalog search order")
+	check(catalog.search("BIRD flower").size() == 1 and catalog.search("").size() == 3, "catalog search words")
+	check(catalog.search("at").is_empty(), "catalog search matched inside a word")
 
 
 ## A JPEG with an EXIF block holding just an Orientation tag, put after SOI.

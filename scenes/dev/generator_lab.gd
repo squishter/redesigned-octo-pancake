@@ -1,6 +1,7 @@
 extends Control
 ## Developer screen for the puzzle generators: pick a source (seeded mandala
-## or a photo, picked or taken with the camera) and a mode, generate on a
+## a photo, picked or taken with the camera, or line art from the web
+## catalog, searched in its browser) and a mode, generate on a
 ## worker thread, and look at the result. Kits come in the game's sizes (up
 ## to X-large), with drills in the gem colors or the picture's own colors.
 ## Laid out for phones: the picture fills the screen (pinch to zoom, drag to
@@ -15,6 +16,7 @@ signal back_requested
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+const CatalogBrowser := preload("res://scenes/dev/catalog_browser.gd")
 
 var _source: OptionButton
 var _variant: OptionButton
@@ -55,6 +57,10 @@ var _camera: CameraCapture
 ## Show a Menu button that goes back to the game.
 var show_back := false
 var _photo: Image
+## Line art picked from the web catalog (WebArtCatalog.line_art) and its item.
+var _catalog_art: Dictionary = {}
+var _catalog_item: Dictionary = {}
+var _catalog: CatalogBrowser
 var _task_id := -1
 var _task_started := 0
 var _result: Dictionary = {}
@@ -129,6 +135,7 @@ func _ready() -> void:
 	_button(actions, "Generate", _generate)
 	_button(actions, "Photo…", func() -> void: _file_dialog.popup_centered_ratio(0.8))
 	_button(actions, "Camera…", func() -> void: _camera.open())
+	_button(actions, "Catalog…", func() -> void: _catalog.open())
 	_button(actions, "Save JSON", _save)
 
 	var controls := GridContainer.new()
@@ -158,7 +165,7 @@ func _ready() -> void:
 			_perf.toggle())
 	_fill_row(readout)
 	controls.add_child(readout)
-	_source = _options(controls, "Source", ["Mandala", "Photo"])
+	_source = _options(controls, "Source", ["Mandala", "Photo", "Catalog"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
 	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS)
@@ -214,11 +221,20 @@ func _ready() -> void:
 	_camera.captured.connect(_use_photo)
 	add_child(_camera)
 
+	_catalog = CatalogBrowser.new()
+	_catalog.visible = false
+	_catalog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 24)
+	_catalog.picked.connect(_use_catalog_item)
+	add_child(_catalog)
+
 	_generate()
 
 
 ## Back to the game (a picture being made finishes first: its worker writes here).
 func go_back() -> void:
+	if _catalog.visible:
+		_catalog.hide()
+		return
 	if _camera.visible:
 		_camera.close()
 		return
@@ -364,6 +380,19 @@ func _on_photo_selected(path: String) -> void:
 	_use_photo(img)
 
 
+## Line art picked in the catalog: the source from now on.
+func _use_catalog_item(item: Dictionary) -> void:
+	var art := _catalog.catalog.line_art(item)
+	if art.is_empty():
+		_say("Couldn't load %s" % item.get("id", "?"))
+		return
+	_catalog_art = art
+	_catalog_item = item
+	_catalog.hide()
+	_source.select(2)
+	_generate()
+
+
 ## A photo picked or taken: the source from now on.
 func _use_photo(img: Image) -> void:
 	_photo = img
@@ -378,8 +407,14 @@ func _generate() -> void:
 	if use_photo and _photo == null:
 		_say("Pick a photo first.")
 		return
+	var use_catalog: bool = _source.selected == 2
+	if use_catalog and _catalog_art.is_empty():
+		_catalog.open()
+		_say("Pick a picture from the catalog.")
+		return
 	var job := {
 		"photo": _photo if use_photo else null,
+		"catalog_art": _catalog_art if use_catalog else {},
 		"seed": int(_seed.value),
 		"variant": _selected(_variant),
 		"template": _selected(_template),
@@ -431,7 +466,14 @@ func _run_job(job: Dictionary) -> void:
 		opts["frame"] = job["frame"] == "on"
 	var photo: Image = job["photo"]
 	# The line art is made once and kept, so the Lines box can show it.
-	var lines := PhotoLineArt.generate(photo, opts) if photo else PictureSources.mandala_lines(job["seed"], opts)
+	var lines: Dictionary = job["catalog_art"]
+	if not lines.is_empty():
+		# Catalog line art is finished (PhotoEdges, made by the catalog
+		# builder); its colors come with it, as a photo's do.
+		photo = lines["image"]
+		opts["method"] = "edges"
+	else:
+		lines = PhotoLineArt.generate(photo, opts) if photo else PictureSources.mandala_lines(job["seed"], opts)
 	var out := {"mode": job["mode"], "lines": lines}
 	match job["mode"]:
 		"Collage":

@@ -4,6 +4,16 @@ Goal: a scrollable, searchable list of line art drawn from images on the web
 (the isolated subject when there is one), each of which can become a Gem
 Collage.
 
+> **Status (prototype built):** architecture B exists as `tools/web_art/`
+> with a 57-picture Met catalog in `assets/web_art/` and a searchable
+> browser in the generator lab; see the README's *Web line-art catalog*.
+> Findings so far: IS-Net cutouts are clean on museum object photos; the
+> remaining weakness is busy patterns (painted porcelain, engraving)
+> tracing into dense black masses at 640 px, which edge sharpness can't
+> fix because those edges really are sharp. The Met retired `v1/search`
+> on 2026-10-01 (use `v1.1/search`, paged); the AIC answers cloud IPs with
+> a Cloudflare challenge.
+
 ## What we already have
 
 The hard half is done. `PictureSources` already turns any picture into a

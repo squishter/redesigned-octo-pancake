@@ -10,7 +10,14 @@ extends RefCounted
 ##    thinned to the ridge (non-maximum suppression) and kept where strong,
 ##    or weak but joined to strong (hysteresis, thresholds set from the
 ##    photo's own spread of gradients, never below a floor, so smooth
-##    gradients don't sprout edges). Short specks are dropped.
+##    gradients don't sprout edges). Only hard edges count: across a
+##    connected edge, most of the color change must on average happen within
+##    a few px (in the photo before smoothing), so shading on a rounded thing (the shadow
+##    side of an apple), which changes slowly over a long way, isn't traced
+##    (Kuwahara turns such slopes into steps of its own). Short specks are
+##    dropped. Optionally (strict_inside), once a subject's outline is
+##    settled (step 3), edges inside it must be sharper and stronger still:
+##    seams, patterns and printed lines stay, folds and wrinkles go.
 ## 2. Closing: each loose end reaches on along its direction a little way,
 ##    joining the edge it meets, so shapes close into regions.
 ## 3. Subject: each region between the lines gets a background weight from
@@ -36,6 +43,19 @@ const MIN_EDGE := [0.08, 0.03]
 ## Share of pixels counted as strong edges (more at more detail).
 const STRONG_SHARE := [0.02, 0.07]
 const WEAK_RATIO := 0.45
+## Edge hardness: on average along a connected edge, the color change
+## across HARD_NEAR px either side must be at least this share of the change
+## across HARD_FAR px (a sharp step: about 1; an even slope: HARD_NEAR /
+## HARD_FAR). Less at more detail. A ridge with too little change across HARD_FAR (a thin stroke,
+## the same color either side) is a line in itself and stays.
+const HARD_NEAR := 2
+const HARD_FAR := 6
+const HARD_SHARE := [0.55, 0.5]
+const THIN_STROKE := 6.0
+## Inside a subject's outline, an edge must be sharper and stronger on
+## average (more lenient at more detail).
+const INNER_SHARP := [0.75, 0.65]
+const INNER_STRENGTH := [60.0, 45.0]
 ## Strong edges are at least this strong (Sobel over Lab), whatever the photo.
 const STRONG_FLOOR := 30.0
 ## Kuwahara square size, px (smaller at more detail).
@@ -57,10 +77,14 @@ const SIGMA_BOUNDARY := 1.0
 ## Regions smaller than this share of the photo are left out of the subject
 ## search (they'd only slow it: it compares every region with every other).
 const MIN_REGION := 0.0008
+## Opaque pieces of a cutout smaller than this share of the picture are specks.
+const ALPHA_PIECE := 0.005
 
 
-## options: detail 0..1 (default 0.5), subject: "auto" | "on" | "off"
-## (default "auto": only a clear subject). Returns {mask, width, height,
+## options: detail 0..1 (default 0.5), subject: "auto" | "on" | "off" |
+## "alpha" (default "auto": only a clear subject; "alpha": the opaque part of
+## a cutout, from a segmentation model or a transparent PNG, falling back to
+## "auto" when it has none), strict_inside: bool (see step 1). Returns {mask, width, height,
 ## image (the working photo, cropped like the mask), subject: bool,
 ## subject_rect (in the uncropped working photo)}.
 static func line_art(photo: Image, options: Dictionary = {}) -> Dictionary:
@@ -74,18 +98,34 @@ static func line_art(photo: Image, options: Dictionary = {}) -> Dictionary:
 		img = KitGenerator.downscale(img, maxi(1, int(img.get_width() * s)), maxi(1, int(img.get_height() * s)))
 	var w := img.get_width()
 	var h := img.get_height()
-	var lab := _kuwahara(_lab(img, 1), w, h, int(round(lerpf(SMOOTH[0], SMOOTH[1], detail))))
-	var edges := _edges(lab, w, h, detail)
+	var raw := _lab(img, 1)
+	var lab := _kuwahara(raw, w, h, int(round(lerpf(SMOOTH[0], SMOOTH[1], detail))))
+	var info := {}
+	var edges := _edges(lab, raw, w, h, detail, info)
 	_close_gaps(edges, w, h, int(maxi(w, h) * REACH))
 	var lines := LineRaster.dilate(edges, w, h, LINE_RADIUS)
 
 	var want: String = options.get("subject", "auto")
-	var subject := {} if want == "off" else _subject(lines, lab, w, h, want == "on")
+	var subject := {}
+	if want == "alpha":
+		subject = _alpha_subject(img, w, h)
+	if want != "off" and not subject.has("mask"):
+		subject = _subject(lines, lab, w, h, want == "on")
 	if not subject.has("mask"):
 		return {"mask": LineRaster.add_frame(lines, w, h, 3), "width": w, "height": h, "image": img,
 				"subject": false, "subject_rect": Rect2i(0, 0, w, h), "scores": subject}
-	# Only the subject: its own edges, its outline, cropped around it.
+	# Only the subject: its own edges, its outline, cropped around it. With
+	# strict_inside, its outline settled, an edge inside it must be clearly
+	# sharp and strong too (a seam, a pattern, a printed line), not a fold or a
+	# shadow. Off by default: edges inside a subject join into webs that are
+	# kept or dropped whole, which on museum objects mostly changed nothing
+	# and sometimes emptied a picture.
 	var inside: PackedByteArray = subject["mask"]
+	if options.get("strict_inside", false) and info.has("sharp"):
+		var inner := edges.duplicate()
+		_drop_chains(inner, info["sharp"], w, h, lerpf(INNER_SHARP[0], INNER_SHARP[1], detail), info["strength"],
+				lerpf(INNER_STRENGTH[0], INNER_STRENGTH[1], detail), LineRaster.dilate(inside, w, h, 1))
+		lines = LineRaster.dilate(inner, w, h, LINE_RADIUS)
 	var near_inside := LineRaster.dilate(inside, w, h, 1)
 	var mask := PackedByteArray()
 	mask.resize(w * h)
@@ -177,7 +217,10 @@ static func _kuwahara(lab: PackedVector3Array, w: int, h: int, r: int) -> Packed
 
 
 ## Thin, connected edges (255) of a Lab image.
-static func _edges(lab: PackedVector3Array, w: int, h: int, detail: float) -> PackedByteArray:
+## `info` gets each pixel's sharpness ("sharp", 0..1) and ridge strength
+## ("strength", 0 off the ridges).
+static func _edges(lab: PackedVector3Array, raw: PackedVector3Array, w: int, h: int, detail: float,
+		info: Dictionary = {}) -> PackedByteArray:
 	var mag := PackedFloat32Array()
 	mag.resize(w * h)
 	var dir := PackedByteArray()  # 0: across x, 1: diagonal \, 2: across y, 3: diagonal /
@@ -205,6 +248,19 @@ static func _edges(lab: PackedVector3Array, w: int, h: int, detail: float) -> Pa
 			var d: int = steps[dir[i]]
 			if mag[i] > 0.0 and mag[i] >= mag[i + d] and mag[i] >= mag[i - d]:
 				thin[i] = mag[i]
+	# How sharp each ridge is (1: a step; HARD_NEAR / HARD_FAR: an even slope).
+	var sharp := PackedFloat32Array()
+	sharp.resize(w * h)
+	sharp.fill(1.0)
+	for y in range(HARD_FAR, h - HARD_FAR):
+		for x in range(HARD_FAR, w - HARD_FAR):
+			var i := y * w + x
+			if thin[i] <= 0.0:
+				continue
+			var d: int = steps[dir[i]]
+			var far := raw[i + d * HARD_FAR].distance_to(raw[i - d * HARD_FAR])
+			if far > THIN_STROKE:
+				sharp[i] = minf(raw[i + d * HARD_NEAR].distance_to(raw[i - d * HARD_NEAR]) / far, 1.0)
 	# Thresholds from the photo itself: the strongest share of ridge pixels.
 	var ridge := Array(thin).filter(func(v: float) -> bool: return v > 0.0)
 	if ridge.is_empty():
@@ -228,8 +284,57 @@ static func _edges(lab: PackedVector3Array, w: int, h: int, detail: float) -> Pa
 					if k >= 0 and k < w * h and out[k] == 0 and thin[k] >= low:
 						out[k] = 255
 						stack.append(k)
+	_drop_chains(out, sharp, w, h, lerpf(HARD_SHARE[0], HARD_SHARE[1], detail))
+	info["sharp"] = sharp
+	info["strength"] = thin
 	_drop_short(out, w, h, int(maxi(w, h) * lerpf(MIN_EDGE[0], MIN_EDGE[1], detail)))
 	return out
+
+
+## Clears connected edges (8-way) that are soft on average (the contours of
+## shading, which change slowly along their whole length; real edges are
+## sharp along most of theirs, so they stay whole, soft stretches and all) or,
+## with `min_strength`, weak on average. With `within` (255 inside), only
+## edge pixels inside it are judged, joined only through each other, and the
+## rest are left alone.
+static func _drop_chains(edges: PackedByteArray, sharp: PackedFloat32Array, w: int, h: int, min_sharp: float,
+		strength := PackedFloat32Array(), min_strength := 0.0, within := PackedByteArray()) -> void:
+	var seen := _zeros(w * h)
+	var stack := PackedInt32Array()
+	var members := PackedInt32Array()
+	var limited := not within.is_empty()
+	for start in w * h:
+		if edges[start] == 0 or seen[start] != 0 or (limited and within[start] == 0):
+			continue
+		seen[start] = 1
+		stack.append(start)
+		members.clear()
+		var total := 0.0
+		var power := 0.0
+		var ridge := 0
+		while not stack.is_empty():
+			var j := stack[stack.size() - 1]
+			stack.resize(stack.size() - 1)
+			members.append(j)
+			total += sharp[j]
+			if not strength.is_empty() and strength[j] > 0.0:
+				power += strength[j]
+				ridge += 1
+			var y := j / w
+			var x := j - y * w
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					var xx := x + dx
+					var yy := y + dy
+					if xx >= 0 and yy >= 0 and xx < w and yy < h:
+						var k := yy * w + xx
+						if edges[k] != 0 and seen[k] == 0 and (not limited or within[k] != 0):
+							seen[k] = 1
+							stack.append(k)
+		var weak := min_strength > 0.0 and power / maxi(ridge, 1) < min_strength
+		if total / members.size() < min_sharp or weak:
+			for j in members:
+				edges[j] = 0
 
 
 static func _zeros(n: int) -> PackedByteArray:
@@ -463,6 +568,45 @@ static func _subject(lines: PackedByteArray, lab: PackedVector3Array, w: int, h:
 		return scores
 	scores["mask"] = filled
 	return scores
+
+
+## The subject of a cutout: its opaque pixels, pieces under ALPHA_PIECE of the
+## picture dropped and holes filled. Empty when there is no sizable opaque
+## part or no transparent part (nothing was cut out).
+static func _alpha_subject(img: Image, w: int, h: int) -> Dictionary:
+	var opaque := _zeros(w * h)
+	var count := 0
+	for y in h:
+		for x in w:
+			if img.get_pixel(x, y).a >= 0.5:
+				opaque[y * w + x] = 255
+				count += 1
+	if count < w * h * SUBJECT_AREA[0] or count == w * h:
+		return {}
+	var pieces := _components(_invert(opaque), w, h, int(w * h * ALPHA_PIECE))
+	var labels: PackedInt32Array = pieces["labels"]
+	var inside := _zeros(w * h)
+	for i in w * h:
+		if labels[i] >= 0:
+			inside[i] = 255
+	inside = _fill_holes(inside, w, h)
+	var lo := Vector2i(w, h)
+	var hi := Vector2i(-1, -1)
+	for y in h:
+		for x in w:
+			if inside[y * w + x] != 0:
+				lo = Vector2i(mini(lo.x, x), mini(lo.y, y))
+				hi = Vector2i(maxi(hi.x, x), maxi(hi.y, y))
+	if hi.x < 0:
+		return {}
+	return {"mask": inside, "rect": Rect2i(lo, hi - lo + Vector2i.ONE), "alpha": true}
+
+
+static func _invert(mask: PackedByteArray) -> PackedByteArray:
+	var out := mask.duplicate()
+	for i in out.size():
+		out[i] = 255 - out[i]
+	return out
 
 
 ## Shortest color distance (sum of mean-color steps between neighbors) from
