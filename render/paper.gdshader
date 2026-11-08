@@ -65,7 +65,9 @@ vec3 finish(vec3 c, vec3 n, vec3 r, float m, vec2 px, float lit) {
 		float lit_fleck = step(0.55, hash12(cell + 53.0));
 		float fleck = (pow(max(dot(fr, key_dir), 0.0), 40.0) + 0.6 * pow(max(dot(fr, fill_dir), 0.0), 40.0)) * lit_fleck;
 		float sheen = pow(key, 14.0) + 0.5 * pow(fill, 14.0);
-		return c * (0.45 + 0.5 * n.y) + mix(vec3(1.0), c, 0.35) * (sheen * 0.6 + fleck * 2.2) * light_strength;
+		// The paint's own shine is kept faint (about 13% of what it was)
+		// so the sparkle comes from the flecks.
+		return c * (0.45 + 0.5 * n.y) + mix(vec3(1.0), c, 0.35) * (sheen * 0.08 + fleck * 2.2) * light_strength;
 	}
 	if (line_finish == 4) {
 		// Chalk: pale, dusty and grainy, with specks of paper showing through.
