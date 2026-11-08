@@ -49,7 +49,10 @@ const GENE_RANGES := {
 	"back": [0.04, 0.16],  # how far the back rises above the spine
 	"chest": [0.18, 0.62],  # chest depth below the spine
 	"tuck": [0.5, 1.1],  # waist depth, x chest
-	"rump": [0.13, 0.46],  # rump depth below the spine
+	"rump": [0.13, 0.56],  # rump depth below the spine
+	"haunch": [0.0, 1.0],  # how full, high and round the rump stays to the tail
+	"barrel": [0.0, 1.0],  # how far back the chest keeps its depth
+	"hip_at": [0.08, 0.2],  # where the hips sit, from the rump's end
 	"arch": [-0.15, 0.3],  # how the back bows (up positive)
 	"hump": [0.0, 0.1],  # extra height over the shoulders (a bear's)
 	"neck": [0.05, 0.6],
@@ -104,7 +107,8 @@ const SCENES := ["none", "field", "round"]
 const SCENE_WEIGHTS := {"none": 0.45, "field": 0.35, "round": 0.2}
 
 const BASE_GENES := {
-	"back": 0.06, "chest": 0.24, "tuck": 0.75, "rump": 0.17, "arch": 0.05, "hump": 0.0,
+	"back": 0.06, "chest": 0.24, "tuck": 0.75, "rump": 0.17, "haunch": 0.0, "barrel": 0.0,
+	"hip_at": 0.17, "arch": 0.05, "hump": 0.0,
 	"neck": 0.17, "neck_w": 0.85, "neck_angle": 35.0,
 	"head": 0.32, "skull": 0.134, "muzzle": 0.3, "muzzle_w": 0.6, "jaw": 0.95, "head_angle": 12.0, "trunk": 0.0,
 	"leg": 0.27, "leg_w": 0.052, "shoulder": 0.1, "thigh": 0.15, "paw": 0.052,
@@ -162,46 +166,51 @@ const SPECIES := {
 			"leg": 0.1, "leg_w": 0.05, "shoulder": 0.1, "thigh": 0.12, "paw": 0.055, "ears": "floppy",
 			"ear_size": 1.3, "tail": "tapered", "tail_len": 0.45, "tail_w": 0.04},
 			"coats": ["solid", "dapple", "countershade"], "muzzle": 0.3},
-	"horse": {"plan": "ungulate", "genes": {"back": 0.07, "chest": 0.34, "tuck": 0.95, "rump": 0.25, "arch": -0.06,
+	"horse": {"plan": "ungulate", "genes": {"hip_at": 0.1, "barrel": 1.0,
+			"back": 0.07, "chest": 0.38, "tuck": 1.0, "rump": 0.22, "arch": -0.06,
 			"neck": 0.48, "neck_w": 0.75, "neck_angle": 52.0, "head": 0.54, "skull": 0.123, "muzzle": 0.56,
 			"muzzle_w": 0.62, "jaw": 1.35, "head_angle": 62.0, "leg": 0.55, "leg_w": 0.045, "shoulder": 0.13,
-			"thigh": 0.19, "paw": 0.05, "feet": "hoof", "ear_size": 0.8, "tail": "hair", "tail_len": 0.6,
+			"thigh": 0.22, "paw": 0.05, "feet": "hoof", "ear_size": 0.8, "tail": "hair", "tail_len": 0.6,
 			"tail_w": 0.055, "mane": "horse"},
 			"coats": ["solid", "solid", "pinto", "dapple", "appaloosa"], "socks": 0.6, "blaze": 0.55},
-	"zebra": {"plan": "ungulate", "genes": {"back": 0.07, "chest": 0.34, "tuck": 0.95, "rump": 0.25, "arch": -0.03,
+	"zebra": {"plan": "ungulate", "genes": {"hip_at": 0.1, "barrel": 1.0,
+			"back": 0.07, "chest": 0.38, "tuck": 1.0, "rump": 0.22, "arch": -0.03,
 			"neck": 0.42, "neck_w": 0.85, "neck_angle": 48.0, "head": 0.518, "skull": 0.129, "muzzle": 0.55,
 			"muzzle_w": 0.65, "jaw": 1.3, "head_angle": 58.0, "leg": 0.47, "leg_w": 0.047, "shoulder": 0.13,
-			"thigh": 0.19, "paw": 0.05, "feet": "hoof", "ear_size": 1.05, "tail": "tuft", "tail_len": 0.5,
+			"thigh": 0.22, "paw": 0.05, "feet": "hoof", "ear_size": 1.05, "tail": "tuft", "tail_len": 0.5,
 			"tail_w": 0.03, "mane": "crest"},
 			"coats": ["zebra"]},
-	"cow": {"plan": "ungulate", "genes": {"back": 0.08, "chest": 0.42, "tuck": 1.05, "rump": 0.29, "arch": -0.03,
+	"cow": {"plan": "ungulate", "genes": {"hip_at": 0.12, "barrel": 0.8,
+			"back": 0.08, "chest": 0.42, "tuck": 1.05, "rump": 0.29, "arch": -0.03,
 			"neck": 0.22, "neck_w": 0.95, "neck_angle": 15.0, "head": 0.454, "skull": 0.146, "muzzle": 0.45,
 			"muzzle_w": 0.78, "jaw": 1.2, "head_angle": 55.0, "leg": 0.37, "leg_w": 0.06, "shoulder": 0.14,
 			"thigh": 0.2, "paw": 0.06, "feet": "hoof", "ear_size": 0.8, "horns": "curved", "tail": "tuft",
 			"tail_len": 0.62, "tail_w": 0.03},
 			"coats": ["cow", "cow", "pinto", "solid", "saddle"], "blaze": 0.25, "socks": 0.2},
-	"deer": {"plan": "ungulate", "genes": {"back": 0.06, "chest": 0.3, "tuck": 0.85, "rump": 0.2, "arch": 0.02,
+	"deer": {"plan": "ungulate", "genes": {"hip_at": 0.11, "barrel": 0.8,
+			"back": 0.06, "chest": 0.33, "tuck": 0.95, "rump": 0.19, "arch": 0.02,
 			"neck": 0.38, "neck_w": 0.7, "neck_angle": 55.0, "head": 0.389, "skull": 0.112, "muzzle": 0.5,
 			"muzzle_w": 0.5, "jaw": 1.0, "head_angle": 42.0, "leg": 0.55, "leg_w": 0.036, "shoulder": 0.1,
-			"thigh": 0.15, "paw": 0.04, "feet": "hoof", "ear_size": 1.25, "horns": "antlers", "tail": "short",
+			"thigh": 0.18, "paw": 0.04, "feet": "hoof", "ear_size": 1.25, "horns": "antlers", "tail": "short",
 			"tail_len": 0.13},
 			"coats": ["countershade", "dalmatian", "solid"], "belly": 0.5},
-	"elephant": {"plan": "heavy", "genes": {"back": 0.14, "chest": 0.58, "tuck": 1.0, "rump": 0.44, "arch": 0.12,
+	"elephant": {"plan": "heavy", "genes": {"back": 0.14, "chest": 0.54, "tuck": 1.0, "rump": 0.54, "haunch": 1.0,
+			"arch": 0.0,
 			"neck": 0.08, "neck_w": 1.0, "neck_angle": 10.0, "head": 0.389, "skull": 0.235, "muzzle": 0.25,
 			"muzzle_w": 0.6, "jaw": 1.0, "head_angle": 72.0, "trunk": 0.7, "leg": 0.56, "leg_w": 0.125,
 			"shoulder": 0.2, "thigh": 0.25, "paw": 0.13, "feet": "pillar", "ears": "fan", "ear_size": 1.2,
 			"tail": "whip", "tail_len": 0.36, "tail_w": 0.025},
 			"coats": ["solid"]},
-	"hippo": {"plan": "heavy", "genes": {"back": 0.1, "chest": 0.4, "tuck": 1.08, "rump": 0.33, "arch": 0.03,
+	"hippo": {"plan": "heavy", "genes": {"back": 0.1, "chest": 0.4, "tuck": 1.08, "rump": 0.36, "haunch": 0.8, "arch": 0.03,
 			"neck": 0.12, "neck_w": 1.05, "neck_angle": 8.0, "head": 0.54, "skull": 0.19, "muzzle": 0.42,
 			"muzzle_w": 1.05, "jaw": 1.15, "head_angle": 14.0, "leg": 0.15, "leg_w": 0.095, "shoulder": 0.14,
 			"thigh": 0.2, "paw": 0.1, "feet": "pillar", "ears": "small", "ear_size": 0.6, "tail": "whip",
 			"tail_len": 0.18, "tail_w": 0.03},
 			"coats": ["solid", "countershade"]},
-	"bear": {"plan": "bear", "genes": {"back": 0.09, "chest": 0.37, "tuck": 0.9, "rump": 0.26, "arch": 0.08,
-			"hump": 0.07, "neck": 0.16, "neck_w": 0.95, "neck_angle": 18.0, "head": 0.367, "skull": 0.157,
-			"muzzle": 0.36, "muzzle_w": 0.55, "jaw": 0.95, "head_angle": 18.0, "leg": 0.28, "leg_w": 0.08,
-			"shoulder": 0.15, "thigh": 0.2, "paw": 0.08, "feet": "plantigrade", "ears": "round", "ear_size": 0.55,
+	"bear": {"plan": "bear", "genes": {"back": 0.11, "chest": 0.33, "tuck": 0.9, "rump": 0.33, "haunch": 1.0, "arch": 0.0,
+			"hump": 0.04, "neck": 0.16, "neck_w": 0.95, "neck_angle": 18.0, "head": 0.367, "skull": 0.157,
+			"muzzle": 0.36, "muzzle_w": 0.55, "jaw": 0.95, "head_angle": 18.0, "leg": 0.3, "leg_w": 0.08,
+			"shoulder": 0.15, "thigh": 0.24, "paw": 0.08, "feet": "plantigrade", "ears": "round", "ear_size": 0.55,
 			"tail": "short", "tail_len": 0.08},
 			"coats": ["solid", "countershade"], "muzzle": 0.5},
 }
@@ -228,7 +237,7 @@ const TIGHT := 0.0085
 const JOINTS := {
 	"paw": {"rest": [-0.35, -0.25, 0.8, -0.95], "fold": [-1.4, 2.1, 2.1, -2.0]},
 	"hoof": {"rest": [-0.2, 0.0, 0.55, -0.7], "fold": [-1.2, 2.3, 1.9, -2.1]},
-	"pillar": {"rest": [-0.04, 0.0, 0.08, -0.08], "fold": [-0.9, 1.3, 1.4, -1.4]},
+	"pillar": {"rest": [-0.04, 0.02, 0.08, -0.08], "fold": [-0.6, 1.8, 1.4, -1.4]},
 	"plantigrade": {"rest": [-0.12, -1.3, 0.25, -1.5], "fold": [-1.3, 0.6, 1.9, -1.6]},
 }
 ## How far each of those joints may turn: [least, most]. Knees only fold
@@ -238,8 +247,8 @@ const JOINT_LIMITS := [[-2.5, 0.25], [-1.7, 2.7], [-0.15, 2.7], [-2.75, 0.3]]
 ## of a leg standing on the ground, by kind of foot: [front, hind].
 const PLANTED := {"paw": [[-0.1, 0.8], [-0.2, 0.6]], "hoof": [[-0.1, 0.45], [-0.1, 0.4]],
 		"pillar": [[-0.12, 0.12], [-0.12, 0.12]], "plantigrade": [[1.15, 1.4], [1.45, 1.55]]}
-## Where along the body (fractions of the torso) the hips and shoulders sit.
-const HIP_AT := 0.17
+## Where along the body (fraction of the torso) the shoulders sit; the hips
+## sit at the gene "hip_at".
 const SHOULDER_AT := 0.8
 
 var rng := RandomNumberGenerator.new()
@@ -593,14 +602,34 @@ func _rig() -> void:
 	var chest: float = g["chest"]
 	var rump: float = g["rump"]
 	var hump: float = g["hump"]
-	_body["stations"] = [
-		[0.0, back * 1.3, rump * 0.72],
-		[HIP_AT, back * 1.15, rump],
+	# The rump tapers to the tail (a cat's), or stays deep, high and round
+	# behind the haunches (`haunch`: an elephant's, a bear's).
+	var haunch: float = g["haunch"]
+	var hip_at: float = g["hip_at"]
+	var high := back * (1.15 + 0.7 * haunch)
+	var stations := [
+		[0.0, lerpf(back * 1.3, high, 0.8), rump * lerpf(0.72, 1.05, haunch)],
+		[hip_at * 0.5, high, rump * lerpf(0.88, 1.08, haunch)],
+		[hip_at, high, rump * lerpf(1.0, 1.08, haunch)],
 		[0.45, back, chest * g["tuck"]],
 		[0.68, back + hump * 0.6, chest],
 		[0.86, back + hump, chest * 0.97],
 		[1.0, back * 1.5 + hump, chest * 0.85],
 	]
+	# A full rump (a bear's) runs straight on into the shoulders: no dip in
+	# the back, no waist under the belly.
+	if haunch > 0.0:
+		var t := (0.45 - hip_at) / (0.68 - hip_at)
+		stations[3][1] = lerpf(back, lerpf(high, back + hump * 0.6, t), haunch)
+		stations[3][2] = lerpf(chest * g["tuck"], lerpf(rump * 1.08, chest, t), haunch)
+	# A barrel chest (a horse's) keeps the ribs' full depth back to the
+	# flank, where the thigh meets the body, then tapers quickly.
+	var barrel: float = g["barrel"]
+	if barrel > 0.0:
+		stations[3][2] = chest * lerpf(g["tuck"], 0.97, barrel)
+		stations.insert(3, [lerpf(hip_at + 0.22, hip_at + 0.12, barrel), back,
+				lerpf(chest * g["tuck"], chest * 0.9, barrel)])
+	_body["stations"] = stations
 	var skull: float = g["skull"]
 	var neck_end: float = skull * g["neck_w"]
 	_body["neck_stations"] = [
@@ -620,10 +649,16 @@ func _rig() -> void:
 		[lerpf(stop, 1.0, 0.55), mw * 1.05, mw * 1.0],
 		[1.0, mw * 0.95, mw * 0.95],
 	]
-	# Legs, standing on a level back: the shoulder joint sits 40% down the
-	# chest, the elbow just below it; the hip 30% down the rump.
-	var front_h: float = chest * 0.6 + g["leg"]
-	var hind_h: float = front_h + chest * 0.4 - rump * 0.3
+	# Legs, standing on a level back: how far below the spine the shoulder
+	# and hip joints sit (as _shoulder and _hip find them), and the ground
+	# `leg` below the chest.
+	var at_s: Vector2 = _station(_body["stations"], SHOULDER_AT)
+	var at_h: Vector2 = _station(_body["stations"], g["hip_at"])
+	var shoulder_depth := (at_s.y - at_s.x) * 0.5 + 0.1 * (at_s.y + at_s.x) * 0.5
+	var hip_depth := (at_h.y - at_h.x) * 0.5 + 0.05 * (at_h.y + at_h.x) * 0.5
+	var ground: float = at_s.y + g["leg"]
+	var front_h := ground - shoulder_depth
+	var hind_h := ground - hip_depth
 	var paw_h := _paw_height()
 	var upper := chest * 0.6 + 0.02
 	var rest := maxf(0.05, front_h - upper * 0.92 - paw_h)
@@ -632,7 +667,9 @@ func _rig() -> void:
 			_legs["front"] = [upper, rest * 0.58, rest * 0.44]
 			_legs["hind"] = [hind_h * 0.4, hind_h * 0.44, hind_h * 0.4]
 		"pillar":
-			_legs["front"] = [upper, rest * 0.92, rest * 0.1]
+			# The elbow sits high at the belly; the joint halfway down an
+			# elephant's foreleg is its wrist, which folds the foot back.
+			_legs["front"] = [upper, rest * 0.55, rest * 0.45]
 			_legs["hind"] = [hind_h * 0.5, hind_h * 0.46, hind_h * 0.06]
 		"plantigrade":
 			_legs["front"] = [upper, rest * 0.95, g["paw"] * 1.6]
@@ -640,6 +677,19 @@ func _rig() -> void:
 		_:
 			_legs["front"] = [upper, rest * 0.72, rest * 0.33]
 			_legs["hind"] = [hind_h * 0.42, hind_h * 0.45, hind_h * 0.33]
+	# Each pair, standing at ease, reaches just that ground: its upper bones
+	# scaled to fit (the lowest keeps its length: a bear's foot, a hoof's
+	# cannon).
+	var heights := {"front": front_h - paw_h, "hind": hind_h - paw_h}
+	for key: String in heights:
+		for _i in 4:
+			var reach := _rest_reach(key == "front").y
+			if reach <= 0.01:
+				break
+			var lens: Array = _legs[key]
+			var k: float = clampf(1.0 + (heights[key] - reach) / (lens[0] + lens[1]), 0.5, 1.5)
+			lens[0] *= k
+			lens[1] *= k
 
 
 ## How high above the ground the lowest bone ends when the foot stands on
@@ -700,7 +750,7 @@ func _shoulder() -> Vector2:
 
 
 func _hip() -> Vector2:
-	return _sweep_at(_body["sweep"], _body_f(HIP_AT), 0.05)
+	return _sweep_at(_body["sweep"], _body_f(genes["hip_at"]), 0.05)
 
 
 ## The lowest point of the body's underside between two torso fractions.
@@ -775,7 +825,7 @@ func _leg(name: String, front: bool, near: bool, paw: Vector2, hint: float, fold
 	var feet: String = g["feet"]
 	var lens: Array = _legs["front" if front else "hind"]
 	var root := _shoulder() if front else _hip()
-	var at := _body_f(SHOULDER_AT if front else HIP_AT)
+	var at := _body_f(SHOULDER_AT if front else genes["hip_at"])
 	var up := (_sweep_at(_body["sweep"], at, -1.0) - _sweep_at(_body["sweep"], at, 1.0)).normalized()
 	var k := 0 if front else 2
 	var rest: Array = JOINTS[feet]["rest"]
@@ -816,12 +866,13 @@ func _leg(name: String, front: bool, near: bool, paw: Vector2, hint: float, fold
 				low = dir
 	var end: Vector2 = joint + low * lens[2]
 	var depth := _sweep_at(_body["sweep"], at, -1.0).distance_to(_sweep_at(_body["sweep"], at, 1.0))
-	var top_r: float = minf(g["shoulder"] if front else g["thigh"], depth * (0.4 if front else 0.46))
+	var fill := 0.4 if front else (0.56 if plan == "ungulate" else 0.46)
+	var top_r: float = minf(g["shoulder"] if front else g["thigh"], depth * fill)
 	if feet == "pillar":
 		top_r = minf(top_r, lw * 1.5)
 	if not near:
 		top_r *= 0.85
-	var top := root + up * top_r * (0.45 if front else 0.2)
+	var top := root + up * top_r * 0.45
 	var pts := PackedVector2Array([top, root, mid, joint, end])
 	var radii: Array
 	if feet == "pillar":
@@ -830,6 +881,16 @@ func _leg(name: String, front: bool, near: bool, paw: Vector2, hint: float, fold
 		radii = [top_r * 0.9, top_r * 0.8, lw * 1.25, lw * 0.82, lw * 0.78]
 	else:
 		radii = [top_r, top_r * 0.82, lw * 1.3, lw * 0.78, lw * 0.72]
+	if not front:
+		# The thigh starts as the rump itself: the body's rounded rear end,
+		# so the rump flows into the back of the leg instead of sticking out
+		# behind it, and the thigh tapers from there to the knee.
+		var sw: Dictionary = _body["sweep"]
+		var back_r: float = (sw["top"][0] + sw["bottom"][0]) * 0.5
+		var heading: Vector2 = (sw["pts"][1] - sw["pts"][0]).normalized()
+		pts[0] = _sweep_at(sw, 0.0) - heading * back_r * (0.015 if near else -0.1)
+		radii[0] = back_r * (1.0 if near else 0.88)
+		radii[1] = maxf(radii[1], lerpf(radii[0], radii[2], 0.35))
 	var part := _part(name, "coat", "legs")
 	_add_chain(part, pts, radii)
 	var length: float = part["len"]
@@ -1311,8 +1372,8 @@ func _pose(pose: String) -> void:
 				var reach: float = reach_f if k[0] else reach_h
 				var lean: float = k[2]
 				var fold: float = k[3]
-				legs[_leg_name(k[0], k[1])] = [root + Vector2(sin(lean), cos(lean)) * reach * lerpf(0.88, 0.6, fold),
-						lean + 0.4, fold, false]
+				legs[_leg_name(k[0], k[1])] = [root + Vector2(sin(lean), cos(lean)) * reach * lerpf(0.96, 0.62, fold),
+						lean + (0.0 if feet == "pillar" else 0.4), fold, false]
 			tail = [PI - 0.1, rng.randf_range(-0.4, 0.4), rng.randf_range(-0.8, 0.8)]
 	for name: String in legs:
 		var leg: Array = legs[name]
