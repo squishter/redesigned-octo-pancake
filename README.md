@@ -71,7 +71,11 @@ mode for trying out new pattern generation.
   with the lighter and darker halves taking turns so neighbors contrast
   (ids like `red_light_5`; where a hue has too few colors for four
   different ones, only Light and Dark; Light Shimmers at 6 would be
-  Opaline, so it's left out). Then 71 more mixes: complements (Harbor
+  Opaline, so it's left out). The six-color ones are named plainly
+  (Light Reds, Dark Blues, Mid Greens, Teal Ombré); the other sizes each
+  have a name of their own (Poppy Petals, Bordeaux, Creamsicle, Key Lime,
+  Forget-Me-Not, Café au Lait, Piano Keys, Soap Bubbles, ...), so no two
+  stories share a name. Then 71 more mixes: complements (Harbor
   Sunset, Iris & Daffodil, Watermelon), neighbors (Hearth, Hydrangea,
   Marigold), seasons (Merry & Bright, Easter Eggs, Spooky Night) and
   places and things (Koi Pond, Spice Market, Toy Box, Arctic Aurora).
