@@ -25,7 +25,7 @@ def accessor_values(document, binary, index):
             for i in range(accessor["count"])]
 
 
-def audit(path):
+def read_glb(path):
     data = path.read_bytes()
     assert data[:4] == b"glTF" and struct.unpack_from("<I", data, 4)[0] == 2, path
     assert struct.unpack_from("<I", data, 8)[0] == len(data), path
@@ -39,6 +39,12 @@ def audit(path):
             binary = payload
         position += 8 + length
     assert document is not None
+    return document, binary
+
+
+def audit(path):
+    document, binary = read_glb(path)
+    data = path.read_bytes()
     primitives = [p for m in document.get("meshes", []) for p in m["primitives"]]
     vertices = triangles = 0
     maximum_weight_error = 0.0
@@ -51,7 +57,9 @@ def audit(path):
         triangles += (document["accessors"][primitive["indices"]]["count"]
                       if "indices" in primitive else count) // 3
         if "WEIGHTS_0" in attributes:
-            weights = accessor_values(document, binary, attributes["WEIGHTS_0"])
+            sets = [accessor_values(document, binary, attributes[key]) for key in sorted(attributes)
+                    if key.startswith("WEIGHTS_")]
+            weights = [sum(rows, ()) for rows in zip(*sets)]
             assert all(all(math.isfinite(x) and x >= 0 for x in row) for row in weights)
             maximum_weight_error = max(maximum_weight_error, max(abs(sum(row) - 1) for row in weights))
             max_influences = max(max_influences, max(sum(x > 0 for x in row) for row in weights))
@@ -63,6 +71,7 @@ def audit(path):
                 clips=[a.get("name", "") for a in document.get("animations", [])],
                 materials=[m.get("name", "") for m in document.get("materials", [])],
                 uv_on_all_primitives=all("TEXCOORD_0" in p["attributes"] for p in primitives),
+                uv2_on_all_primitives=all("TEXCOORD_1" in p["attributes"] for p in primitives),
                 skinned_primitives=all("JOINTS_0" in p["attributes"] and "WEIGHTS_0" in p["attributes"]
                                        for p in primitives),
                 maximum_weight_error=maximum_weight_error, maximum_bone_influences=max_influences,

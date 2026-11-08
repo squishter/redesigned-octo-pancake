@@ -1,0 +1,1168 @@
+{
+  "schema_version": 1,
+  "reviewed": "2026-11-08",
+  "sources": [
+    {
+      "file": "gobkit/Corgi.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Corgi.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 73516,
+      "sha256": "95cd2c4d53d70ee9dd2e1329dcb6de7d4a725301d504a4f2f00ecb34dc1a0851"
+    },
+    {
+      "file": "gobkit/Hippo.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Hippo.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 66300,
+      "sha256": "6a911f141482994f890911429e0863353a10fb567822e553b91a273e0fb1d5bd"
+    },
+    {
+      "file": "gobkit/Rhino.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Rhino.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 70364,
+      "sha256": "65cea4e6533e50d00efdde03de3e792f7337736d97b8f8c8f8b12c4bc0ee5017"
+    },
+    {
+      "file": "gobkit/Bat.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Bat.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 63308,
+      "sha256": "1a4317609094c64d3f751adb9150df628aaf7902f7440174afcb642c30e0e072"
+    },
+    {
+      "file": "gobkit/Duck.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Duck.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 70104,
+      "sha256": "6550a5807bc83edbadec0759155b3d9242b6ce6b980213a3872b49db80dfd579"
+    },
+    {
+      "file": "gobkit/Platypus.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Platypus.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 74604,
+      "sha256": "9d5e67a5147dabe04c5e3f677b10aa8042ed4efe337378bccc3b7dd6338d99b6"
+    },
+    {
+      "file": "gobkit/Anglerfish.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Anglerfish.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 57640,
+      "sha256": "8d07bd212527ec2e0ba2d42367dcf65ae91eb35538fb3b57a2bfd8e1d8ac60fa"
+    },
+    {
+      "file": "gobkit/Shark.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Shark.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 61616,
+      "sha256": "0fc450c99f0fd9f2e5d774ef58cd42b8d8d927bed138444254204b366595dc42"
+    },
+    {
+      "file": "gobkit/Jellyfish.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Jellyfish.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 66972,
+      "sha256": "b0625fa8a726c594afc47a317b997d98da97b163fe551b15e32262854c99ea46"
+    },
+    {
+      "file": "gobkit/Red.glb",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Red.glb",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 77092,
+      "sha256": "412df0483b64f3339dfa8405c75c194effb90b72bb279bd233bfb4653d70c7a8"
+    },
+    {
+      "file": "gobkit/LICENSE",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/LICENSE",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 628,
+      "sha256": "9c841187ead66a563971fcffe3a92cf2f8d5d4eda0a77cbb695204298bda6f43"
+    },
+    {
+      "file": "gobkit/Texture001.png",
+      "url": "https://raw.githubusercontent.com/Ariescar/gobkit-free-assets/4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b/animal/Texture001.png",
+      "revision": "4e73c68fa6e8ca9d948fcc0ce7215c830a022c3b",
+      "creator": "Gobkit / Alsomind Tech Co., Ltd.",
+      "license": "CC0-1.0",
+      "primary": "https://github.com/Ariescar/gobkit-free-assets",
+      "bytes": 12488,
+      "sha256": "5c9930aba1b78f18551c2df4d9c250d0a7d72eafa6ca72d0d856aec62124ed04"
+    },
+    {
+      "file": "toon-cat/toon_cat_free.glb",
+      "url": "https://raw.githubusercontent.com/lhns/steam-frame-nix/881c1de6a9e813b7c269be80a9bf91baf588f5f2/modules/pet/sources/toon-cat/toon_cat_free.glb",
+      "revision": "881c1de6a9e813b7c269be80a9bf91baf588f5f2",
+      "creator": "Omabuarts Studio",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/toon-cat-free-b2bd1ee7858444bda366110a2d960386",
+      "bytes": 205288,
+      "sha256": "f76291f5d37d60fc58e8006a1111a5960958545fc4d9592988682ad3a9aaef81"
+    },
+    {
+      "file": "toon-cat/LICENSE.md",
+      "url": "https://raw.githubusercontent.com/lhns/steam-frame-nix/881c1de6a9e813b7c269be80a9bf91baf588f5f2/modules/pet/sources/toon-cat/LICENSE.md",
+      "revision": "881c1de6a9e813b7c269be80a9bf91baf588f5f2",
+      "creator": "Omabuarts Studio",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/toon-cat-free-b2bd1ee7858444bda366110a2d960386",
+      "bytes": 746,
+      "sha256": "e8d8aded24d28fda6bbef2b696e293de0759496fc3bcaac1d26010dfa0fa2f0d"
+    },
+    {
+      "file": "tuxedo-cat/scene.gltf",
+      "url": "https://raw.githubusercontent.com/lhns/steam-frame-nix/881c1de6a9e813b7c269be80a9bf91baf588f5f2/modules/pet/sources/tuxedo-cat/scene.gltf",
+      "revision": "881c1de6a9e813b7c269be80a9bf91baf588f5f2",
+      "creator": "DreamNoms",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/tuxedo-cat-animated-20-783fcb78b55b4394a212c2b6392e1113",
+      "bytes": 308319,
+      "sha256": "04bc11ad664beb9c84284fb8a4e630de5aee9fc654af0e47a9e337a25f7a1e82"
+    },
+    {
+      "file": "tuxedo-cat/scene.bin",
+      "url": "https://raw.githubusercontent.com/lhns/steam-frame-nix/881c1de6a9e813b7c269be80a9bf91baf588f5f2/modules/pet/sources/tuxedo-cat/scene.bin",
+      "revision": "881c1de6a9e813b7c269be80a9bf91baf588f5f2",
+      "creator": "DreamNoms",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/tuxedo-cat-animated-20-783fcb78b55b4394a212c2b6392e1113",
+      "bytes": 411988,
+      "sha256": "8a2459455d86c629410d4bf3ead500cd3df3e7e56aaff024cd0eb015915f4eac"
+    },
+    {
+      "file": "tuxedo-cat/LICENSE.md",
+      "url": "https://raw.githubusercontent.com/lhns/steam-frame-nix/881c1de6a9e813b7c269be80a9bf91baf588f5f2/modules/pet/sources/tuxedo-cat/LICENSE.md",
+      "revision": "881c1de6a9e813b7c269be80a9bf91baf588f5f2",
+      "creator": "DreamNoms",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/tuxedo-cat-animated-20-783fcb78b55b4394a212c2b6392e1113",
+      "bytes": 855,
+      "sha256": "bf3f0e3262b10cd3f9493115d095fc578d21e32c6de19e43d11bdeed782be5e8"
+    },
+    {
+      "file": "shepherd/shepherd.glb",
+      "url": "https://raw.githubusercontent.com/YenanLiu/soundworld4d-demo/004f7e5acf1accbfe669ae9c19afcb4bd977f637/episodes/assets/living/shepherd.glb",
+      "revision": "004f7e5acf1accbfe669ae9c19afcb4bd977f637",
+      "creator": "Quaternius",
+      "license": "CC-BY-3.0",
+      "primary": "https://poly.pizza/m/Hssa6NPc6W",
+      "bytes": 914220,
+      "sha256": "ca9925e5aeb95242dd77a7474f6b54db93ad5de4beb45de290024cf6447ccd65"
+    },
+    {
+      "file": "shepherd/DOG-CREDITS.txt",
+      "url": "https://raw.githubusercontent.com/YenanLiu/soundworld4d-demo/004f7e5acf1accbfe669ae9c19afcb4bd977f637/episodes/assets/living/DOG-CREDITS.txt",
+      "revision": "004f7e5acf1accbfe669ae9c19afcb4bd977f637",
+      "creator": "Quaternius",
+      "license": "CC-BY-3.0",
+      "primary": "https://poly.pizza/m/Hssa6NPc6W",
+      "bytes": 355,
+      "sha256": "3fd95a280d7f1401fcb3f9e73b8f3207d7e83e527231c31802b75c46b425267c"
+    },
+    {
+      "file": "daydaze/labrador.glb",
+      "url": "https://raw.githubusercontent.com/dpologdvinity/daydaze/d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73/public/models/animals/labrador.glb",
+      "revision": "d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73",
+      "creator": "kenchoo; original Dog by all of life",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/labrador-dog-1f56cfbab07e4fe49b5d9e521c82073a",
+      "bytes": 377480,
+      "sha256": "77c2d6d651199fddfbf4e2223f966f3206e794cdd8992213031eccd592984966"
+    },
+    {
+      "file": "daydaze/elephant.glb",
+      "url": "https://raw.githubusercontent.com/dpologdvinity/daydaze/d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73/public/models/animals/elephant.glb",
+      "revision": "d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73",
+      "creator": "Rukh3D",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/elephant-4ae161372d6a4219a87340339d1ffe03",
+      "bytes": 414996,
+      "sha256": "b93255ce5144084a691204241c2aa10f2611cdbfa9c127c29597105af618b169"
+    },
+    {
+      "file": "daydaze/lion.glb",
+      "url": "https://raw.githubusercontent.com/dpologdvinity/daydaze/d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73/public/models/animals/lion.glb",
+      "revision": "d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73",
+      "creator": "kenchoo; original Baby-Lion by hendrikReyneke",
+      "license": "CC-BY-4.0",
+      "primary": "https://sketchfab.com/3d-models/baby-lion-c9599625dc474262aab754d7b63841f5",
+      "bytes": 201180,
+      "sha256": "35491dd092c36d3a74abe3154f073bdce6bcb5fed8c4dd5be270ad012d7a5641"
+    },
+    {
+      "file": "daydaze/UPSTREAM-CREDITS.md",
+      "url": "https://raw.githubusercontent.com/dpologdvinity/daydaze/d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73/docs/assets.md",
+      "revision": "d381c3b268f7ff4321cbe9a123e5ede6cbc0ea73",
+      "creator": "See individual model credits",
+      "license": "See individual model licenses",
+      "primary": "https://github.com/dpologdvinity/daydaze",
+      "bytes": 40297,
+      "sha256": "d516a6d1f7cbd8b2850817f73c0391e183a44d3cb42a3f9413ddbfca9dcc1fec"
+    }
+  ],
+  "prepared_assets": [
+    {
+      "path": "daydaze/elephant.glb",
+      "file": "elephant.glb",
+      "bytes": 661524,
+      "sha256": "d51b66c9d715bf3330f2ed9964469007d22bc079f28e1e4b6ecb4dcfc11597bd",
+      "triangles": 1958,
+      "vertices": 1265,
+      "primitives": 1,
+      "skin_joint_counts": [
+        54
+      ],
+      "bone_names": [
+        [
+          "_rootJoint",
+          "spine1_hiResSpine1_01",
+          "spine1_hiResHips_031",
+          "leftLeg2_LoResUpperLeg_032",
+          "leftLeg2_LoResLowerLeg_033",
+          "leftLeg2_LoResFoot_034",
+          "leftLeg2_LoResToe_035",
+          "leftLeg2_LoResToe_end_050",
+          "rightLeg2_LoResUpperLeg_036",
+          "rightLeg2_LoResLowerLeg_037",
+          "rightLeg2_LoResFoot_038",
+          "rightLeg2_LoResToe_039",
+          "rightLeg2_LoResToe_end_051",
+          "tail1_Joint1_040",
+          "tail1_Joint2_041",
+          "tail1_Joint3_042",
+          "tail1_Joint4_043",
+          "tail1_Joint4_end_052",
+          "spine1_hiResSpine2_02",
+          "spine1_hiResSpine3_03",
+          "spine1_hiResSpine4_04",
+          "spine1_hiResSpine5_05",
+          "head1_neck_013",
+          "head1_head_014",
+          "jaw_021",
+          "jaw_end_048",
+          "LeftEar01_015",
+          "LeftEar02_016",
+          "LeftEar03_017",
+          "LeftEar03_end_046",
+          "proboscis01_022",
+          "proboscis02_023",
+          "proboscis03_024",
+          "proboscis04_025",
+          "proboscis05_026",
+          "proboscis06_027",
+          "proboscis07_028",
+          "proboscis08_029",
+          "proboscis09_030",
+          "proboscis09_end_049",
+          "RrightEar01_018",
+          "RrightEar02_019",
+          "RrightEar03_020",
+          "RrightEar03_end_047",
+          "leftLeg1_LoResUpperLeg_06",
+          "leftLeg1_LoResLowerLeg_00",
+          "leftLeg1_LoResFoot_07",
+          "leftLeg1_LoResToe_08",
+          "leftLeg1_LoResToe_end_044",
+          "rightLeg1_LoResUpperLeg_09",
+          "rightLeg1_LoResLowerLeg_010",
+          "rightLeg1_LoResFoot_011",
+          "rightLeg1_LoResToe_012",
+          "rightLeg1_LoResToe_end_045"
+        ]
+      ],
+      "clips": [
+        "eat",
+        "graze",
+        "idle",
+        "react",
+        "run",
+        "walk"
+      ],
+      "materials": [
+        "ElephantMaterial"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 5.21540641784668e-08,
+      "maximum_bone_influences": 4,
+      "images": 1
+    },
+    {
+      "path": "daydaze/labrador.glb",
+      "file": "labrador.glb",
+      "bytes": 464112,
+      "sha256": "aef45c117671eccfc6882f0b20930a3e6ee41d75d1a99d783aee1128742236cc",
+      "triangles": 2367,
+      "vertices": 1927,
+      "primitives": 2,
+      "skin_joint_counts": [
+        52
+      ],
+      "bone_names": [
+        [
+          "Body",
+          "Back",
+          "BackShoulder.L",
+          "BackLeg.L",
+          "BackUpperLeg.L",
+          "BackLowerLeg.L",
+          "BackShoulder.R",
+          "BackLeg.R",
+          "BackUpperLeg.R",
+          "BackLowerLeg.R",
+          "Tail1",
+          "Tail2",
+          "Tail3",
+          "Tail4",
+          "Tail5",
+          "Tail6",
+          "Torso",
+          "Torso2",
+          "FrontShoulder.L",
+          "FrontUpperLeg.L",
+          "FrontLowerLeg.L",
+          "FrontShoulder.R",
+          "FrontUpperLeg.R",
+          "FrontLowerLeg.R",
+          "Torso3",
+          "Neck1",
+          "Neck2",
+          "Neck3",
+          "Ear1.L",
+          "Ear2.L",
+          "Ear3.L",
+          "Ear4.L",
+          "Ear1.R",
+          "Ear2.R",
+          "Ear3.R",
+          "Ear4.R",
+          "Head",
+          "Neck3.001",
+          "Neck3.002",
+          "PoleTarget.L",
+          "PoleTarget.R",
+          "PoleTargetBack.L",
+          "PoleTargetBack.R",
+          "IKBackLeg.L",
+          "FFB.L",
+          "IKBackLeg.R",
+          "FFB.R",
+          "IKFrontLeg.L",
+          "FF.L",
+          "IKFrontLeg.R",
+          "FF.R",
+          "neutral_bone"
+        ]
+      ],
+      "clips": [
+        "idle"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": true,
+      "skinned_primitives": false,
+      "maximum_weight_error": 5.21540641784668e-08,
+      "maximum_bone_influences": 4,
+      "images": 3
+    },
+    {
+      "path": "daydaze/lion.glb",
+      "file": "lion.glb",
+      "bytes": 765224,
+      "sha256": "f2196e8997f64e291e67e0ee8b6c2577d1241bf9db5ea32799a0c55745d9da75",
+      "triangles": 7928,
+      "vertices": 4783,
+      "primitives": 1,
+      "skin_joint_counts": [
+        44
+      ],
+      "bone_names": [
+        [
+          "GLTF_created_0_rootJoint",
+          "baby lion_42",
+          "Wolf_ROOTSHJnt_41",
+          "Wolf_l_HindLeg_HipSHJnt_30",
+          "Wolf_l_HindLeg_Knee1SHJnt_29",
+          "Wolf_l_HindLeg_Knee2SHJnt_28",
+          "Wolf_l_HindLeg_AnkleSHJnt_27",
+          "Wolf_l_HindLeg_BallSHJnt_26",
+          "Wolf_l_HindLeg_ToeSHJnt_25",
+          "Wolf_r_HindLeg_HipSHJnt_36",
+          "Wolf_r_HindLeg_Knee1SHJnt_35",
+          "Wolf_r_HindLeg_Knee2SHJnt_34",
+          "Wolf_r_HindLeg_AnkleSHJnt_33",
+          "Wolf_r_HindLeg_BallSHJnt_32",
+          "Wolf_r_HindLeg_ToeSHJnt_31",
+          "Wolf_Spine_01SHJnt_24",
+          "Wolf_Spine_02SHJnt_23",
+          "Wolf_Spine_03SHJnt_22",
+          "Wolf_Spine_04SHJnt_21",
+          "Wolf_Spine_TopSHJnt_20",
+          "Wolf_l_Clavicle_01_01SHJnt_5",
+          "Wolf_l_FrontLeg_HipSHJnt_4",
+          "Wolf_l_FrontLeg_KneeSHJnt_3",
+          "Wolf_l_FrontLeg_AnkleSHJnt_2",
+          "Wolf_l_FrontLeg_BallSHJnt_1",
+          "Wolf_l_FrontLeg_ToeSHJnt_0",
+          "Wolf_Neck_01SHJnt_19",
+          "Wolf_Neck_02SHJnt_18",
+          "Wolf_Neck_TopSHJnt_17",
+          "Wolf_Head_JawSHJnt_12",
+          "Wolf_l_Ear_01_01SHJnt_14",
+          "Wolf_l_Ear_01_02SHJnt_13",
+          "Wolf_r_Ear_01_01SHJnt_16",
+          "Wolf_r_Ear_01_02SHJnt_15",
+          "Wolf_r_Clavicle_01_01SHJnt_11",
+          "Wolf_r_FrontLeg_HipSHJnt_10",
+          "Wolf_r_FrontLeg_KneeSHJnt_9",
+          "Wolf_r_FrontLeg_AnkleSHJnt_8",
+          "Wolf_r_FrontLeg_BallSHJnt_7",
+          "Wolf_r_FrontLeg_ToeSHJnt_6",
+          "Wolf_Tail_01_02SHJnt_40",
+          "Wolf_Tail_01_03SHJnt_39",
+          "Wolf_Tail_01_04SHJnt_38",
+          "Wolf_Tail_01_05SHJnt_37"
+        ]
+      ],
+      "clips": [
+        "idle"
+      ],
+      "materials": [
+        "Baby_Lion_Material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": true,
+      "skinned_primitives": true,
+      "maximum_weight_error": 5.21540641784668e-08,
+      "maximum_bone_influences": 4,
+      "images": 3
+    },
+    {
+      "path": "gobkit/Anglerfish.glb",
+      "file": "Anglerfish.glb",
+      "bytes": 57640,
+      "sha256": "8d07bd212527ec2e0ba2d42367dcf65ae91eb35538fb3b57a2bfd8e1d8ac60fa",
+      "triangles": 266,
+      "vertices": 281,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Bat.glb",
+      "file": "Bat.glb",
+      "bytes": 63308,
+      "sha256": "1a4317609094c64d3f751adb9150df628aaf7902f7440174afcb642c30e0e072",
+      "triangles": 376,
+      "vertices": 359,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Corgi.glb",
+      "file": "Corgi.glb",
+      "bytes": 73516,
+      "sha256": "95cd2c4d53d70ee9dd2e1329dcb6de7d4a725301d504a4f2f00ecb34dc1a0851",
+      "triangles": 508,
+      "vertices": 513,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Duck.glb",
+      "file": "Duck.glb",
+      "bytes": 70104,
+      "sha256": "6550a5807bc83edbadec0759155b3d9242b6ce6b980213a3872b49db80dfd579",
+      "triangles": 508,
+      "vertices": 452,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Hippo.glb",
+      "file": "Hippo.glb",
+      "bytes": 66300,
+      "sha256": "6a911f141482994f890911429e0863353a10fb567822e553b91a273e0fb1d5bd",
+      "triangles": 382,
+      "vertices": 411,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Jellyfish.glb",
+      "file": "Jellyfish.glb",
+      "bytes": 66972,
+      "sha256": "b0625fa8a726c594afc47a317b997d98da97b163fe551b15e32262854c99ea46",
+      "triangles": 428,
+      "vertices": 413,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Platypus.glb",
+      "file": "Platypus.glb",
+      "bytes": 74604,
+      "sha256": "9d5e67a5147dabe04c5e3f677b10aa8042ed4efe337378bccc3b7dd6338d99b6",
+      "triangles": 504,
+      "vertices": 533,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Red.glb",
+      "file": "Red.glb",
+      "bytes": 77092,
+      "sha256": "412df0483b64f3339dfa8405c75c194effb90b72bb279bd233bfb4653d70c7a8",
+      "triangles": 470,
+      "vertices": 585,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Rhino.glb",
+      "file": "Rhino.glb",
+      "bytes": 70364,
+      "sha256": "65cea4e6533e50d00efdde03de3e792f7337736d97b8f8c8f8b12c4bc0ee5017",
+      "triangles": 464,
+      "vertices": 466,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "gobkit/Shark.glb",
+      "file": "Shark.glb",
+      "bytes": 61616,
+      "sha256": "0fc450c99f0fd9f2e5d774ef58cd42b8d8d927bed138444254204b366595dc42",
+      "triangles": 286,
+      "vertices": 348,
+      "primitives": 1,
+      "skin_joint_counts": [
+        16
+      ],
+      "bone_names": [
+        [
+          "Root",
+          "Spine",
+          "LeftLegB",
+          "LeftLegF",
+          "RightLegB",
+          "RightLegF",
+          "Tail",
+          "Mouth",
+          "RightEar",
+          "LeftEar",
+          "Head",
+          "RightHand",
+          "LeftHand",
+          "RightEye",
+          "LeftEye",
+          "Hips"
+        ]
+      ],
+      "clips": [
+        "clip"
+      ],
+      "materials": [
+        "material"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 0.0,
+      "maximum_bone_influences": 1,
+      "images": 1
+    },
+    {
+      "path": "shepherd/shepherd.glb",
+      "file": "shepherd.glb",
+      "bytes": 914220,
+      "sha256": "ca9925e5aeb95242dd77a7474f6b54db93ad5de4beb45de290024cf6447ccd65",
+      "triangles": 4898,
+      "vertices": 4077,
+      "primitives": 1,
+      "skin_joint_counts": [
+        50
+      ],
+      "bone_names": [
+        [
+          "Body",
+          "Back",
+          "Torso",
+          "Torso2",
+          "Torso3",
+          "Neck1",
+          "Neck2",
+          "Neck3",
+          "Head",
+          "Ear1.L",
+          "Ear2.L",
+          "Ear3.L",
+          "Ear4.L",
+          "Ear1.R",
+          "Ear2.R",
+          "Ear3.R",
+          "Ear4.R",
+          "FrontShoulder.L",
+          "FrontUpperLeg.L",
+          "FrontLowerLeg.L",
+          "FrontShoulder.R",
+          "FrontUpperLeg.R",
+          "FrontLowerLeg.R",
+          "Torso.001",
+          "BackShoulder.L",
+          "BackLeg.L",
+          "BackUpperLeg.L",
+          "BackLowerLeg.L",
+          "BackShoulder.R",
+          "BackLeg.R",
+          "BackUpperLeg.R",
+          "BackLowerLeg.R",
+          "Tail1",
+          "Tail2",
+          "Tail3",
+          "Tail3.001",
+          "Tail3.002",
+          "Tail3.003",
+          "PoleTargetBack.L",
+          "PoleTarget.L",
+          "PoleTargetBack.R",
+          "PoleTarget.R",
+          "IKBackLeg.L",
+          "FFB.L",
+          "IKFrontLeg.L",
+          "FF.L",
+          "IKBackLeg.R",
+          "FFB.R",
+          "IKFrontLeg.R",
+          "FF.R"
+        ]
+      ],
+      "clips": [
+        "Attack",
+        "Death",
+        "Eating",
+        "Idle",
+        "Idle_2",
+        "Idle_2_HeadLow",
+        "Run",
+        "Run_Jump",
+        "Walk",
+        "HitReact_Right",
+        "HitReact_Left",
+        "AnimalArmature|Attack",
+        "AnimalArmature|Death",
+        "AnimalArmature|Eating",
+        "AnimalArmature|HitReact_Left",
+        "AnimalArmature|HitReact_Right",
+        "AnimalArmature|Idle",
+        "AnimalArmature|Idle_2",
+        "AnimalArmature|Idle_2_HeadLow",
+        "AnimalArmature|Run",
+        "AnimalArmature|Run_Jump",
+        "AnimalArmature|Walk"
+      ],
+      "materials": [
+        "Atlas"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 1.4156103134155273e-07,
+      "maximum_bone_influences": 4,
+      "images": 1
+    },
+    {
+      "path": "toon-cat/toon_cat_free.glb",
+      "file": "toon_cat_free.glb",
+      "bytes": 205288,
+      "sha256": "f76291f5d37d60fc58e8006a1111a5960958545fc4d9592988682ad3a9aaef81",
+      "triangles": 2636,
+      "vertices": 1810,
+      "primitives": 1,
+      "skin_joint_counts": [
+        36
+      ],
+      "bone_names": [
+        [
+          "_rootJoint",
+          "root_01",
+          "torso_02",
+          "thigh.B.L_03",
+          "leg.upper.B.L_04",
+          "leg.lower.B.L_05",
+          "foot.B.L_06",
+          "tail_07",
+          "tail.01_08",
+          "tail.02_09",
+          "tail.03_010",
+          "tail.end_011",
+          "spine.01_012",
+          "spine.02_013",
+          "leg.upper.F.L_014",
+          "leg.lower.FL_015",
+          "foot.F.L_016",
+          "neck_017",
+          "head_018",
+          "ear.L_019",
+          "ear.R_020",
+          "mouth_021",
+          "eye.L_022",
+          "eye.R_023",
+          "leg.upper.F.R_024",
+          "leg.lower.F.R_00",
+          "foot.F.R_025",
+          "thigh.B.R_026",
+          "leg.upper.B.R_027",
+          "leg.lower.B.R_028",
+          "foot.B.R_029",
+          "tail.CTRL_030",
+          "foot.F.IK.L_031",
+          "foot.B.IK.L_032",
+          "foot.F.IK.R_033",
+          "foot.B.IK.R_034"
+        ]
+      ],
+      "clips": [
+        "Scene"
+      ],
+      "materials": [
+        "Mat_Gradient"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 1.043081283569336e-07,
+      "maximum_bone_influences": 4,
+      "images": 1
+    },
+    {
+      "path": "tuxedo-cat/tuxedo_cat.glb",
+      "file": "tuxedo_cat.glb",
+      "bytes": 585908,
+      "sha256": "7c6e8721df9cbd104355c303c70344d002285d0a2979867599d0ae794da35604",
+      "triangles": 6376,
+      "vertices": 4025,
+      "primitives": 8,
+      "skin_joint_counts": [
+        47
+      ],
+      "bone_names": [
+        [
+          "metarig.004_rootJoint",
+          "FootIK.L_metarig.004",
+          "FootIK.R_metarig.004",
+          "Root_metarig.004",
+          "spine.007_metarig.004",
+          "spine.008_metarig.004",
+          "spine.009_metarig.004",
+          "spine.010_metarig.004",
+          "Head_metarig.004",
+          "Ear.L_metarig.004",
+          "Ear1.L_metarig.004",
+          "Ear.R_metarig.004",
+          "Ear1.R_metarig.004",
+          "Eye.L_metarig.004",
+          "Eye.R_metarig.004",
+          "shoulder.L_metarig.004",
+          "front_thigh.L_metarig.004",
+          "front_shin.L_metarig.004",
+          "front_foot.L_metarig.004",
+          "front_toe.L_metarig.004",
+          "shoulder.R_metarig.004",
+          "front_thigh.R_metarig.004",
+          "front_shin.R_metarig.004",
+          "front_foot.R_metarig.004",
+          "front_toe.R_metarig.004",
+          "spine.006_metarig.004",
+          "spine.005_metarig.004",
+          "spine.004_metarig.004",
+          "TailBase_metarig.004",
+          "Tail2_metarig.004",
+          "Tail3_metarig.004",
+          "TailTip_metarig.004",
+          "pelvis.L_metarig.004",
+          "thigh.L_metarig.004",
+          "shin.L_metarig.004",
+          "foot.L_metarig.004",
+          "toe.L_metarig.004",
+          "pelvis.R_metarig.004",
+          "thigh.R_metarig.004",
+          "shin.R_metarig.004",
+          "foot.R_metarig.004",
+          "toe.R_metarig.004",
+          "BackFootIK.L_metarig.004",
+          "BackFootIK.R_metarig.004",
+          "EyeTarget_metarig.004",
+          "EyeTarget.L_metarig.004",
+          "EyeTarget.R_metarig.004"
+        ]
+      ],
+      "clips": [
+        "IdleNorm",
+        "WalkCycle",
+        "IdleTailSwoosh",
+        "SitDown",
+        "IdleSit",
+        "StandUp"
+      ],
+      "materials": [
+        "Pupil",
+        "EyeColor",
+        "EyeHighlight",
+        "NormalFur",
+        "Ears",
+        "Collar",
+        "NormalBlackFur"
+      ],
+      "uv_on_all_primitives": true,
+      "uv2_on_all_primitives": false,
+      "skinned_primitives": true,
+      "maximum_weight_error": 1.4156103134155273e-07,
+      "maximum_bone_influences": 4,
+      "images": 0
+    }
+  ],
+  "godot_validation": "16 imports/UV/animation checks passed; Gobkit additionally sampled in published walk segment",
+  "credits": "EXTRA_ASSET_CREDITS.md"
+}

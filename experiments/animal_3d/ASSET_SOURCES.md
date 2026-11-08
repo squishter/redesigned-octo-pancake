@@ -4,6 +4,12 @@ Reviewed 2026-11-08. The target is quality stylized animals with reasonable
 detail and a consistent style. Use existing meshes and rigs before building
 a parametric animal generator.
 
+**Follow-up completed:** [UV preparation and expanded roster](UV_PREPARATION.md)
+adds coat atlases/flow coordinates to the 21 initial files and sources 16 more
+rigged animals. The user explicitly allows different styles for these roster
+additions. The observations below describe the original downloaded files;
+the UV-prepared derivatives are separate artifacts.
+
 **Recommendation: start with Quaternius.** There is enough free material for
 a coherent initial collection of about 13 animal types. This does not cover
 every species/breed in the current generator. Keep those gaps explicit rather
@@ -18,7 +24,7 @@ than substituting an unrelated model or mixing several visual styles.
 | [Quaternius Animal Pack Vol.2](https://www.patreon.com/quaternius/posts/animated-animals-13160113) | Adds a cat; also has dog/wolf/birds/fish. Older style needs a side-by-side review with the main collection. | Cat/dog conversion mirror includes a CC0 notice pointing to the [OpenGameArt listing](https://opengameart.org/content/animated-animales-low-poly). Creator's original release located. Downloaded and tested cat/dog conversions; original archive not inspected. |
 | [Kenney Cube Pets](https://kenney.nl/assets/cube-pets) | Official page lists 24 files and animation. Very consistent, deliberately cuboid; a secondary direction if that shape language is wanted. | Official CC0. Listing checked; binaries not tested. The similarly named Animal Pack/Remastered collections are 2D, not replacement 3D meshes. |
 | [ITHappy Animals Free](https://ithappystudios.com/free/animals-free/) | Seven coherent models, including a tiger, with rigs and animations. Visually promising alternative to Quaternius. | Free download is not automatically CC0. [ArtStation's distribution](https://www.artstation.com/marketplace/p/1WdKK/animals-free) shows a Standard license with project/sales limits. Confirm the selected distributor's terms before adopting it. Binaries not tested. |
-| [Gobkit free animal packs](https://gobkit.com/freebies) | Broad low-poly animal catalog with rig/animation metadata; possible coverage alternative. | Publisher states CC0. Listings checked, but binary downloads were blocked by this environment's network policy, so technical/style suitability is unverified. |
+| [Gobkit free animal packs](https://github.com/Ariescar/gobkit-free-assets) | Ten first-release animals downloaded from the publisher's GitHub repository, including Corgi, hippo, rhino and red panda. Coarse toy style. | CC0 notice retained; all ten pass Godot rig, UV and animation checks, including the published walk frame range. The website itself remains inaccessible to the execution environment. |
 
 Quaternius uses public-domain CC0 terms on the two primary pack pages above,
 including commercial use. The downloaded license notices are retained beside
