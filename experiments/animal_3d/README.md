@@ -10,9 +10,11 @@ two-channel UV exports for all 21 initial sources, 16 additional rigged meshes,
 license credits, previews and reproduction commands.
 
 [Runtime sourced-animal posing](../../gen/animal_3d/README.md) now loads all
-37 bundled models, freezes authored poses and adds constrained seeded variations.
-The pose studio offers an interactive review; projection/line-art integration
-of these sourced meshes is the next stage.
+37 bundled models, freezes authored poses, solves custom species/rig-specific
+poses, and adds constrained seeded variations. Its 24 pose types include canine
+sitting/play bows, feline crouches and equine trot/gallop phases. The pose studio
+also offers curated silhouette views and three front head crops. Production
+line-art integration of these sourced meshes is the next stage.
 
 This is a working investigation of a replacement for the animal generator.
 It uses the app wiring from `ccr-7d680ac7-axod0b` and leaves the production
@@ -74,8 +76,8 @@ The complete validation expects the default three animals and all three angles.
 Open `cat.blend`, `wolf.blend` or `horse.blend` to inspect the actual rig and
 constraints. The `.glb` files contain rest meshes, skin weights and skeletons.
 Blender constraints are **not** transferred to Godot by glTF; the JSON snapshots
-are meshes evaluated after posing in Blender. The experiment does not yet
-implement a Godot pose controller.
+are meshes evaluated after posing in Blender. The sourced-mesh runtime controller
+is documented separately above.
 
 ## Validation
 
@@ -130,5 +132,5 @@ Godot `Skeleton3D` scenes. It writes `*_game_colors.png` previews.
    puzzle contract.
 
 This prototype establishes that the 3D-to-2D route is viable and compatible
-with the app. Asset quality, the runtime pose controller, self-collision,
+with the app. Asset quality, full self-collision,
 detail filtering and Android performance are the remaining production work.

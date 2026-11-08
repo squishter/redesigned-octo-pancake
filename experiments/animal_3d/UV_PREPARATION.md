@@ -112,5 +112,6 @@ godot --headless -s res://experiments/animal_3d/check_sourced_assets.gd -- \
 
 For Gobkit walking specifically, sample its combined track using
 `--sample-start=3.8` (frame 91 at 24 fps). The general importer check samples its
-idle segment. The supplied skeletons do not add joint constraints in Godot;
-new procedural poses still need species-specific constraints/contact checks.
+idle segment. The supplied skeletons do not import Blender joint constraints;
+the [runtime posing library](../../gen/animal_3d/README.md) now provides explicit
+leg mappings, constrained variations, reviewed custom recipes and contact checks.

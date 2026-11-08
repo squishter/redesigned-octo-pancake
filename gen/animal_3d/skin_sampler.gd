@@ -51,6 +51,73 @@ func affects_geometry(skeleton: Skeleton3D, ancestor: int) -> bool:
 	return false
 
 
+func indices_for_bones(
+	arm: Skeleton3D, bones: PackedInt32Array, minimum_weight := 0.35
+) -> PackedInt32Array:
+	var selected := PackedInt32Array()
+	var offset := 0
+	for surface in _surfaces:
+		var arrays: Array = surface.arrays
+		var count: int = arrays[Mesh.ARRAY_VERTEX].size()
+		if surface.skin != null and surface.skeleton == arm and arrays[Mesh.ARRAY_WEIGHTS] != null:
+			var skin: Skin = surface.skin
+			var matching := {}
+			for bind in skin.get_bind_count():
+				var index := skin.get_bind_bone(bind)
+				if index < 0:
+					index = arm.find_bone(skin.get_bind_name(bind))
+				matching[bind] = index in bones
+			var influences: int = arrays[Mesh.ARRAY_WEIGHTS].size() / count
+			for vertex in count:
+				var weight := 0.0
+				for i in influences:
+					var k := vertex * influences + i
+					if matching.get(arrays[Mesh.ARRAY_BONES][k], false):
+						weight += arrays[Mesh.ARRAY_WEIGHTS][k]
+				if weight >= minimum_weight:
+					selected.append(offset + vertex)
+		else:
+			var parent: Node = surface.instance.get_parent()
+			while parent != null and parent != _space:
+				if (
+					parent is BoneAttachment3D
+					and parent.get_parent() == arm
+					and arm.find_bone(parent.bone_name) in bones
+				):
+					for vertex in count:
+						selected.append(offset + vertex)
+					break
+				parent = parent.get_parent()
+		offset += count
+	return selected
+
+
+static func subset(data: Dictionary, selected: PackedInt32Array) -> Dictionary:
+	var result := {}
+	for key in data:
+		result[key] = data[key].slice(0, 0)
+	var allowed := {}
+	for index in selected:
+		allowed[index] = true
+	var remap := {}
+	for start in range(0, data.triangles.size(), 3):
+		var triangle: PackedInt32Array = data.triangles.slice(start, start + 3)
+		if (
+			not allowed.has(triangle[0])
+			or not allowed.has(triangle[1])
+			or not allowed.has(triangle[2])
+		):
+			continue
+		for index in triangle:
+			if not remap.has(index):
+				remap[index] = result.vertices.size()
+				for key in data:
+					if key != "triangles" and not data[key].is_empty():
+						result[key].append(data[key][index])
+			result.triangles.append(remap[index])
+	return result
+
+
 func _register_weights(skeleton: Skeleton3D, skin: Skin, arrays: Array) -> void:
 	if skeleton == null or skin == null or arrays[Mesh.ARRAY_WEIGHTS] == null:
 		return
@@ -69,7 +136,7 @@ func _register_weights(skeleton: Skeleton3D, skin: Skin, arrays: Array) -> void:
 			_active_bones[key][bone] = true
 
 
-func sample(attributes := true) -> Dictionary:
+func sample(attributes := true, topology := false) -> Dictionary:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var atlas := PackedVector2Array()
@@ -176,7 +243,7 @@ func sample(attributes := true) -> Dictionary:
 			if arrays[Mesh.ARRAY_COLOR] != null:
 				color *= arrays[Mesh.ARRAY_COLOR][i]
 			colors.append(color)
-		if attributes:
+		if attributes or topology:
 			if arrays[Mesh.ARRAY_INDEX] != null:
 				for i: int in arrays[Mesh.ARRAY_INDEX]:
 					triangles.append(offset + i)

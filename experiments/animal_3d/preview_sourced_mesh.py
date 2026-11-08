@@ -16,11 +16,19 @@ def render(model, mode="colors", size=360, frame=None):
     right = np.array((math.cos(yaw), math.sin(yaw), 0))
     direction = np.array((math.sin(yaw) * 0.97, -math.cos(yaw) * 0.97, 0.243))
     up = np.cross(direction, right)
+    camera = model.get("camera")
+    if camera:
+        right = np.array(camera["right"])
+        up = np.array(camera["up"])
+        direction = np.array(camera["direction"])
     screen = np.column_stack((vertices @ right, -vertices @ up))
     lo, hi = screen.min(axis=0), screen.max(axis=0)
     if frame:
         lo, hi = np.array(frame["low"]), np.array(frame["high"])
     screen = (screen - (lo + hi) / 2) * (size * 0.86 / max(hi - lo)) + size / 2
+    if camera:
+        centered = vertices - np.array(camera["target"])
+        screen = np.column_stack((centered @ right, -centered @ up)) * (size / camera["size"]) + size / 2
     depths = vertices @ direction
     zbuffer = np.full((size, size), -np.inf)
     output = np.full((size, size, 3), 0.965)
@@ -30,6 +38,8 @@ def render(model, mode="colors", size=360, frame=None):
         p = screen[indices]
         x0, y0 = np.maximum(0, np.floor(p.min(axis=0)).astype(int))
         x1, y1 = np.minimum(size - 1, np.ceil(p.max(axis=0)).astype(int))
+        if x0 > x1 or y0 > y1:
+            continue
         a, b, c = p
         denominator = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
         if abs(denominator) < 1e-9:
@@ -41,6 +51,8 @@ def render(model, mode="colors", size=360, frame=None):
         z = wa * depths[indices[0]] + wb * depths[indices[1]] + wc * depths[indices[2]]
         target = zbuffer[y0:y1 + 1, x0:x1 + 1]
         visible = (wa >= 0) & (wb >= 0) & (wc >= 0) & (z > target)
+        if camera:
+            visible &= (z >= camera.get("clip_low", -np.inf)) & (z <= camera.get("clip_high", np.inf))
         if not visible.any():
             continue
         weights = np.stack((wa, wb, wc), axis=-1)[visible]

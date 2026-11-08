@@ -37,17 +37,19 @@ func _run() -> void:
 		_check(animal != null, id + " spawn")
 		if animal == null:
 			continue
-		var rest := animal.snapshot()
+		var imported := animal.snapshot()
 		# Imported vertices are in bind space, not necessarily mesh-node space.
 		# Export this neutral skin for an independent glTF matrix/bind check.
 		var neutral := {"vertices": [], "scene": animal.source_info.scene}
-		for point: Vector3 in rest.vertices:
+		for point: Vector3 in imported.vertices:
 			neutral.vertices.append([point.x, point.y, point.z])
 		var bind_dir := out.path_join("bind_checks")
 		DirAccess.make_dir_recursive_absolute(bind_dir)
 		FileAccess.open(bind_dir.path_join(id + ".json"), FileAccess.WRITE).store_string(
 			JSON.stringify(neutral)
 		)
+		animal.pose("rest", 0, 0)
+		var rest := animal.snapshot()
 		var pose_count := 0
 		var max_error := 0.0
 		var max_delta := 0.0
@@ -79,7 +81,13 @@ func _run() -> void:
 				id + " no limb stretching or scaling"
 			)
 			if animal.source_info.locomotion != "free":
-				_check(absf(_minimum_y(first_data.vertices)) < 0.0001, id + " grounded surface")
+				if first.get("grounding", "surface") == "authored":
+					_check(
+						_minimum_y(first_data.vertices) >= -0.0001,
+						id + " authored motion preserves clearance"
+					)
+				else:
+					_check(absf(_minimum_y(first_data.vertices)) < 0.0001, id + " grounded surface")
 			max_error = maxf(max_error, first.get("max_contact_error", INF))
 			max_delta = maxf(max_delta, first.get("max_leg_delta_degrees", INF))
 			var second := animal.pose(preset, 81, 1, {"phase": 0.25})

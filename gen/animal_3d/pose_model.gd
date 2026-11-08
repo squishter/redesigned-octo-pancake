@@ -41,6 +41,7 @@ var _height := 1.0
 var _forward := Vector3.FORWARD
 var _right := Vector3.RIGHT
 var _head_active := true
+var _head_rest_basis := Basis.IDENTITY
 
 
 func configure(id: String, info: Dictionary, model: Node3D, target_height: float) -> bool:
@@ -84,7 +85,16 @@ func configure(id: String, info: Dictionary, model: Node3D, target_height: float
 	_capture_nodes(model)
 	_placement_base = _placement.transform
 	_resolve_profile()
+	_head_rest_basis = _bone(_profile.head).basis.orthonormalized()
 	_build_presets()
+	if source_info.rig == "elephant" and _presets.has("idle"):
+		var saved := _capture_live()
+		_player.play(_presets.idle.clip)
+		_player.seek(_presets.idle.end * 0.25, true)
+		_player.pause()
+		_flush()
+		_head_rest_basis = _bone(_profile.head).basis.orthonormalized()
+		_restore_live(saved)
 	return true
 
 
@@ -92,8 +102,59 @@ func available_poses() -> PackedStringArray:
 	return PackedStringArray(_presets.keys())
 
 
+func pose_info(preset: String) -> Dictionary:
+	return _presets.get(preset, {}).duplicate(true)
+
+
 func forward_direction() -> Vector3:
 	return _forward
+
+
+func head_direction() -> Vector3:
+	return (
+		(_bone(_profile.head).basis.orthonormalized() * _head_rest_basis.inverse() * _forward)
+		. normalized()
+	)
+
+
+func head_vertices() -> PackedVector3Array:
+	return portrait_snapshot(false).vertices
+
+
+func portrait_snapshot(attributes := true) -> Dictionary:
+	_flush()
+	var data := _sampler.sample(attributes, true)
+	return AnimalSkinSampler.subset(data, _head_indices())
+
+
+func _head_indices() -> PackedInt32Array:
+	if not _head_active and _profile.portrait.is_empty() and source_info.rig != "gobkit":
+		return PackedInt32Array()
+	if source_info.rig == "gobkit":
+		# Toy faces share a shell with the torso. Select the face-shell bones
+		# directly; descending from Spine would also include hands and tail.
+		var face := PackedInt32Array()
+		for name_value: String in _profile.portrait:
+			var index := skeleton.find_bone(name_value)
+			if index >= 0:
+				face.append(index)
+		return _sampler.indices_for_bones(skeleton, face)
+	var roots: Array = [_profile.head]
+	for name_value: String in _profile.portrait:
+		var index := skeleton.find_bone(name_value)
+		if index >= 0:
+			roots.append(index)
+	roots.append_array(_profile.ears)
+	roots.append_array(_profile.trunk)
+	var bones := PackedInt32Array()
+	for bone in skeleton.get_bone_count():
+		var parent := bone
+		while parent >= 0:
+			if parent in roots:
+				bones.append(bone)
+				break
+			parent = skeleton.get_bone_parent(parent)
+	return _sampler.indices_for_bones(skeleton, bones)
 
 
 func supported_controls() -> PackedStringArray:
@@ -124,18 +185,47 @@ func supported_controls() -> PackedStringArray:
 func pose(
 	preset := "idle", seed_value := 0, amount := 0.65, controls: Dictionary = {}
 ) -> Dictionary:
-	if not _presets.has(preset) or not is_finite(amount):
+	if not _presets.has(preset):
 		return {}
+	return _pose_base(preset, _presets[preset], seed_value, amount, controls)
+
+
+func pose_targets(
+	definition: Dictionary, seed_value := 0, amount := 0.0, controls: Dictionary = {}
+) -> Dictionary:
+	var base := {
+		"clip": "",
+		"start": 0.0,
+		"end": 0.0,
+		"custom": "targets",
+		"definition": definition,
+		"origin": "procedural",
+		"grounding": "targets"
+	}
+	return _pose_base("custom", base, seed_value, amount, controls)
+
+
+func _valid_request(amount: float, controls: Dictionary) -> bool:
+	if not is_finite(amount):
+		return false
 	for key in controls:
 		if not key is String:
-			return {}
+			return false
 		if (
 			(key != "phase" and key not in CONTROL_NAMES)
 			or not (controls[key] is float or controls[key] is int)
 		):
-			return {}
+			return false
 		if not is_finite(float(controls[key])):
-			return {}
+			return false
+	return true
+
+
+func _pose_base(
+	preset: String, base: Dictionary, seed_value: int, amount: float, controls: Dictionary
+) -> Dictionary:
+	if not _valid_request(amount, controls):
+		return {}
 	amount = clampf(amount, 0, 1)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
@@ -145,16 +235,27 @@ func pose(
 	var phase := clampf(
 		float(controls.get("phase", lerpf(0.25, rng.randf_range(0.08, 0.92), amount))), 0, 1
 	)
+	var previous := _capture_live()
 	_reset_source()
-	var base: Dictionary = _presets[preset]
 	var sample_time: float = lerpf(base.start, base.end, phase)
 	if not base.clip.is_empty():
 		_player.play(base.clip)
 		_player.seek(sample_time, true)
 		_player.pause()
 	_flush()
+	var custom := {}
+	if base.has("custom"):
+		custom = AnimalCustomPoses.apply(self, base.custom, phase, base.get("definition", {}))
+		if custom.is_empty():
+			_restore_live(previous)
+			return {}
 	var reference := _capture_state()
 	var anchors := _capture_legs()
+	if not custom.is_empty():
+		for row in anchors:
+			for foot: Dictionary in custom.feet:
+				if foot.key == row.leg.key:
+					row.contact = foot.contact
 	var body_factor := 0.0
 	var accepted := {}
 	if amount > 0:
@@ -167,10 +268,19 @@ func pose(
 				accepted = result
 				break
 		if accepted.is_empty():
-			_restore_bones(reference)
+			_restore_live(previous)
 			return {}
 	else:
 		accepted = {"ok": true, "max_error": 0.0, "max_leg_angle": 0.0, "feet": []}
+		for row in anchors:
+			accepted.feet.append(
+				{
+					"bone": skeleton.get_bone_name(row.leg.foot),
+					"contact": row.contact,
+					"target": row.c,
+					"position": row.c
+				}
+			)
 	var before_turn := _placement.transform
 	_placement.rotate_y(deg_to_rad(values.heading * 6.0))
 	var turn := _placement.transform * before_turn.affine_inverse()
@@ -179,7 +289,12 @@ func pose(
 		foot.position = turn * foot.position
 	_flush()
 	var posed_bounds := _bounds(_sampler.sample(false).vertices)
+	var grounding: String = base.get("grounding", "surface")
 	var ground_shift := -posed_bounds.position.y
+	if grounding == "authored" or (not custom.is_empty() and custom.get("airborne", false)):
+		ground_shift = maxf(0, ground_shift)
+	if grounding == "targets":
+		ground_shift = 0.0
 	if source_info.locomotion != "free":
 		_placement.position.y += ground_shift
 	else:
@@ -189,10 +304,12 @@ func pose(
 		foot.target.y += ground_shift
 		foot.position.y += ground_shift
 	last_pose = {
-		"version": 1,
+		"version": 2,
 		"model": model_id,
 		"source_sha256": source_info.sha256,
 		"preset": preset,
+		"origin": base.get("origin", "procedural"),
+		"grounding": grounding,
 		"clip": base.clip,
 		"time": sample_time,
 		"phase": phase,
@@ -206,6 +323,10 @@ func pose(
 		"ground_shift": ground_shift,
 		"feet": accepted.feet
 	}
+	if not custom.is_empty():
+		last_pose["custom"] = custom
+	if base.has("definition"):
+		last_pose["definition"] = base.definition.duplicate(true)
 	return last_pose.duplicate(true)
 
 
@@ -271,6 +392,19 @@ func _resolve_profile() -> void:
 				"direct": skeleton.get_bone_parent(foot) == lower
 			}
 		)
+		var leg: Dictionary = _legs[-1]
+		var side := (
+			"left"
+			if (_bone(foot).origin - _bone(_profile.body).origin).dot(_right) < 0
+			else "right"
+		)
+		leg.key = ("front_" if leg.front else "hind_") + side
+		leg.hip = upper
+		leg.shoulder = upper
+		if not leg.front and source_info.rig in ["quaternius", "labrador", "lion"]:
+			leg.hip = skeleton.get_bone_parent(upper)
+		if leg.front and source_info.rig in ["quaternius", "labrador"]:
+			leg.shoulder = skeleton.get_bone_parent(upper)
 	# Some exporters call the shoulder-bearing upper spine a neck. Keep those
 	# bones under the stance-fitting/backoff path, away from free head gestures.
 	var neck := []
@@ -289,39 +423,7 @@ func _resolve_profile() -> void:
 
 
 func _build_presets() -> void:
-	_presets = {"rest": {"clip": "", "start": 0.0, "end": 0.0}}
-	if _player == null:
-		return
-	var clips := _player.get_animation_list()
-	clips.sort()
-	for clip in clips:
-		var leaf := clip.get_slice("|", clip.get_slice_count("|") - 1).to_lower()
-		var preset := ""
-		if leaf in ["idle", "idlenorm"]:
-			preset = "idle"
-		elif leaf in ["walk", "walking", "walkcycle"]:
-			preset = "walk"
-		elif leaf in ["eating", "eat", "graze", "idle_headlow", "idle_2_headlow"]:
-			preset = "graze"
-		elif leaf == "idlesit":
-			preset = "sit"
-		if not preset.is_empty() and not _presets.has(preset):
-			_presets[preset] = {
-				"clip": clip, "start": 0.0, "end": _player.get_animation(clip).length
-			}
-	if source_info.rig == "gobkit":
-		for clip in clips:
-			if clip != "RESET" and _player.get_animation(clip).length >= 119.0 / 24:
-				_presets.idle = {"clip": clip, "start": 0.0, "end": 29.0 / 24}
-				_presets.walk = {"clip": clip, "start": 90.0 / 24, "end": 119.0 / 24}
-				break
-	elif source_info.rig == "toon_cat":
-		for clip in clips:
-			if clip != "RESET":
-				_presets.source = {
-					"clip": clip, "start": 0.0, "end": _player.get_animation(clip).length
-				}
-				break
+	_presets = AnimalPoseCatalog.build(self, _player)
 
 
 func _apply_offsets(v: Dictionary, factor: float, preset: String) -> void:
@@ -515,6 +617,26 @@ func _capture_state() -> Array[Dictionary]:
 			}
 		)
 	return state
+
+
+func _capture_live() -> Dictionary:
+	var nodes := []
+	for row in _nodes:
+		var saved := {"node": row.node, "transform": row.node.transform, "shapes": []}
+		for i in row.shapes.size():
+			saved.shapes.append(row.node.get_blend_shape_value(i))
+		nodes.append(saved)
+	return {"bones": _capture_state(), "placement": _placement.transform, "nodes": nodes}
+
+
+func _restore_live(state: Dictionary) -> void:
+	for row in state.nodes:
+		row.node.transform = row.transform
+		for i in row.shapes.size():
+			row.node.set_blend_shape_value(i, row.shapes[i])
+	_placement.transform = state.placement
+	_restore_bones(state.bones)
+	_flush()
 
 
 func _restore_bones(poses: Array[Dictionary]) -> void:

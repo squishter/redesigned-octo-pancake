@@ -3,9 +3,13 @@ extends Control
 
 var _world: Node3D
 var _camera: Camera3D
+var _portrait: MeshInstance3D
+var _floor: MeshInstance3D
 var _animal: AnimalPoseModel
 var _models: OptionButton
 var _poses: OptionButton
+var _views: OptionButton
+var _phase: HSlider
 var _seed: SpinBox
 var _amount: HSlider
 var _orbit: HSlider
@@ -51,6 +55,19 @@ func _ready() -> void:
 	next.text = "New variation"
 	next.pressed.connect(func(): _seed.value += 1)
 	toolbar.add_child(next)
+	var view_row := HBoxContainer.new()
+	column.add_child(view_row)
+	var view_label := Label.new()
+	view_label.text = "Camera / crop"
+	view_row.add_child(view_label)
+	_views = OptionButton.new()
+	_views.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_views.item_selected.connect(
+		func(_index):
+			_orbit.editable = _views.get_selected_metadata() == "manual"
+			_frame_camera()
+	)
+	view_row.add_child(_views)
 	var viewport_container := SubViewportContainer.new()
 	viewport_container.stretch = true
 	viewport_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -67,6 +84,14 @@ func _ready() -> void:
 	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	_camera.current = true
 	_world.add_child(_camera)
+	_portrait = MeshInstance3D.new()
+	_portrait.hide()
+	var portrait_material := StandardMaterial3D.new()
+	portrait_material.vertex_color_use_as_albedo = true
+	portrait_material.roughness = 0.9
+	portrait_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_portrait.material_override = portrait_material
+	_world.add_child(_portrait)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-40, -30, 0)
 	light.light_energy = 1.3
@@ -87,8 +112,15 @@ func _ready() -> void:
 	material.roughness = 1
 	floor_mesh.material_override = material
 	_world.add_child(floor_mesh)
+	_floor = floor_mesh
 	_amount = _slider(column, "Variation strength", 0, 1, 0.75)
 	_amount.value_changed.connect(func(_value): _apply())
+	_phase = _slider(column, "Pose phase", 0, 1, 0.25)
+	_phase.value_changed.connect(
+		func(value):
+			_overrides.phase = value
+			_apply()
+	)
 	_orbit = _slider(column, "View angle", -180, 180, 25)
 	_orbit.value_changed.connect(func(_value): _frame_camera())
 	for entry in [
@@ -144,6 +176,29 @@ func _load_model() -> void:
 		"sit": "Sitting",
 		"source": "Authored animation"
 	}
+	labels.merge(
+		{
+			"head_low": "Head low",
+			"eat": "Eating",
+			"alert": "Alert",
+			"run": "Running",
+			"gallop": "Galloping",
+			"trot": "Trotting",
+			"jump": "Jumping",
+			"landing": "Landing",
+			"kick": "Hind-leg kick",
+			"headbutt": "Headbutt",
+			"lie_down": "Lying down",
+			"play_bow": "Play bow",
+			"stretch": "Stretching",
+			"look_back": "Looking back",
+			"crouch": "Crouching",
+			"swim": "Swimming",
+			"fly": "Flying",
+			"drift": "Drifting"
+		},
+		true
+	)
 	for preset: String in _animal.available_poses():
 		_poses.add_item(labels.get(preset, preset))
 		_poses.set_item_metadata(_poses.item_count - 1, preset)
@@ -159,6 +214,8 @@ func _apply() -> void:
 	if _animal == null:
 		return
 	var preset: String = _poses.get_selected_metadata()
+	var info := _animal.pose_info(preset)
+	_phase.editable = info.end > info.start or info.get("custom", "") == "trot"
 	var supported := _animal.supported_controls()
 	for key: String in _sliders:
 		var stance_control := key in ["body_roll", "stance_width", "stance_stagger"]
@@ -172,14 +229,69 @@ func _apply() -> void:
 			result.controls[key] / maxf(0.0001, result.amount) if _sliders[key].editable else 0
 		)
 	_status.text = "Frozen pose · variation %d" % int(_seed.value)
+	_phase.set_value_no_signal(result.phase)
+	_status.text += " · " + ("custom pose" if result.origin == "procedural" else "authored pose")
 	if result.body_factor > 0 and result.body_factor < 1:
 		_status.text += " · stance softened to preserve foot contact"
+	_sync_views()
 	_frame_camera()
+
+
+func _sync_views() -> void:
+	var previous: String = (
+		_views.get_selected_metadata() if _views.item_count > 0 else "three_quarter_left"
+	)
+	_views.clear()
+	var labels := {
+		"side_left": "Side · left",
+		"side_right": "Side · right",
+		"three_quarter_left": "Three-quarter · left",
+		"three_quarter_right": "Three-quarter · right",
+		"front": "Front · full animal",
+		"head_front": "Front · head portrait",
+		"head_front_close": "Front · tight head crop",
+		"head_front_high": "Front · head from above"
+	}
+	for view: String in AnimalCameraPresets.available(_animal):
+		_views.add_item(labels[view])
+		_views.set_item_metadata(_views.item_count - 1, view)
+	_views.add_item("Manual orbit")
+	_views.set_item_metadata(_views.item_count - 1, "manual")
+	_views.select(0)
+	for i in _views.item_count:
+		if _views.get_item_metadata(i) == previous:
+			_views.select(i)
+	_orbit.editable = _views.get_selected_metadata() == "manual"
 
 
 func _frame_camera() -> void:
 	if _animal == null:
 		return
+	var head: bool = (
+		_views.item_count > 0 and str(_views.get_selected_metadata()).begins_with("head_")
+	)
+	_animal.visible = not head
+	_floor.visible = not head
+	_portrait.visible = head
+	if head:
+		var data := _animal.portrait_snapshot()
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = data.vertices
+		arrays[Mesh.ARRAY_NORMAL] = data.normals
+		arrays[Mesh.ARRAY_COLOR] = data.colors
+		arrays[Mesh.ARRAY_INDEX] = data.triangles
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		_portrait.mesh = mesh
+		_portrait.transform = _animal.transform
+	var viewport_size: Vector2 = _camera.get_viewport().get_visible_rect().size
+	var aspect := maxf(0.1, float(viewport_size.x) / maxf(1, viewport_size.y))
+	if _views.item_count > 0 and _views.get_selected_metadata() != "manual":
+		AnimalCameraPresets.apply(_camera, _animal, _views.get_selected_metadata(), aspect)
+		return
+	_camera.near = 0.01
+	_camera.far = 100.0
 	var points: PackedVector3Array = _animal.snapshot(false).vertices
 	var bounds := AABB(points[0], Vector3.ZERO)
 	for point in points:
@@ -188,8 +300,6 @@ func _frame_camera() -> void:
 	var center := bounds.get_center()
 	_camera.position = center + direction * 4 + Vector3.UP * 1.1
 	_camera.look_at(center)
-	var viewport_size: Vector2 = _camera.get_viewport().get_visible_rect().size
-	var aspect := maxf(0.1, float(viewport_size.x) / viewport_size.y)
 	_camera.size = (
 		maxf(bounds.size.y, Vector2(bounds.size.x, bounds.size.z).length() / aspect) * 1.35
 	)

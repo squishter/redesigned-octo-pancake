@@ -13,7 +13,8 @@ static func get_profile(kind: String) -> Dictionary:
 		"ears": [],
 		"trunk": [],
 		"legs": [],
-		"look_limit": 16.0
+		"look_limit": 16.0,
+		"portrait": []
 	}
 	match kind:
 		"quaternius", "labrador":
@@ -37,6 +38,11 @@ static func get_profile(kind: String) -> Dictionary:
 				p.legs.append(
 					_leg("BackUpperLeg." + side, "BackLowerLeg." + side, "IKBackLeg." + side, false)
 				)
+			if kind == "labrador":
+				# Head and jaw are siblings under Neck3 in this source. Rotate
+				# their shared parent so the lower mouth follows head gestures.
+				p.head = "Neck3"
+				p.neck = ["Neck1", "Neck2"]
 		"farm":
 			p.merge(
 				{
@@ -83,7 +89,9 @@ static func get_profile(kind: String) -> Dictionary:
 					"head": "Head",
 					"tail": ["Tail"],
 					"ears": ["LeftEar", "RightEar"],
-					"look_limit": 10.0
+					"look_limit": 10.0,
+					"portrait":
+					["Spine", "Head", "Mouth", "LeftEar", "RightEar", "LeftEye", "RightEye"]
 				},
 				true
 			)
