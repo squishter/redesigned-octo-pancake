@@ -81,10 +81,12 @@ vec3 finished(int finish, vec3 inside, vec3 tint, vec2 p, vec3 n, vec3 k, float 
 	float bright = max(tint.r, max(tint.g, tint.b));
 	if (finish == FINISH_OPAL) {
 		// Black opals show their fire boldest; white ones in a milky veil.
-		vec3 fire = opal_fire(p, n, k, seed);
+		// Not named `fire`: gem_impostor.gdshader has a uniform of that name,
+		// which Godot's compiler binds this to instead, breaking the shader.
+		vec3 play = opal_fire(p, n, k, seed);
 		float dark = 1.0 - smoothstep(0.05, 0.6, bright);
-		float veil = max(fire.r, max(fire.g, fire.b));
-		return inside * (1.0 - 0.3 * veil) + fire * (0.45 + 0.6 * dark) * light_strength;
+		float veil = max(play.r, max(play.g, play.b));
+		return inside * (1.0 - 0.3 * veil) + play * (0.45 + 0.6 * dark) * light_strength;
 	}
 	if (finish == FINISH_MOONSTONE) {
 		// Adularescence: a soft blue glow floating under the surface,
