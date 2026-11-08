@@ -28,6 +28,14 @@ extends Control
 ## lifts it off the row; let go over one of its open slots and it goes in
 ## there (a gold ring shows which). Let go anywhere else and it stays picked.
 ## Fingers, a mouse and a stylus such as the S Pen all work (see App).
+##
+## A picture that keeps lines as drawn outlines (see LinePaint) has them
+## empty to start, in groups each painted at once like a gem: the row ends
+## with a paint card for each of their colors, and tapping, dragging over
+## or dropping a paint on one of its lines fills the whole group, the color
+## running along the lines from there. The lines are grouped on a worker
+## thread the first time a puzzle is played and kept (SaveStore); painted
+## ones take the line_finish setting's look (GemCatalog.LINE_FINISHES).
 
 signal back_requested
 signal collection_requested
@@ -69,6 +77,10 @@ const FLING_DECAY := 4.0
 ## go in (screen px), how big it's drawn, and how far above the point it
 ## floats so the slot underneath stays in sight.
 const DROP_SLOP := 22.0
+## Paints share the row with gem types: a paint's key there is PAINT + its
+## number. How big a paint's sparkle burst is (board units).
+const PAINT := 100000
+const PAINT_BURST := 14.0
 const CARRY_PX := 130.0
 const CARRY_LIFT := 0.75
 ## Placement styles and power-ups this screen knows: GemCatalog.ANIMATIONS
@@ -125,6 +137,19 @@ var _carry_slot := -1
 var _carry_layer: Control
 ## A carried gem is going in: it pops into place where it was let go.
 var _carry_drop := false
+## The line group a carried paint would go into (-1 none).
+var _carry_line := -1
+## Painted lines: whether the picture keeps lines, the grouping job (-1
+## none running) and its result, LinePaint's groups (empty until ready), the
+## paints ([{color, count, left}]), each group's paint and whether it's painted.
+var _has_lines := false
+var _lines_task := -1
+var _lines_built := {}
+var _lines := {}
+var _paints: Array[Dictionary] = []
+var _paint_of := PackedInt32Array()
+var _painted := PackedByteArray()
+var _painted_count := 0
 var _flights: GemFlights
 ## "fly" or "pop" (see SaveStore.DEFAULT_SETTINGS).
 var _fill_animation := "fly"
@@ -336,10 +361,14 @@ func _load() -> void:
 	_update_hint()
 	_overlay.setup(_picture, _type_of, colors, placed)
 	_board.show_collage(_picture, placed)
+	_apply_settings()
 	_build_icons()
 	_build_palette()
+	_start_lines()
 	_update_progress()
-	if _filled >= slots.size():
+	# A finished picture shows finished; one whose stones are all in but
+	# whose lines wait for paint carries on (once the lines are grouped).
+	if _filled >= slots.size() and (not _has_lines or _meta.get("done", false)):
 		_finish(false)
 	else:
 		_select(_next_open(-1))
@@ -465,7 +494,197 @@ static func _card(color: Color, border: Color) -> StyleBoxFlat:
 
 func _update_left(t: int) -> void:
 	if _left_labels.has(t):
-		(_left_labels[t] as Label).text = "× %d" % _types[t]["left"]
+		(_left_labels[t] as Label).text = "× %d" % _left_of(t)
+
+
+static func _is_paint(t: int) -> bool:
+	return t >= PAINT
+
+
+## Gems, or line groups, left for row key t (a gem type or PAINT + a paint).
+func _left_of(t: int) -> int:
+	if t < 0:
+		return 0
+	if _is_paint(t):
+		return _paints[t - PAINT]["left"] if t - PAINT < _paints.size() else 0
+	return _types[t]["left"] if t < _types.size() else 0
+
+
+## Every row key: gem types, then paints.
+func _all_keys() -> Array:
+	var keys := range(_types.size())
+	for k in _paints.size():
+		keys.append(PAINT + k)
+	return keys
+
+
+## The open slots of gem type t (none for a paint).
+func _open_slots(t: int) -> Array:
+	return [] if t < 0 or _is_paint(t) else _overlay.open_of_type(t)
+
+
+## Groups the picture's kept lines: from the cache, or on a worker thread
+## (picked up in _process by _finish_lines).
+func _start_lines() -> void:
+	_has_lines = LinePaint.has_lines(_picture)
+	if not _has_lines:
+		return
+	var cached := SaveStore.load_line_groups(puzzle_id)
+	if not cached.is_empty() and int(cached.get("width", 0)) == int(_picture["width"]) \
+			and int(cached.get("height", 0)) == int(_picture["height"]):
+		_apply_lines(cached)
+		return
+	var picture := _picture
+	_lines_task = WorkerThreadPool.add_task(func() -> void: _lines_built = LinePaint.build(picture), false,
+			"Group the picture's lines")
+
+
+## Waits for the grouping job if it's still running, and uses its groups.
+func finish_loading_lines() -> void:
+	if _lines_task >= 0:
+		_finish_lines()
+
+
+func _finish_lines() -> void:
+	WorkerThreadPool.wait_for_task_completion(_lines_task)
+	_lines_task = -1
+	if _lines_built.is_empty() or not is_inside_tree():
+		return
+	SaveStore.save_line_groups(puzzle_id, _lines_built)
+	_apply_lines(_lines_built)
+
+
+## The line groups are known: one paint per color (in the order of the
+## biggest group of each), the board paints them, and the row gets their
+## cards.
+func _apply_lines(lines: Dictionary) -> void:
+	LinePaint.recolor(lines, _picture)
+	_lines = lines
+	var groups: Array = lines["groups"]
+	_paints.clear()
+	_paint_of.resize(groups.size())
+	_painted.resize(groups.size())
+	_painted.fill(0)
+	var by_color := {}
+	var colors := PackedColorArray()
+	for g in groups.size():
+		var c: Color = groups[g]["color"]
+		colors.append(c)
+		if not by_color.has(c):
+			by_color[c] = _paints.size()
+			_paints.append({"color": c, "count": 0, "left": 0})
+		_paint_of[g] = by_color[c]
+		_paints[by_color[c]]["count"] += 1
+	# Progress from before, if it was kept for these same groups.
+	_painted_count = 0
+	if _meta.get("done", false) and _filled >= _type_of.size():
+		_painted.fill(1)
+	elif int(_meta.get("lines_groups", -1)) == groups.size():
+		for g: Variant in _meta.get("lines_painted", []):
+			if int(g) >= 0 and int(g) < groups.size():
+				_painted[int(g)] = 1
+	for g in groups.size():
+		if _painted[g] != 0:
+			_painted_count += 1
+		else:
+			_paints[_paint_of[g]]["left"] += 1
+	_board.show_line_paint(lines, colors, _paint_of, _painted)
+	_apply_settings()
+	if not _done:
+		for k in _paints.size():
+			if _paints[k]["left"] > 0:
+				_row.add_child(_make_paint_item(k))
+		if _selected < 0 or _left_of(_selected) <= 0:
+			_select(_next_open(-1))
+		else:
+			_select(_selected)
+		if _all_placed():
+			_finish_pending = true
+			_try_finish()
+	_update_progress()
+
+
+## The open line group of paint row key t (-1: any paint) nearest board
+## point `at`, within `slop` screen px; -1 if none.
+func _line_target(at: Vector2, t: int, slop: float) -> int:
+	if _lines.is_empty() or _done:
+		return -1
+	var k := t - PAINT
+	return LinePaint.group_at(_lines, at, slop / _board.scale_px() + 1.5, func(g: int) -> bool:
+		return _painted[g] == 0 and (t < 0 or _paint_of[g] == k))
+
+
+## Paints line group g, the color running out from board point `at`
+## (`instant`: all at once, no fuss).
+func _paint(g: int, at: Vector2, instant := false) -> void:
+	if g < 0 or g >= _painted.size() or _painted[g] != 0:
+		return
+	_painted[g] = 1
+	_painted_count += 1
+	var k := _paint_of[g]
+	_paints[k]["left"] -= 1
+	_update_left(PAINT + k)
+	_board.paint_line(g, at, instant)
+	if not instant:
+		_flights.burst(at, PAINT_BURST, _paints[k]["color"])
+		_buzz()
+	_update_progress()
+	_dirty = true
+	if _paints[k]["left"] <= 0:
+		_retire(PAINT + k)
+	if _all_placed():
+		_finish_pending = true
+		_try_finish()
+
+
+## A paint's card in the row: a swatch of its color, and how many line
+## groups it has left to paint.
+func _make_paint_item(k: int) -> PanelContainer:
+	var t := PAINT + k
+	var b := PanelContainer.new()
+	b.custom_minimum_size = ITEM_SIZE
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_theme_stylebox_override("panel", _card_style)
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 2)
+	b.add_child(box)
+	var swatch := Control.new()
+	swatch.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	swatch.draw.connect(func() -> void:
+		var side := minf(swatch.size.x, swatch.size.y)
+		_draw_swatch(swatch, Rect2((swatch.size - Vector2(side, side)) / 2.0, Vector2(side, side)), _paints[k]["color"]))
+	box.add_child(swatch)
+	var name_label := Label.new()
+	name_label.text = "Lines"
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(name_label)
+	var left := Label.new()
+	left.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_theme_font_size_override("font_size", GameTheme.SMALL_FONT_SIZE - 4)
+	left.add_theme_color_override("font_color", GameTheme.TEXT_DIM)
+	box.add_child(left)
+	_items[t] = b
+	_left_labels[t] = left
+	_update_left(t)
+	return b
+
+
+## A paint swatch in `rect`: a looping stroke of the color with a highlight.
+static func _draw_swatch(on: CanvasItem, rect: Rect2, color: Color, alpha := 1.0) -> void:
+	var c := rect.get_center()
+	var r := rect.size.x * 0.3
+	var points := PackedVector2Array()
+	for i in 41:
+		var a := -PI * 0.85 + i / 40.0 * PI * 1.7
+		points.append(c + Vector2(cos(a), sin(a)) * r * Vector2(1.0, 0.85) + Vector2(0.0, sin(a * 3.0) * r * 0.08))
+	on.draw_polyline(points, Color(color.darkened(0.35), alpha), rect.size.x * 0.17, true)
+	on.draw_polyline(points, Color(color, alpha), rect.size.x * 0.12, true)
+	var shine := points.slice(6, 16)
+	on.draw_polyline(shine, Color(color.lightened(0.6), 0.75 * alpha), rect.size.x * 0.03, true)
 
 
 ## Selects a gem type (-1 for none): its slots stand out on the board.
@@ -473,7 +692,9 @@ func _select(t: int) -> void:
 	if _items.has(_selected):
 		(_items[_selected] as Control).add_theme_stylebox_override("panel", _card_style)
 	_selected = t
-	_overlay.selected = t
+	_overlay.selected = -1 if _is_paint(t) else t
+	if is_instance_valid(_board):
+		_board.set_selected_paint(t - PAINT if _is_paint(t) else -1)
 	if _items.has(t):
 		(_items[t] as Control).add_theme_stylebox_override("panel", _picked_style)
 
@@ -564,7 +785,7 @@ func _card_at(at: Vector2) -> int:
 
 ## Lifts gem type t (if any) off the row to be carried, picking it.
 func _lift(t: int, at: Vector2) -> void:
-	if t < 0 or _done or _types[t]["left"] <= 0:
+	if t < 0 or _done or _left_of(t) <= 0:
 		return
 	_carry = t
 	_fling = 0.0
@@ -576,10 +797,15 @@ func _lift(t: int, at: Vector2) -> void:
 func _move_carry(at: Vector2) -> void:
 	_carry_at = at
 	var slot := -1
+	var line := -1
 	var p := _board_point(at)
 	if Rect2(Vector2.ZERO, _board.size).has_point(_board.get_global_transform_with_canvas().affine_inverse() * at):
-		slot = _overlay.slot_at(p, _carry, DROP_SLOP / _board.scale_px())
+		if _is_paint(_carry):
+			line = _line_target(p, _carry, DROP_SLOP)
+		else:
+			slot = _overlay.slot_at(p, _carry, DROP_SLOP / _board.scale_px())
 	_carry_slot = slot
+	_carry_line = line
 	_carry_layer.queue_redraw()
 
 
@@ -589,7 +815,7 @@ func _move_carry(at: Vector2) -> void:
 func _drop_carry(at: Vector2) -> void:
 	_move_carry(at)
 	var t := _carry
-	var slot := _carry_slot
+	var slot := _carry_slot if not _is_paint(t) else _carry_line
 	_end_carry()
 	if slot < 0 or _done:
 		return
@@ -604,6 +830,7 @@ func _drop_carry(at: Vector2) -> void:
 func _end_carry() -> void:
 	_carry = -1
 	_carry_slot = -1
+	_carry_line = -1
 	_carry_layer.queue_redraw()
 
 
@@ -624,19 +851,27 @@ func _draw_carry() -> void:
 				* Vector2(s["x"], s["y"])))
 		var r := maxf(maxf(float(s["size"]), float(s["width"])) / 2.0 * _board.scale_px() * 1.2, 14.0)
 		_carry_layer.draw_arc(at, r, 0.0, TAU, 48, GameTheme.GOLD, 5.0, true)
+	if _carry_line >= 0:
+		_carry_layer.draw_arc(to_layer * _carry_at, 30.0, 0.0, TAU, 40, GameTheme.GOLD, 5.0, true)
+	var center := to_layer * _carry_at - Vector2(0.0, CARRY_PX * CARRY_LIFT)
+	var rect := Rect2(center - Vector2(CARRY_PX, CARRY_PX) / 2.0, Vector2(CARRY_PX, CARRY_PX))
+	var on := _carry_slot >= 0 or _carry_line >= 0
+	if _is_paint(_carry):
+		_draw_swatch(_carry_layer, rect, _paints[_carry - PAINT]["color"], 0.95 if on else 0.75)
+		return
 	var icon: Texture2D = _types[_carry].get("icon")
 	if icon == null:
 		return
-	var center := to_layer * _carry_at - Vector2(0.0, CARRY_PX * CARRY_LIFT)
-	var rect := Rect2(center - Vector2(CARRY_PX, CARRY_PX) / 2.0, Vector2(CARRY_PX, CARRY_PX))
-	_carry_layer.draw_texture_rect(icon, rect, false, Color(1, 1, 1, 0.92 if _carry_slot >= 0 else 0.7))
+	_carry_layer.draw_texture_rect(icon, rect, false, Color(1, 1, 1, 0.92 if on else 0.7))
 
 
 ## The first gem type after `t` with slots left (wrapping round), or -1.
 func _next_open(t: int) -> int:
-	for k in _types.size():
-		var u := (t + 1 + k) % _types.size()
-		if _types[u]["left"] > 0:
+	var keys := _all_keys()
+	var start := keys.find(t)
+	for k in keys.size():
+		var u: int = keys[(start + 1 + k) % keys.size()]
+		if _left_of(u) > 0:
 			return u
 	return -1
 
@@ -651,12 +886,18 @@ func _stroke_gem(at: Vector2) -> int:
 	if _done:
 		return -1
 	var reach := (BRUSH_PX if _has_power("big_brush") else TAP_SLOP) / _board.scale_px()
-	if _selected >= 0 and _overlay.slot_at(at, _selected, reach) >= 0:
+	if _is_paint(_selected):
+		if _line_target(at, _selected, BRUSH_PX if _has_power("big_brush") else TAP_SLOP) >= 0:
+			return _selected
+	elif _selected >= 0 and _overlay.slot_at(at, _selected, reach) >= 0:
 		return _selected
 	if _has_power("free_hand"):
 		var i := _overlay.slot_at(at, -1, TAP_SLOP / _board.scale_px())
 		if i >= 0:
 			return _type_of[i]
+		var g := _line_target(at, -1, TAP_SLOP)
+		if g >= 0:
+			return PAINT + _paint_of[g]
 	return -1
 
 
@@ -682,6 +923,12 @@ func _on_stroke_moved(from: Vector2, to: Vector2) -> void:
 ## one of its slots under the brush.
 func _fill_at(at: Vector2, slop: float) -> void:
 	if _stroke_type < 0 or _done:
+		return
+	if _is_paint(_stroke_type):
+		var g := _line_target(at, _stroke_type, BRUSH_PX if _has_power("big_brush") else slop)
+		if g >= 0 and not (_stroke_limit > 0 and _stroke_placed >= _stroke_limit):
+			_stroke_placed += 1
+			_paint(g, at)
 		return
 	if _has_power("big_brush"):
 		for i: int in _overlay.slots_near(at, _stroke_type, BRUSH_PX / _board.scale_px()):
@@ -743,7 +990,7 @@ func _fill(i: int) -> void:
 		_retire(t)
 	else:
 		_tidy(t)
-	if _filled >= _type_of.size():
+	if _all_placed():
 		_finish_pending = true
 		_try_finish()
 
@@ -796,6 +1043,11 @@ func _apply_settings() -> void:
 	_fill_animation = profile.get("settings", {}).get("fill_animation", "fly")
 	if not _fill_animation in profile["unlocks"].get("animations", ["pop"]):
 		_fill_animation = "pop"
+	if is_instance_valid(_board):
+		var finish: String = profile.get("settings", {}).get("line_finish", GemCatalog.STARTING_LINE_FINISHES[0])
+		if not finish in profile["unlocks"].get("line_finishes", GemCatalog.STARTING_LINE_FINISHES):
+			finish = GemCatalog.STARTING_LINE_FINISHES[0]
+		_board.set_line_finish(finish)
 
 
 func _open_settings() -> void:
@@ -860,6 +1112,24 @@ func _use_power(power: String) -> void:
 			_tidy_all()
 	else:
 		match power:
+			"finish_gem" when _is_paint(_selected):
+				for g in _painted.size():
+					if _painted[g] == 0 and PAINT + _paint_of[g] == _selected:
+						_paint(g, _lines["groups"][g]["at"])
+			"sweep" when _is_paint(_selected):
+				var view := Rect2(Vector2.ZERO, _board.size)
+				var xf := _board.view_transform()
+				for g in _painted.size():
+					if _painted[g] == 0 and PAINT + _paint_of[g] == _selected and view.has_point(xf * _lines["groups"][g]["at"]):
+						_paint(g, _lines["groups"][g]["at"])
+			"finder" when _is_paint(_selected):
+				var area := Rect2()
+				for g in _painted.size():
+					if _painted[g] == 0 and PAINT + _paint_of[g] == _selected:
+						var rect: Rect2 = _lines["groups"][g]["rect"]
+						area = rect if area.size == Vector2.ZERO else area.merge(rect)
+				if area.size != Vector2.ZERO:
+					_board.focus_on(area)
 			"finish_gem":
 				for i: int in _overlay.open_of_type(_selected):
 					_fill(i)
@@ -904,6 +1174,12 @@ func _debug_complete() -> void:
 			_board.set_slot_shown(i, true)
 			_filled += 1
 			_types[_type_of[i]]["left"] -= 1
+	if _lines_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_lines_task)
+		_finish_lines()
+	for g in _painted.size():
+		if _painted[g] == 0:
+			_paint(g, _lines["groups"][g]["at"], true)
 	_update_progress()
 	_dirty = true
 	_finish(true)
@@ -915,12 +1191,26 @@ func _use_hint() -> void:
 	if _done:
 		return
 	var t := _selected
-	if t < 0 or _types[t]["left"] <= 0:
+	if t < 0 or _left_of(t) <= 0:
 		t = _next_open(-1)
 		if t < 0:
 			return
 		_select(t)
 	var middle := _board.screen_to_board(_board.size / 2.0)
+	if _is_paint(t):
+		var near := -1
+		for g in _painted.size():
+			if _painted[g] == 0 and PAINT + _paint_of[g] == t and (near < 0
+					or middle.distance_squared_to(_lines["groups"][g]["at"])
+						< middle.distance_squared_to(_lines["groups"][near]["at"])):
+				near = g
+		if near < 0 or not Hints.spend(_meta):
+			return
+		var rect: Rect2 = _lines["groups"][near]["rect"]
+		_board.glide_to(rect.grow(maxf(rect.size.x, rect.size.y) * 0.1), HINT_GLIDE)
+		_dirty = true
+		_update_hint()
+		return
 	var best := -1
 	var best_d := INF
 	for i: int in _overlay.open_of_type(t):
@@ -1002,8 +1292,17 @@ func _buzz() -> void:
 
 func _update_progress() -> void:
 	var total := _type_of.size()
-	_progress.text = "%d / %d gems" % [_filled, total] if _filled < total else "All %d gems placed" % total
-	_progress_track.value = 100.0 * _filled / maxi(1, total)
+	var lines: int = _painted.size()
+	if lines > 0 and not _all_placed():
+		_progress.text = "%d / %d gems · %d / %d lines" % [_filled, total, _painted_count, lines]
+	else:
+		_progress.text = "%d / %d gems" % [_filled, total] if _filled < total else "All %d gems placed" % total
+	_progress_track.value = 100.0 * (_filled + _painted_count) / maxi(1, total + lines)
+
+
+## Every stone is in, and every line painted (once they're known).
+func _all_placed() -> bool:
+	return _filled >= _type_of.size() and (not _has_lines or (not _lines.is_empty() and _painted_count >= _painted.size()))
 
 
 ## The picture is done: from now on it's only for looking at. `celebrate`
@@ -1072,6 +1371,8 @@ func _open_collection() -> void:
 
 
 func _process(delta: float) -> void:
+	if _lines_task >= 0 and WorkerThreadPool.is_task_completed(_lines_task):
+		_finish_lines()
 	if _row_touch < 0 and absf(_fling) > 10.0:
 		_scroll_x += _fling * delta
 		_fling *= exp(-delta * FLING_DECAY)
@@ -1109,6 +1410,13 @@ func _save(thumbnail: bool) -> void:
 	SaveStore.save_progress(puzzle_id, _overlay.placed)
 	_meta["filled"] = _filled
 	_meta["done"] = _done
+	if not _lines.is_empty():
+		var painted := []
+		for g in _painted.size():
+			if _painted[g] != 0:
+				painted.append(g)
+		_meta["lines_painted"] = painted
+		_meta["lines_groups"] = _painted.size()
 	_meta["updated"] = int(Time.get_unix_time_from_system())
 	SaveStore.save_profile(profile)
 	if thumbnail:
@@ -1133,6 +1441,12 @@ func go_back() -> void:
 		_powers_panel.close()
 	else:
 		_leave()
+
+
+func _exit_tree() -> void:
+	if _lines_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_lines_task)
+		_lines_task = -1
 
 
 func _notification(what: int) -> void:

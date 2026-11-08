@@ -36,6 +36,13 @@ const GRAIN_SHADER := preload("res://render/paper_grain.gdshader")
 const IMPOSTOR_SHADER := preload("res://render/gem_impostor.gdshader")
 const BACKGROUND := Color("#2a1f3d")
 const MAX_ZOOM := 40.0
+## Painted lines' finishes (paper.gdshader's line_finish, in this order; see
+## GemCatalog.LINE_FINISHES), and how fast paint runs along a line (board
+## px a second), within how long a fill may take (seconds).
+const LINE_FINISHES := ["metal", "matte", "glossy", "glitter", "pearl", "glow", "enamel", "holographic"]
+const PAINT_SPEED := 700.0
+const PAINT_MIN_TIME := 0.45
+const PAINT_MAX_TIME := 1.3
 const DOUBLE_TAP_MS := 300
 const DOUBLE_TAP_SLOP := 60.0
 ## Room around the picture when fitted, as a share of its size.
@@ -256,6 +263,16 @@ var _drawn_frame := -1
 var _drawn_key := Vector3.UP
 var _drawn_fill := Vector3.UP
 var _fixed_fps := 0.0
+## Painted lines (show_line_paint): the groups' pixels (LinePaint labels and
+## each group's pixel list), when each pixel gets painted (on _clock), and
+## when the last fill running ends.
+var _line_labels := PackedByteArray()
+var _line_size := Vector2i.ZERO
+var _line_pixels: Array[PackedInt32Array] = []
+var _line_times := PackedFloat32Array()
+var _line_time_image: Image
+var _line_time_tex: ImageTexture
+var _paint_until := -1.0
 
 
 func _init() -> void:
@@ -329,6 +346,8 @@ func _process(delta: float) -> void:
 		_set_wave_time(_clock - _wave_at)
 	if not _anims.is_empty():
 		_step_anims()
+	if _clock < _paint_until + 0.5:
+		_paper_material.set_shader_parameter("paint_clock", _clock)
 	if use_sensor:
 		_read_sensors(delta)
 	update_light(delta)
@@ -341,7 +360,8 @@ func _process(delta: float) -> void:
 func _schedule(delta: float) -> void:
 	_due += delta * (_fixed_fps if _fixed_fps > 0.0 else IDLE_FPS)
 	var moving := _fixed_fps <= 0.0 and (not _touches.is_empty() or not _anims.is_empty() or _clock < _sweep_until
-			or (_glide != null and _glide.is_valid()) or key_dir.angle_to(_drawn_key) > LIGHT_STEP
+			or (_glide != null and _glide.is_valid()) or _clock < _paint_until + 0.5
+			or key_dir.angle_to(_drawn_key) > LIGHT_STEP
 			or fill_dir.angle_to(_drawn_fill) > LIGHT_STEP)
 	if _dirty or moving or _due >= 1.0:
 		_render()
@@ -731,6 +751,10 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_paper.position = Vector3(board.x / 2.0, 0.0, board.y / 2.0)
 	_paper_material.set_shader_parameter("board_px", board)
 	_paper_material.set_shader_parameter("lines_tex", _mask_texture(lines, lines_size))
+	_paper_material.set_shader_parameter("line_paint", false)
+	_line_labels = PackedByteArray()
+	_line_pixels = []
+	_paint_until = -1.0
 	if _paper.visible:
 		_bake_grain(board)
 
@@ -778,6 +802,141 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_apply_debug_test()
 	update_light()
 	reset_view()
+
+
+## Paints the picture's kept lines instead of drawing them as gold: `lines`
+## is LinePaint.build()'s, `colors` each group's color, `paint_of` each
+## group's paint (its number in the gem row's paints), `painted` one byte
+## per group (1 already painted). Call after show_collage().
+func show_line_paint(lines: Dictionary, colors: PackedColorArray, paint_of: PackedInt32Array,
+		painted: PackedByteArray) -> void:
+	_line_labels = lines["labels"]
+	_line_size = Vector2i(lines["width"], lines["height"])
+	var n := _line_labels.size()
+	var groups := colors.size()
+	_line_pixels = []
+	_line_pixels.resize(groups)
+	var counts := PackedInt32Array()
+	counts.resize(groups)
+	for i in n:
+		var g := _line_labels[i]
+		if g < groups:
+			counts[g] += 1
+	for g in groups:
+		_line_pixels[g] = PackedInt32Array()
+		_line_pixels[g].resize(counts[g])
+	counts.fill(0)
+	var color_bytes := PackedByteArray()
+	color_bytes.resize(n * 4)
+	_line_times = PackedFloat32Array()
+	_line_times.resize(n)
+	_line_times.fill(1e9)
+	for i in n:
+		var g := _line_labels[i]
+		if g >= groups:
+			continue
+		_line_pixels[g][counts[g]] = i
+		counts[g] += 1
+		var c := colors[g]
+		color_bytes[i * 4] = c.r8
+		color_bytes[i * 4 + 1] = c.g8
+		color_bytes[i * 4 + 2] = c.b8
+		color_bytes[i * 4 + 3] = mini(paint_of[g] + 1, 255)
+		if g < painted.size() and painted[g] != 0:
+			_line_times[i] = -1e6
+	var color_image := Image.create_from_data(_line_size.x, _line_size.y, false, Image.FORMAT_RGBA8, color_bytes)
+	_line_time_image = Image.create_from_data(_line_size.x, _line_size.y, false, Image.FORMAT_RF,
+			_line_times.to_byte_array())
+	_line_time_tex = ImageTexture.create_from_image(_line_time_image)
+	_paper_material.set_shader_parameter("line_color_tex", ImageTexture.create_from_image(color_image))
+	_paper_material.set_shader_parameter("line_time_tex", _line_time_tex)
+	_paper_material.set_shader_parameter("paint_clock", _clock)
+	_paper_material.set_shader_parameter("line_paint", true)
+	_redraw()
+
+
+## Picks which paint's empty lines are tinted (-1 none).
+func set_selected_paint(paint: int) -> void:
+	_paper_material.set_shader_parameter("selected_paint", float(paint))
+	_redraw()
+
+
+## The finish painted lines take (one of LINE_FINISHES).
+func set_line_finish(finish: String) -> void:
+	_paper_material.set_shader_parameter("line_finish", maxi(LINE_FINISHES.find(finish), 0))
+	_redraw()
+
+
+## Paints line group g, flowing out along the lines from board point `from`
+## (and into its other pieces, nearest first); `instant` paints it at once.
+## Returns how long the fill takes (seconds).
+func paint_line(g: int, from: Vector2, instant := false) -> float:
+	if g < 0 or g >= _line_pixels.size():
+		return 0.0
+	var pixels := _line_pixels[g]
+	if pixels.is_empty():
+		return 0.0
+	var w := _line_size.x
+	var h := _line_size.y
+	if instant:
+		for i in pixels:
+			_line_times[i] = _clock - 1.0
+		_upload_line_times()
+		return 0.0
+	# How far along the lines each pixel is from `from` (px), piece by piece:
+	# each next piece starts at its pixel nearest `from`, that far away.
+	var dist := {}
+	var queue := PackedInt32Array()
+	queue.resize(pixels.size())
+	var far := 0.0
+	var left := pixels.size()
+	while left > 0:
+		var seed := -1
+		var seed_d := INF
+		for i in pixels:
+			if dist.has(i):
+				continue
+			var d := Vector2(i % w, i / w).distance_to(from)
+			if d < seed_d:
+				seed_d = d
+				seed = i
+		dist[seed] = seed_d
+		queue[0] = seed
+		var head := 0
+		var tail := 1
+		while head < tail:
+			var i := queue[head]
+			head += 1
+			var di: float = dist[i]
+			far = maxf(far, di)
+			left -= 1
+			var y := i / w
+			var x := i - y * w
+			for dy in [-1, 0, 1]:
+				for dx in [-1, 0, 1]:
+					var xx: int = x + dx
+					var yy: int = y + dy
+					if xx < 0 or yy < 0 or xx >= w or yy >= h:
+						continue
+					var j := yy * w + xx
+					if _line_labels[j] == g and not dist.has(j):
+						dist[j] = di + (1.41 if dx != 0 and dy != 0 else 1.0)
+						queue[tail] = j
+						tail += 1
+	var seconds := clampf(far / PAINT_SPEED, PAINT_MIN_TIME, PAINT_MAX_TIME)
+	for i: int in dist:
+		_line_times[i] = _clock + dist[i] / maxf(far, 1.0) * seconds
+	_upload_line_times()
+	_paint_until = maxf(_paint_until, _clock + seconds)
+	_redraw()
+	return seconds
+
+
+func _upload_line_times() -> void:
+	_line_time_image.set_data(_line_size.x, _line_size.y, false, Image.FORMAT_RF, _line_times.to_byte_array())
+	_line_time_tex.update(_line_time_image)
+	_paper_material.set_shader_parameter("paint_clock", _clock)
+	_redraw()
 
 
 ## Leaves out or cheapens one part of the board, as debug_test says.

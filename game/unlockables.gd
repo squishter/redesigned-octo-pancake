@@ -32,6 +32,7 @@ const KINDS := {
 	"animation": {"key": "animations", "pack": "animations", "title": "Ways to place gems",
 			"found": "New way to place gems!"},
 	"finale": {"key": "finales", "pack": "animations", "title": "Finales", "found": "New finale!"},
+	"line_finish": {"key": "line_finishes", "pack": "features", "title": "Line finishes", "found": "New line finish!"},
 	"power": {"key": "", "pack": "powers", "title": "Power-ups", "found": "Power-up!"},
 }
 ## Old id -> new id, per kind ("kind:old": "new"), applied to profiles on load.
@@ -88,6 +89,8 @@ static func _catalog(kind: String) -> Dictionary:
 			return GemCatalog.ANIMATIONS
 		"finale":
 			return GemCatalog.FINALES
+		"line_finish":
+			return GemCatalog.LINE_FINISHES
 	return {}
 
 
@@ -106,6 +109,8 @@ static func starting(kind: String) -> Array:
 			return GemCatalog.STARTING_ANIMATIONS
 		"finale":
 			return GemCatalog.STARTING_FINALES
+		"line_finish":
+			return GemCatalog.STARTING_LINE_FINISHES
 	return []
 
 
