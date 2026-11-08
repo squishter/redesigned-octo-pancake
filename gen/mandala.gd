@@ -1,19 +1,20 @@
 class_name MandalaGenerator
 extends RefCounted
 ## Seeded line art: symmetric mandalas, flowers, snowflakes, hearts and
-## butterflies, and free-form swirls. The same seed and options always give
-## the same picture.
+## butterflies, and free-form swirls, animals and animal prints. The same
+## seed and options always give the same picture.
 ##
 ## Output is vector polylines in unit space (x and y in -1..1, y down), so it
 ## is crisp at any size. LineRaster turns it into a mask for the slot packer,
 ## and RegionPaint fills it with a theme for Kit mode.
 ##
 ## Each variant has its own generator: MandalaDesign, FlowerGenerator,
-## SnowflakeGenerator, HeartGenerator, ButterflyGenerator and SwirlGenerator. This class picks
-## one, frames most pictures with FrameDesign, and holds the small shape
-## helpers they share.
+## SnowflakeGenerator, HeartGenerator, ButterflyGenerator, SwirlGenerator,
+## AnimalGenerator and AnimalPrintGenerator. This class picks one, frames
+## most pictures with FrameDesign, and holds the small shape helpers they
+## share.
 
-const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl"]
+const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_print"]
 ## Swirls are framed less often than the rest (unless `frame` says), so
 ## their own outlines show.
 const SWIRL_FRAME_CHANCE := 0.25
@@ -29,8 +30,10 @@ const SWIRL_FRAME_CHANCE := 0.25
 ## (folds, silhouette, center, rings, extras, zoom), "flower" (template,
 ## symmetric, rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
 ## (shape, border, body, antennae, fore, hind), "snowflake" (center, arm,
-## tip, between, details) or "swirl" (layout, shape, patch, strings, ribbon, motifs).
-## Swirls aren't symmetric; instead they also return "families" (an id per
+## tip, between, details), "swirl" (layout, shape, patch, strings, ribbon, motifs),
+## "animal" (species, blend, coat, pose, facing, scene, feet, ears, horns, tail,
+## mane, markings) or "animal_print" (coats, shape, split, angle).
+## Swirls, animals and animal prints aren't symmetric; instead they also return "families" (an id per
 ## polyline; a frame's lines get one more) and "marks" ([{"at", "family"}],
 ## points inside motif areas), see SwirlGenerator.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
@@ -61,6 +64,15 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			design = SwirlGenerator.generate(seed_value, options)
 			symmetry = "none"
 			keys = ["layout", "shape", "patch", "strings", "ribbon", "motifs"]
+		"animal":
+			design = AnimalGenerator.generate(seed_value, options)
+			symmetry = "none"
+			keys = ["species", "blend", "coat", "pose", "facing", "scene", "feet", "ears", "horns", "tail", "mane",
+					"markings"]
+		"animal_print":
+			design = AnimalPrintGenerator.generate(seed_value, options)
+			symmetry = "none"
+			keys = ["coats", "shape", "split", "angle"]
 		_:
 			variant = "mandala"
 			design = MandalaDesign.generate(seed_value, options)
@@ -79,6 +91,11 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			rng.seed = hash([seed_value, "swirl frame"])
 			frame_options = options.duplicate()
 			frame_options["frame"] = rng.randf() < SWIRL_FRAME_CHANCE
+		elif variant == "animal" and design["scene"] != "none" and not options.has("frame"):
+			# An animal on a board of its own already has an edge; a frame
+			# would shrink it to a stamp.
+			frame_options = options.duplicate()
+			frame_options["frame"] = false
 		framing = FrameDesign.apply(design["polylines"], design["closed"], seed_value, frame_options)
 	var out := {
 		"seed": seed_value,
@@ -100,6 +117,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		for m: Dictionary in design["marks"]:
 			marks.append({"at": m["at"] * framing["scale"], "family": m["family"]})
 		out["families"] = families
+		out["family_names"] = design["family_names"] + PackedStringArray(["frame"])
 		out["marks"] = marks
 	return out
 

@@ -27,6 +27,8 @@ func _init() -> void:
 	test_butterflies()
 	test_snowflakes()
 	test_swirls()
+	test_animals()
+	test_animal_prints()
 	test_frames()
 	test_collages()
 	test_design_plans()
@@ -348,6 +350,128 @@ func test_swirls() -> void:
 	check(groups.size() * 2 < areas, "pebbles: %d areas in %d groups" % [areas, groups.size()])
 	check(classes.size() * 3 < graph["paths"].size(), "pebbles: %d line classes for %d lines" % [classes.size(),
 			graph["paths"].size()])
+
+
+## Animals: 24 in a row meet every species, never one again within
+## AVOID_RECENT; every line has a family and the silhouette is closed; every
+## coat draws its markings, whose areas share a group; facing left mirrors
+## facing right. Writes a contact sheet.
+func test_animals() -> void:
+	print("Animals")
+	var count := AnimalGenerator.SPECIES.size()
+	var cell := 256
+	var sheet := Image.create(cell * 6, cell * ceili(count / 6.0), false, Image.FORMAT_RGBA8)
+	sheet.fill(Color.WHITE)
+	var recent := []
+	var seen := {}
+	for i in count:
+		var seed_value := 7300 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "animal", "recent": recent, "frame": false})
+		var m: Dictionary = lines["mandala"]
+		var an: Dictionary = m["animal"]
+		var last := recent.slice(maxi(0, recent.size() - AnimalGenerator.AVOID_RECENT)).map(
+				func(r: Dictionary) -> String: return r["species"])
+		check(not an["species"] in last, "seed %d: %s again within %d" % [seed_value, an["species"],
+				AnimalGenerator.AVOID_RECENT])
+		recent.append(an)
+		seen[an["species"]] = true
+		var w: int = lines["width"]
+		var h: int = lines["height"]
+		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
+		print("  seed %d %-9s %-12s %-6s %-5s %-6s %3d regions" % [seed_value, an["species"], an["coat"], an["pose"],
+				an["facing"], an["scene"], map.regions.size()])
+		check(m["symmetry"] == "none", "seed %d: animals aren't symmetric" % seed_value)
+		check(m["families"].size() == m["polylines"].size(), "seed %d: lines without a family" % seed_value)
+		check(map.regions.size() >= 4, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+		var outline: int = m["family_names"].find("outline")
+		for k in m["polylines"].size():
+			if m["families"][k] == outline:
+				check(m["closed"][k] == 1, "seed %d: the silhouette is open" % seed_value)
+		sheet_cell(sheet, lines, i, cell)
+	for species: String in AnimalGenerator.SPECIES:
+		check(seen.has(species), "%s never showed up in %d animals" % [species, count])
+	sheet.save_png(out_dir.path_join("animals_contact_sheet.png"))
+
+	# Every coat draws markings (bar solid), and their areas are joined.
+	for coat: String in CoatPatterns.COATS:
+		var opts := {"variant": "animal", "species": "horse", "coat": coat, "scene": "none", "frame": false}
+		var lines := PictureSources.mandala_lines(7400, opts)
+		var m: Dictionary = lines["mandala"]
+		var family: int = m["family_names"].find("markings")
+		var drawn: int = m["families"].count(family) if family >= 0 else 0
+		check((drawn > 0) == (coat != "solid"), "%s coat drew %d marking lines" % [coat, drawn])
+		if coat == "solid":
+			continue
+		var w: int = lines["width"]
+		var map := RegionMap.build(lines["mask"], w, lines["height"], 0)
+		var groups := RegionPaint.motif_groups(map, RegionPaint.symmetry_groups(map, "none"), lines["motifs"]["areas"])
+		var marked := {}
+		for mark: Dictionary in lines["motifs"]["areas"]:
+			if mark["family"] == family:
+				var at: Vector2 = mark["at"]
+				var r := map.labels[int(at.y) * w + int(at.x)]
+				if r >= 0:
+					marked[r] = groups[r]
+		var distinct := {}
+		for r in marked:
+			distinct[marked[r]] = true
+		check(marked.size() > 0 and distinct.size() == 1, "%s coat: %d marked areas in %d groups" % [coat, marked.size(),
+				distinct.size()])
+
+	# Facing left is facing right in a mirror.
+	var right := PictureSources.mandala_lines(7500, {"variant": "animal", "facing": "right", "scene": "none",
+			"frame": false, "size": 384})
+	var left := PictureSources.mandala_lines(7500, {"variant": "animal", "facing": "left", "scene": "none",
+			"frame": false, "size": 384})
+	var mirrored := PackedByteArray()
+	mirrored.resize(right["mask"].size())
+	for y in 384:
+		for x in 384:
+			mirrored[y * 384 + x] = left["mask"][y * 384 + 383 - x]
+	var lit := 0
+	var differ := 0
+	for i in mirrored.size():
+		if right["mask"][i]:
+			lit += 1
+		if (mirrored[i] != 0) != (right["mask"][i] != 0):
+			differ += 1
+	check(differ < lit * 0.05, "facing left differs from the mirror of facing right in %d of %d px" % [differ, lit])
+
+	# A wild animal blends two species; genes can be set outright.
+	var wild := AnimalGenerator.generate(7600, {"species": "wild"})
+	check(wild["blend"] != "" and wild["blend"] != wild["species"], "wild animal didn't blend: %s" % wild["blend"])
+	var set := AnimalGenerator.generate(7601, {"species": "cat", "genes": {"horns": "antlers", "tail": "bushy"}})
+	check(set["horns"] == "antlers" and set["tail"] == "bushy", "genes option ignored: %s, %s" % [set["horns"],
+			set["tail"]])
+
+
+## Animal prints: every print shows up over a run, splits carry two, and
+## each side's markings share a group.
+func test_animal_prints() -> void:
+	print("Animal prints")
+	var recent := []
+	var seen := {}
+	var splits := 0
+	for i in 18:
+		var seed_value := 7700 + i
+		var lines := PictureSources.mandala_lines(seed_value, {"variant": "animal_print", "recent": recent,
+				"frame": false})
+		var m: Dictionary = lines["mandala"]
+		var ap: Dictionary = m["animal_print"]
+		recent.append(ap)
+		for c in ap["coats"]:
+			seen[c] = true
+		if ap["split"]:
+			splits += 1
+			check(ap["coats"].size() == 2 and ap["coats"][0] != ap["coats"][1], "seed %d: split into %s" % [seed_value,
+					ap["coats"]])
+		check(m["families"].size() == m["polylines"].size(), "seed %d: lines without a family" % seed_value)
+		var w: int = lines["width"]
+		var map := RegionMap.build(lines["mask"], w, lines["height"], int(w * w * 0.0005))
+		check(map.regions.size() >= 3, "seed %d: only %d regions" % [seed_value, map.regions.size()])
+	for coat: String in CoatPatterns.PRINTS:
+		check(seen.has(coat), "print %s never showed up in 18 prints" % coat)
+	check(splits >= 2 and splits <= 14, "%d of 18 prints split" % splits)
 
 
 ## Frames: about three in four pictures are framed by default; 24 framed

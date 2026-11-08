@@ -704,6 +704,10 @@ const PUZZLES := {
 			"about": "Mirrored wings with spots and veins."},
 	"swirl": {"name": "Swirl collage", "source": "Swirl", "variant": "swirl",
 			"about": "Free-flowing line art: waves, whirls, blooms, scales and more, no two alike."},
+	"animal": {"name": "Animal collage", "source": "Animal", "variant": "animal",
+			"about": "Animals from tigers to giraffes, and some that never were, each in its own coat."},
+	"animal_print": {"name": "Animal print collage", "source": "Animal print", "variant": "animal_print",
+			"about": "Stripes, spots, rosettes and patches all over, sometimes two prints at once."},
 	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,
 			"about": "Any of your pictures as a grid of drills, one color per cell."},
 }

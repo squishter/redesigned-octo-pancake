@@ -490,6 +490,14 @@ func _process(_delta: float) -> void:
 				var sw: Dictionary = p["source"]["swirl"]
 				flower = ", %s swirl in %s outline%s, motifs %s" % [sw["layout"], sw["shape"],
 						" (patch)" if sw["patch"] else "", " + ".join(PackedStringArray(sw["motifs"]))]
+			if p["source"].has("animal"):
+				var an: Dictionary = p["source"]["animal"]
+				flower = ", %s%s in a %s coat, %s, facing %s, %s scene%s" % [an["species"],
+						" x " + an["blend"] if an["blend"] != "" else "", an["coat"], an["pose"], an["facing"], an["scene"],
+						", " + " + ".join(PackedStringArray(an["markings"])) if not an["markings"].is_empty() else ""]
+			if p["source"].has("animal_print"):
+				var ap: Dictionary = p["source"]["animal_print"]
+				flower = ", %s print on a %s" % [" | ".join(PackedStringArray(ap["coats"])), ap["shape"]]
 			if p["source"].has("frame"):
 				var fr: Dictionary = p["source"]["frame"]
 				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],
