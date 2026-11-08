@@ -8,10 +8,13 @@ extends RefCounted
 ## saved picture when it's played, so every puzzle with kept lines, old or
 ## new, gets them, and the same picture always gives the same groups.
 ##
-## A line pixel's group is the pair of symmetry groups (CollageGenerator's
+## A thin line pixel's group is the pair of symmetry groups (CollageGenerator's
 ## region `group`) on its two sides, so symmetric copies of a line share a
-## group: every petal's outline, every ring between two bands. Groups too
-## small to find with a finger join the group next to them. Each group takes
+## group: every petal's outline, every ring between two bands. Thick parts
+## (bands and blobs much wider than the lines) are each one group, keyed by
+## every symmetry group around them, so a wide band touching many areas
+## stays whole and its symmetric copies share it. Groups too small to find
+## with a finger join the group next to them. Each group takes
 ## a color from the board: the accent color of the smaller area it borders
 ## (its own color when it has no accent), so groups of one color share a
 ## paint.
@@ -27,7 +30,13 @@ const MIN_PX := 30
 const MAX_GROUPS := 200
 ## Bumped whenever build() would group a picture differently, so groups
 ## cached by an older version (see SaveStore.load_line_groups) are rebuilt.
-const FORMAT := 1
+const FORMAT := 2
+## A line pixel at least this many px (4-connected) from the nearest area,
+## and this share of the picture's shorter side (about 1.6 times as deep as
+## the middle of a line drawn PictureSources' usual width, side / 170), is
+## in a thick part.
+const THICK_MIN_DEPTH := 4
+const THICK_SHARE := 1.6 / 170.0
 
 ## Pixel offsets, 4- and 8-connected.
 const _N4 := [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
@@ -131,6 +140,8 @@ static func build(picture: Dictionary) -> Dictionary:
 	# Every line pixel takes the area nearest it (a breadth-first sweep in
 	# from both sides, so a line splits down its middle).
 	var near := comp.duplicate()
+	var depth := PackedInt32Array()
+	depth.resize(n)
 	var tail := 0
 	for i in n:
 		if near[i] != -2:
@@ -148,6 +159,7 @@ static func build(picture: Dictionary) -> Dictionary:
 			o = comp[i + w]
 		if o >= 0:
 			near[i] = o
+			depth[i] = 1
 			queue[tail] = i
 			tail += 1
 	var head := 0
@@ -164,19 +176,22 @@ static func build(picture: Dictionary) -> Dictionary:
 			var j := yy * w + xx
 			if near[j] == -2:
 				near[j] = near[i]
+				depth[j] = depth[i] + 1
 				queue[tail] = j
 				tail += 1
 
-	# The pair of groups on the two sides: read where the two halves of a
-	# line meet, then spread across its width.
 	var key_of := {}
-	var keys: Array[Vector2i] = []
+	var keys: Array = []
 	var label := PackedInt32Array()
 	label.resize(n)
 	label.fill(-1)
+	_label_thick(vis, comp, comp_group, depth, label, key_of, keys, queue, w, h)
+
+	# The pair of groups on the two sides: read where the two halves of a
+	# line meet, then spread across its width.
 	tail = 0
 	for i in n:
-		if vis[i] == 0 or near[i] < 0:
+		if vis[i] == 0 or near[i] < 0 or label[i] >= 0:
 			continue
 		var y := i / w
 		var x := i - y * w
@@ -187,9 +202,9 @@ static func build(picture: Dictionary) -> Dictionary:
 			if xx < 0 or yy < 0 or xx >= w or yy >= h:
 				continue
 			var j := yy * w + xx
-			if near[j] >= 0 and near[j] != near[i] and comp[j] == -2:
+			if near[j] >= 0 and near[j] != near[i] and comp[j] == -2 and label[j] < 0:
 				var b := comp_group[near[j]]
-				var k := Vector2i(mini(a, b), maxi(a, b))
+				var k := [mini(a, b), maxi(a, b)]
 				if not key_of.has(k):
 					key_of[k] = keys.size()
 					keys.append(k)
@@ -202,7 +217,7 @@ static func build(picture: Dictionary) -> Dictionary:
 	for i in n:
 		if vis[i] != 0 and label[i] < 0 and near[i] >= 0:
 			var a := comp_group[near[i]]
-			var k := Vector2i(a, a)
+			var k := [a, a]
 			if not key_of.has(k):
 				key_of[k] = keys.size()
 				keys.append(k)
@@ -287,6 +302,68 @@ static func recolor(lines: Dictionary, picture: Dictionary) -> void:
 		g["color"] = _color_for(g["key"], regions, group_area, fallback)
 
 
+## Labels the thick parts of the kept lines (see THICK_MIN_DEPTH): each
+## connected core deeper than the threshold, grown out to its rim (down the
+## depth, so thin lines leaving it aren't taken), is keyed by "thick" and
+## every symmetry group it touches.
+static func _label_thick(vis: PackedByteArray, comp: PackedInt32Array, comp_group: PackedInt32Array,
+		depth: PackedInt32Array, label: PackedInt32Array, key_of: Dictionary, keys: Array, queue: PackedInt32Array,
+		w: int, h: int) -> void:
+	var n := w * h
+	var thick := maxi(THICK_MIN_DEPTH, roundi(mini(w, h) * THICK_SHARE))
+	var part := PackedInt32Array()
+	part.resize(n)
+	part.fill(-1)
+	var parts := 0
+	for start in n:
+		if vis[start] == 0 or depth[start] < thick or part[start] >= 0:
+			continue
+		# One core (8-connected), then down to its rim.
+		var b := parts
+		parts += 1
+		part[start] = b
+		var head := 0
+		var tail := 1
+		queue[0] = start
+		while head < tail:
+			var i := queue[head]
+			head += 1
+			var y := i / w
+			var x := i - y * w
+			for d: Vector2i in _N8:
+				var xx := x + d.x
+				var yy := y + d.y
+				if xx < 0 or yy < 0 or xx >= w or yy >= h:
+					continue
+				var j := yy * w + xx
+				if vis[j] != 0 and part[j] < 0 and depth[j] > 0 \
+						and (depth[j] >= thick or depth[j] < depth[i]):
+					part[j] = b
+					queue[tail] = j
+					tail += 1
+		var around := {}
+		for k in tail:
+			var i := queue[k]
+			var y := i / w
+			var x := i - y * w
+			for d: Vector2i in _N4:
+				var xx := x + d.x
+				var yy := y + d.y
+				if xx < 0 or yy < 0 or xx >= w or yy >= h:
+					continue
+				var c := comp[yy * w + xx]
+				if c >= 0:
+					around[comp_group[c]] = true
+		var groups := around.keys()
+		groups.sort()
+		var key := ["thick"] + groups
+		if not key_of.has(key):
+			key_of[key] = keys.size()
+			keys.append(key)
+		for k in tail:
+			label[queue[k]] = key_of[key]
+
+
 ## Spreads labels from the first `tail` pixels in `queue` over the kept line
 ## pixels still unlabeled.
 static func _spread(label: PackedInt32Array, vis: PackedByteArray, queue: PackedInt32Array, tail: int, w: int, h: int,
@@ -323,13 +400,13 @@ static func _group_areas(regions: Array) -> Dictionary:
 	return out
 
 
-## The color of a line between groups key.x and key.y: the smaller side's
-## accent (or own) color.
-static func _color_for(key: Vector2i, regions: Array, group_area: Dictionary, fallback: Color) -> Color:
+## The color of a line between the symmetry groups in `key`: the smallest
+## side's accent (or own) color.
+static func _color_for(key: Array, regions: Array, group_area: Dictionary, fallback: Color) -> Color:
 	var best := -1
 	var best_area := 0
-	for g in [key.x, key.y]:
-		if group_area.has(g) and (best < 0 or group_area[g][0] < best_area):
+	for g: Variant in key:
+		if g is int and group_area.has(g) and (best < 0 or group_area[g][0] < best_area):
 			best = group_area[g][1]
 			best_area = group_area[g][0]
 	if best < 0:

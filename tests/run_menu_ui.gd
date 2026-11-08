@@ -764,6 +764,36 @@ func _test_line_paint() -> void:
 	_check(not LinePaint.has_lines({"width": 4, "height": 4, "lines_visible": PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0,
 			0, 0, 0, 0, 0, 0, 0, 0])}), "A picture with no kept lines has none to paint")
 
+	# A thick band down the middle touching four areas (two symmetry groups,
+	# split by a thin line across) stays one group.
+	var band := PackedByteArray()
+	band.resize(100 * 100)
+	for y in 100:
+		for x in 100:
+			if (x >= 38 and x <= 62) or (y >= 49 and y <= 51):
+				band[y * 100 + x] = 255
+	var band_slots := []
+	for at: Vector2 in [Vector2(15, 20), Vector2(15, 80), Vector2(85, 20), Vector2(85, 80)]:
+		band_slots.append({"id": band_slots.size(), "region": band_slots.size(), "shape": "round", "x": at.x, "y": at.y,
+			"size": 6.0, "width": 6.0, "target_color": Color.RED})
+	var band_regions := []
+	for r in 4:
+		band_regions.append({"id": r, "group": r % 2, "kind": "area", "area": 600, "color": Color.RED,
+			"accent_color": Color.BLUE if r % 2 == 0 else Color.GREEN})
+	var banded := LinePaint.build({"width": 100, "height": 100, "lines": band, "lines_visible": band,
+		"regions": band_regions, "slots": band_slots})
+	var bl: PackedByteArray = banded["labels"]
+	_check(bl[10 * 100 + 50] == bl[90 * 100 + 50] and bl[50 * 100 + 50] == bl[10 * 100 + 50]
+			and bl[30 * 100 + 40] == bl[70 * 100 + 60], "A thick band bordering many areas is one group")
+	_check(bl[50 * 100 + 10] != bl[10 * 100 + 50], "Thin lines leaving the band keep their own group")
+	_check(Array(GemBoard3D.LINE_FINISHES) == GemCatalog.LINE_FINISHES.keys(),
+		"The board knows every line finish, in the catalog's order")
+	var old := {"unlocks": {"line_finishes": ["metal", "pearl", "glow", "enamel"]}, "powers": {}}
+	Unlockables.normalize(old)
+	var migrated: Array = old["unlocks"]["line_finishes"]
+	migrated.sort()
+	_check(migrated == ["beads", "chalk", "metal", "rope"], "Retired line finishes become their replacements: %s" % [migrated])
+
 	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
 	_check("metal" in profile["unlocks"]["line_finishes"] and profile["unlocks"]["line_finishes"].size() == 1,
 		"Players start with the metal line finish only")
@@ -772,6 +802,8 @@ func _test_line_paint() -> void:
 	play.profile = profile
 	play.puzzle_id = meta["id"]
 	root.add_child(play)
+	_check(play._board._paper_material.get_shader_parameter("line_paint") == true and play._board._line_pixels.is_empty(),
+		"While the lines are grouped they already show as empty outlines")
 	await _layout_frames()
 	play.finish_loading_lines()
 	await _layout_frames()
@@ -821,7 +853,8 @@ func _test_line_paint() -> void:
 	again.puzzle_id = meta["id"]
 	root.add_child(again)
 	await _layout_frames()
-	_check(again._painted_count == 2 and again._lines_task == -1, "Reopening restores painted lines from the kept grouping")
+	again.finish_loading_lines()
+	_check(again._painted_count == 2, "Reopening restores painted lines from the kept grouping")
 	var last := again._painted.find(0)
 	again._select(PlayScreen.PAINT + again._paint_of[last])
 	again._stroke_type = again._selected

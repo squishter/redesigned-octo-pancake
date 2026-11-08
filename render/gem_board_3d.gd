@@ -39,7 +39,7 @@ const MAX_ZOOM := 40.0
 ## Painted lines' finishes (paper.gdshader's line_finish, in this order; see
 ## GemCatalog.LINE_FINISHES), and how fast paint runs along a line (board
 ## px a second), within how long a fill may take (seconds).
-const LINE_FINISHES := ["metal", "matte", "glossy", "glitter", "pearl", "glow", "enamel", "holographic"]
+const LINE_FINISHES := ["metal", "matte", "glossy", "glitter", "chalk", "rope", "beads", "holographic"]
 const PAINT_SPEED := 700.0
 const PAINT_MIN_TIME := 0.45
 const PAINT_MAX_TIME := 1.3
@@ -804,38 +804,55 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	reset_view()
 
 
+## Shows the picture's kept lines as empty outlines while their groups are
+## worked out (show_line_paint replaces this), so they never flash gold.
+func show_lines_waiting() -> void:
+	var color := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	var time := Image.create_from_data(1, 1, false, Image.FORMAT_RF, PackedFloat32Array([1e9]).to_byte_array())
+	_paper_material.set_shader_parameter("line_color_tex", ImageTexture.create_from_image(color))
+	_paper_material.set_shader_parameter("line_time_tex", ImageTexture.create_from_image(time))
+	_paper_material.set_shader_parameter("line_paint", true)
+	_redraw()
+
+
 ## Paints the picture's kept lines instead of drawing them as gold: `lines`
 ## is LinePaint.build()'s, `colors` each group's color, `paint_of` each
 ## group's paint (its number in the gem row's paints), `painted` one byte
 ## per group (1 already painted). Call after show_collage().
 func show_line_paint(lines: Dictionary, colors: PackedColorArray, paint_of: PackedInt32Array,
 		painted: PackedByteArray) -> void:
-	_line_labels = lines["labels"]
-	_line_size = Vector2i(lines["width"], lines["height"])
-	var n := _line_labels.size()
+	apply_line_paint(prepare_line_paint(lines, colors, paint_of, painted))
+
+
+## show_line_paint's work on every pixel, touching no nodes, so it can run
+## on a worker thread; apply_line_paint() then only uploads it.
+static func prepare_line_paint(lines: Dictionary, colors: PackedColorArray, paint_of: PackedInt32Array,
+		painted: PackedByteArray) -> Dictionary:
+	var labels: PackedByteArray = lines["labels"]
+	var n := labels.size()
 	var groups := colors.size()
-	_line_pixels = []
-	_line_pixels.resize(groups)
+	var pixels: Array[PackedInt32Array] = []
+	pixels.resize(groups)
 	var counts := PackedInt32Array()
 	counts.resize(groups)
 	for i in n:
-		var g := _line_labels[i]
+		var g := labels[i]
 		if g < groups:
 			counts[g] += 1
 	for g in groups:
-		_line_pixels[g] = PackedInt32Array()
-		_line_pixels[g].resize(counts[g])
+		pixels[g] = PackedInt32Array()
+		pixels[g].resize(counts[g])
 	counts.fill(0)
 	var color_bytes := PackedByteArray()
 	color_bytes.resize(n * 4)
-	_line_times = PackedFloat32Array()
-	_line_times.resize(n)
-	_line_times.fill(1e9)
+	var times := PackedFloat32Array()
+	times.resize(n)
+	times.fill(1e9)
 	for i in n:
-		var g := _line_labels[i]
+		var g := labels[i]
 		if g >= groups:
 			continue
-		_line_pixels[g][counts[g]] = i
+		pixels[g][counts[g]] = i
 		counts[g] += 1
 		var c := colors[g]
 		color_bytes[i * 4] = c.r8
@@ -843,8 +860,17 @@ func show_line_paint(lines: Dictionary, colors: PackedColorArray, paint_of: Pack
 		color_bytes[i * 4 + 2] = c.b8
 		color_bytes[i * 4 + 3] = mini(paint_of[g] + 1, 255)
 		if g < painted.size() and painted[g] != 0:
-			_line_times[i] = -1e6
-	var color_image := Image.create_from_data(_line_size.x, _line_size.y, false, Image.FORMAT_RGBA8, color_bytes)
+			times[i] = -1e6
+	return {"size": Vector2i(lines["width"], lines["height"]), "labels": labels, "pixels": pixels,
+			"times": times, "colors": color_bytes}
+
+
+func apply_line_paint(prepared: Dictionary) -> void:
+	_line_labels = prepared["labels"]
+	_line_size = prepared["size"]
+	_line_pixels = prepared["pixels"]
+	_line_times = prepared["times"]
+	var color_image := Image.create_from_data(_line_size.x, _line_size.y, false, Image.FORMAT_RGBA8, prepared["colors"])
 	_line_time_image = Image.create_from_data(_line_size.x, _line_size.y, false, Image.FORMAT_RF,
 			_line_times.to_byte_array())
 	_line_time_tex = ImageTexture.create_from_image(_line_time_image)

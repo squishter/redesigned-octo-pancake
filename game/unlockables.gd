@@ -36,7 +36,7 @@ const KINDS := {
 	"power": {"key": "", "pack": "powers", "title": "Power-ups", "found": "Power-up!"},
 }
 ## Old id -> new id, per kind ("kind:old": "new"), applied to profiles on load.
-const RENAMED := {}
+const RENAMED := {"line_finish:pearl": "chalk", "line_finish:glow": "rope", "line_finish:enamel": "beads"}
 ## Charges a power-up pack gives: on-demand ones come in pairs.
 const NOW_CHARGES := 2
 const PUZZLE_CHARGES := 1

@@ -183,7 +183,7 @@ mode for trying out new pattern generation.
   Sweep, Shimmer, and a light version of each: Light ripple, Light spiral,
   Light sweep and Light shimmer, which flash the gems and light the paper in
   the same pattern instead of swelling them), line finishes (Metal, Matte,
-  Glossy, Glitter, Pearl, Glow, Enamel, Holographic; the Flourish pack gives
+  Glossy, Glitter, Chalk, Rope, Beads, Holographic; the Flourish pack gives
   them) and power-up charges. Locked things stay a mystery: gems
   show only as flat silhouettes of their outline, and names, theme colors
   and descriptions stay hidden.
@@ -297,9 +297,11 @@ mode for trying out new pattern generation.
 - **Painting lines.** Pictures that keep their lines as drawn outlines (the
   metal setting) don't show them finished any more: the lines start as
   faint gray outlines, split into groups (`LinePaint`), and are painted like
-  gems. A line's group is the pair of symmetry groups of areas on its two
-  sides, so every petal's outline, or a ring between two bands, is one
-  group; tiny pieces join a neighbor. Each group takes the accent color of
+  gems. A thin line's group is the pair of symmetry groups of areas on its
+  two sides, so every petal's outline, or a ring between two bands, is one
+  group; a thick part (a band or blob well wider than the lines) is one
+  group with its symmetric copies, however many areas it touches; tiny
+  pieces join a neighbor. Each group takes the accent color of
   the smaller area it borders, and groups of one color share a **paint**:
   the row ends with a card per paint (a swatch, "Lines" and how many groups
   are left). Picking one tints its empty lines; tapping, dragging over or
@@ -310,8 +312,10 @@ mode for trying out new pattern generation.
   every gem is in and every line painted. Painted lines take the
   *Line finish* chosen in Settings. Generating pictures is unchanged: the
   groups are worked out from the saved picture the first time it's played
-  (on a worker thread, under a second) and kept in `<id>.lines`, which
-  meta's `lines_painted` and `lines_groups` refer to.
+  and kept in `<id>.lines` (meta's `lines_painted` and `lines_groups` refer
+  to them). Grouping, or loading the kept groups, and preparing the board's
+  paint all run on a worker thread; meanwhile the lines already show as
+  empty outlines, so nothing on screen jumps when they're ready.
 
 | File | What it does |
 | --- | --- |

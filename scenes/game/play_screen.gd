@@ -523,20 +523,64 @@ func _open_slots(t: int) -> Array:
 	return [] if t < 0 or _is_paint(t) else _overlay.open_of_type(t)
 
 
-## Groups the picture's kept lines: from the cache, or on a worker thread
-## (picked up in _process by _finish_lines).
+## Groups the picture's kept lines on a worker thread (picked up in
+## _process by _finish_lines), the lines showing as empty outlines meanwhile.
 func _start_lines() -> void:
 	_has_lines = LinePaint.has_lines(_picture)
 	if not _has_lines:
 		return
-	var cached := SaveStore.load_line_groups(puzzle_id)
-	if not cached.is_empty() and int(cached.get("width", 0)) == int(_picture["width"]) \
-			and int(cached.get("height", 0)) == int(_picture["height"]):
-		_apply_lines(cached)
-		return
+	_board.show_lines_waiting()
 	var picture := _picture
-	_lines_task = WorkerThreadPool.add_task(func() -> void: _lines_built = LinePaint.build(picture), false,
-			"Group the picture's lines")
+	var id := puzzle_id
+	var saved: Array = _meta.get("lines_painted", []).duplicate()
+	var saved_groups := int(_meta.get("lines_groups", -1))
+	var finished := bool(_meta.get("done", false)) and _filled >= _type_of.size()
+	_lines_task = WorkerThreadPool.add_task(func() -> void:
+		_lines_built = _prepare_lines(picture, id, saved, saved_groups, finished), false, "Group the picture's lines")
+
+
+## Everything the lines need, worked out off the main thread: the groups
+## (from the cache, or built and cached), their colors, one paint per color
+## (in the order of the biggest group of each), which are painted already
+## (`saved` lists them, if it was kept for `saved_groups` groups; all of
+## them on a `finished` picture), and the board's pixel data.
+static func _prepare_lines(picture: Dictionary, id: String, saved: Array, saved_groups: int,
+		finished: bool) -> Dictionary:
+	var lines := SaveStore.load_line_groups(id)
+	if lines.is_empty() or int(lines.get("width", 0)) != int(picture["width"]) \
+			or int(lines.get("height", 0)) != int(picture["height"]):
+		lines = LinePaint.build(picture)
+		if lines.is_empty():
+			return {}
+		SaveStore.save_line_groups(id, lines)
+	LinePaint.recolor(lines, picture)
+	var groups: Array = lines["groups"]
+	var paints: Array[Dictionary] = []
+	var paint_of := PackedInt32Array()
+	paint_of.resize(groups.size())
+	var painted := PackedByteArray()
+	painted.resize(groups.size())
+	var by_color := {}
+	var colors := PackedColorArray()
+	for g in groups.size():
+		var c: Color = groups[g]["color"]
+		colors.append(c)
+		if not by_color.has(c):
+			by_color[c] = paints.size()
+			paints.append({"color": c, "count": 0, "left": 0})
+		paint_of[g] = by_color[c]
+		paints[by_color[c]]["count"] += 1
+	if finished:
+		painted.fill(1)
+	elif saved_groups == groups.size():
+		for g: Variant in saved:
+			if int(g) >= 0 and int(g) < groups.size():
+				painted[int(g)] = 1
+	for g in groups.size():
+		if painted[g] == 0:
+			paints[paint_of[g]]["left"] += 1
+	return {"lines": lines, "paints": paints, "paint_of": paint_of, "painted": painted,
+			"board": GemBoard3D.prepare_line_paint(lines, colors, paint_of, painted)}
 
 
 ## Waits for the grouping job if it's still running, and uses its groups.
@@ -550,45 +594,18 @@ func _finish_lines() -> void:
 	_lines_task = -1
 	if _lines_built.is_empty() or not is_inside_tree():
 		return
-	SaveStore.save_line_groups(puzzle_id, _lines_built)
 	_apply_lines(_lines_built)
 
 
-## The line groups are known: one paint per color (in the order of the
-## biggest group of each), the board paints them, and the row gets their
-## cards.
-func _apply_lines(lines: Dictionary) -> void:
-	LinePaint.recolor(lines, _picture)
-	_lines = lines
-	var groups: Array = lines["groups"]
-	_paints.clear()
-	_paint_of.resize(groups.size())
-	_painted.resize(groups.size())
-	_painted.fill(0)
-	var by_color := {}
-	var colors := PackedColorArray()
-	for g in groups.size():
-		var c: Color = groups[g]["color"]
-		colors.append(c)
-		if not by_color.has(c):
-			by_color[c] = _paints.size()
-			_paints.append({"color": c, "count": 0, "left": 0})
-		_paint_of[g] = by_color[c]
-		_paints[by_color[c]]["count"] += 1
-	# Progress from before, if it was kept for these same groups.
-	_painted_count = 0
-	if _meta.get("done", false) and _filled >= _type_of.size():
-		_painted.fill(1)
-	elif int(_meta.get("lines_groups", -1)) == groups.size():
-		for g: Variant in _meta.get("lines_painted", []):
-			if int(g) >= 0 and int(g) < groups.size():
-				_painted[int(g)] = 1
-	for g in groups.size():
-		if _painted[g] != 0:
-			_painted_count += 1
-		else:
-			_paints[_paint_of[g]]["left"] += 1
-	_board.show_line_paint(lines, colors, _paint_of, _painted)
+## The line groups are known: the board paints them and the row gets a card
+## per paint.
+func _apply_lines(ready: Dictionary) -> void:
+	_lines = ready["lines"]
+	_paints = ready["paints"]
+	_paint_of = ready["paint_of"]
+	_painted = ready["painted"]
+	_painted_count = _painted.size() - _painted.count(0)
+	_board.apply_line_paint(ready["board"])
 	_apply_settings()
 	if not _done:
 		for k in _paints.size():

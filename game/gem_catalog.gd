@@ -318,13 +318,13 @@ const STARTING_FINALES := ["light_shimmer"]
 ## How a picture's painted lines look (see LinePaint; GemBoard3D.LINE_FINISHES
 ## lists them in the paper shader's order).
 const LINE_FINISHES := {
-	"metal": {"name": "Metal", "about": "Polished metal in the paint's color, shining as the light moves."},
+	"metal": {"name": "Metal", "about": "Brushed metal in the paint's color, with a bright sheen as the light moves."},
 	"matte": {"name": "Matte", "about": "Soft, flat paint with no shine."},
-	"glossy": {"name": "Glossy", "about": "Wet-look paint with a crisp white highlight."},
+	"glossy": {"name": "Glossy", "about": "Candy-bright paint, round as a tube, with a crisp white highlight."},
 	"glitter": {"name": "Glitter", "about": "Sparkly paint whose flecks wink as you tilt the phone."},
-	"pearl": {"name": "Pearl", "about": "Pale and pearly, shifting through soft tints."},
-	"glow": {"name": "Glow", "about": "Bright as neon, white-hot down the middle."},
-	"enamel": {"name": "Enamel", "about": "Glassy color, deeper at the edges, like a cloisonné pin."},
+	"chalk": {"name": "Chalk", "about": "Pale, dusty chalk with specks of paper showing through."},
+	"rope": {"name": "Rope", "about": "A twisted cord, its strands running across the line."},
+	"beads": {"name": "Beads", "about": "A string of tiny round, shiny beads."},
 	"holographic": {"name": "Holographic", "about": "Rainbow bands slide over the paint as the light moves."},
 }
 const STARTING_LINE_FINISHES := ["metal"]
