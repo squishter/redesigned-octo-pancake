@@ -367,7 +367,15 @@ func _test_theme_bonus_flow() -> void:
 	var opening: PackOpening = screen._opening
 	var earned := Unlockables.themes_gained(before, screen.profile["unlocks"])
 	var powers := opening.rewards.filter(func(item: Dictionary) -> bool: return item["kind"] == "power")
-	_check(opening.rewards.size() == 1 + earned.size() + powers.size() and earned.size() > 0, "Every completed theme is a bonus card")
+	var theme_cards := opening.rewards.filter(func(item: Dictionary) -> bool: return item["kind"] == "theme")
+	_check(earned.size() > 1 and opening.rewards.size() == 2 + powers.size() and theme_cards.size() == 1,
+		"Completed color stories share one bonus card")
+	_check(theme_cards.size() == 1 and theme_cards[0].get("bonus", false)
+		and (theme_cards[0].get("themes", []) as Array).size() == earned.size()
+		and str(theme_cards[0]["name"]) == "%d new color stories" % earned.size(),
+		"The card names how many stories it completes and lists them all")
+	_check(earned.all(func(t: String) -> bool: return t in screen.profile["unlocks"]["themes"]),
+		"Every story on the shared card is granted")
 	_check(Packs.picks(screen.profile) == 1, "Repeated purchase press spends one pick")
 	var saved := SaveStore.load_profile()
 	_check(Packs.picks(saved) == 1, "The entire purchase is saved before the foil opens")
@@ -404,10 +412,12 @@ func _test_card_sequence() -> void:
 	opening._timeline.custom_step(0.3)
 	opening._timeline.custom_step(1)
 	_check(opening._index == 1 and opening.item["id"] == rewards[1]["id"], "Rapid next presses advance exactly one card")
-	opening._keep.pressed.emit()
-	opening._timeline.custom_step(0.3)
-	opening._timeline.custom_step(1)
-	_check(opening._index == 2 and opening._revealed, "The last reward has its own reveal")
+	# The rest, bonus cards (a power-up, completed color stories) included.
+	for _i in range(2, rewards.size()):
+		opening._keep.pressed.emit()
+		opening._timeline.custom_step(0.3)
+		opening._timeline.custom_step(1)
+	_check(opening._index == rewards.size() - 1 and opening._revealed, "The last reward has its own reveal")
 	opening._keep.pressed.emit()
 	await _frames()
 	_check_summary(opening)

@@ -22,8 +22,20 @@ static func names(gems: Array) -> String:
 	return ", ".join(titles)
 
 
+## Thumbnails made so far, by size and colors: the story browser shows
+## hundreds, and opens often.
+static var _thumbnails := {}
+
+
 ## A thumbnail keeps every color visible in the field and the story browser.
 static func thumbnail(gems: Array, px := 32) -> ImageTexture:
+	var key := "%d|%s" % [px, ",".join(PackedStringArray(gems))]
+	if not _thumbnails.has(key):
+		_thumbnails[key] = _make_thumbnail(gems, px)
+	return _thumbnails[key]
+
+
+static func _make_thumbnail(gems: Array, px: int) -> ImageTexture:
 	var image := Image.create(maxi(1, gems.size()) * px, px, false, Image.FORMAT_RGBA8)
 	image.fill(Color.TRANSPARENT)
 	for i in gems.size():

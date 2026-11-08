@@ -57,7 +57,7 @@ mode for trying out new pattern generation.
   soft blue glow that floats across them; labradorite flashes blue, teal
   and gold along its streaks; mother of pearl and abalone show wavy soft
   rainbows; aurora is clear crystal with a rainbow coating, like AB drills.
-  86 themes of 3 to 8 colors (`GemCatalog.MIN_THEME_COLORS`,
+  408 themes of 3 to 8 colors (`GemCatalog.MIN_THEME_COLORS`,
   `MAX_THEME_COLORS`): one per hue, the starting rainbow ones and mixes
   like Tropical, Galaxy and Seaside, three of shimmer stones (Opaline,
   Northern Lights, Mermaid), small calm ones of 3 to 5 colors (Primary,
@@ -66,7 +66,17 @@ mode for trying out new pattern generation.
   8 (Full Spectrum, Festival, Aurora Sky, Kaleidoscope, Opal Dreams), and
   more of every size but six, so each of 3, 4, 5, 7 and 8 colors has ten
   (Tuxedo and Pink Lemonade to Monochrome and Cosmic; six-color themes
-  number 36). New themes go at the end of `GemCatalog.THEMES` and existing
+  number 36). Then every hue (shimmer included) at every size from 3 to 8:
+  *Light*, *Dark*, *Mid* and the full range (*Red Ombré*), lightest first
+  with the lighter and darker halves taking turns so neighbors contrast
+  (ids like `red_light_5`; where a hue has too few colors for four
+  different ones, only Light and Dark; Light Shimmers at 6 would be
+  Opaline, so it's left out). Then 71 more mixes: complements (Harbor
+  Sunset, Iris & Daffodil, Watermelon), neighbors (Hearth, Hydrangea,
+  Marigold), seasons (Merry & Bright, Easter Eggs, Spooky Night) and
+  places and things (Koi Pond, Spice Market, Toy Box, Arctic Aurora).
+  By size: 56 of 3 colors, 69 of 4, 76 of 5, 100 of 6, 60 of 7, 47 of 8.
+  New themes go at the end of `GemCatalog.THEMES` and existing
   ones never change, so puzzles made in them stay as they are. A theme is hers as soon as she has all its colors; themes don't
   come from packs. Collection shows a locked theme's colors she has found so far.
 - **Her own color stories.** Under *Color story* in the New puzzle panel,
@@ -74,7 +84,9 @@ mode for trying out new pattern generation.
   `ColorStoryPicker`, a searchable story list that scrolls with a finger or
   mouse wheel. Stories are shown by color count, then by name, in one
   collapsible section per count (tap a heading to fold it away or open it;
-  a search opens every section it matches in). Every story shows its colors; *Create my own story* and
+  a search opens every section it matches in), as a grid of cards: as many
+  columns as fit, 2 to 4 (three on a phone). Their palette thumbnails are
+  made once and reused. Every story shows its colors; *Create my own story* and
   *Edit story* live inside that selector.
   Creation opens `ColorStoryEditor`: she can name a story and
   choose 2 to 8 of her gem colors, with search and color-family filters.
@@ -173,8 +185,9 @@ mode for trying out new pattern generation.
   everything found, including power-up quantities and bonus color themes.
   *Skip animation* or Back jumps to the full bundle summary; a single-card
   pack reveals its card immediately. Back again dismisses either. Completing
-  a theme with a new color adds its own bonus card, without using a base draw
-  or charging again. *Collection*: every
+  a theme with a new color adds a bonus card, without using a base draw
+  or charging again; when one pack completes several, they share one card
+  ("12 new color stories") listing each of them, all granted. *Collection*: every
   gem color and every shape in every cut as real rendered gems, then
   themes, picture types (collages and Diamond kits), flourishes (frames,
   frame backgrounds, heart collars, close-ups, hand-drawn lines), ways to

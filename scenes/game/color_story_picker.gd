@@ -2,12 +2,21 @@ class_name ColorStoryPicker
 extends GameDialog
 ## Scrollable color-story browsing; creation and editing live in this selector.
 ## Stories are shown by how many colors they have, then by name, one
-## collapsible section per count (a search opens every section it matches in).
+## collapsible section per count (a search opens every section it matches in),
+## as a grid of cards: as many columns as fit (MIN_COLUMNS to MAX_COLUMNS).
 
 signal chosen(theme_id: String)
 signal cancelled
 signal create_requested
 signal edit_requested(theme_id: String)
+
+## Columns of story cards, and the narrowest a card may get before one fewer
+## fits.
+const MIN_COLUMNS := 2
+const MAX_COLUMNS := 4
+const CARD_WIDTH := 280
+const CARD_GAP := 12
+const CARD_HEIGHT := 150
 
 var stories: Array = []
 var selected_id := ""
@@ -42,6 +51,7 @@ func _init() -> void:
 	actions.add_child(row)
 	_edit = _action(row, "Edit story", func() -> void: edit_requested.emit(selected_id))
 	_action(row, "Cancel", close)
+	body.resized.connect(_fit_columns)
 
 
 func set_stories(choices: Array, select_id := "") -> void:
@@ -68,14 +78,26 @@ func set_stories(choices: Array, select_id := "") -> void:
 		if not _sections.has(count):
 			_sections[count] = _section(count)
 		var button := _story_card(story)
-		(_sections[count]["cards"] as VBoxContainer).add_child(button)
+		(_sections[count]["cards"] as GridContainer).add_child(button)
 		_buttons[story["id"]] = button
 	_empty = UI.label("No stories match. Try another name or color.", 28, GameTheme.TEXT_DIM)
 	body.add_child(_empty)
 	_search.text = ""
+	_fit_columns()
 	_filter()
 	_update_selection()
 	body_scroll.scroll_vertical = 0
+
+
+## How many cards fit side by side in `width` px.
+static func columns_for(width: float) -> int:
+	return clampi(int((width + CARD_GAP) / (CARD_WIDTH + CARD_GAP)), MIN_COLUMNS, MAX_COLUMNS)
+
+
+func _fit_columns() -> void:
+	var columns := columns_for(body.size.x)
+	for section: Dictionary in _sections.values():
+		(section["cards"] as GridContainer).columns = columns
 
 
 func open() -> void:
@@ -113,8 +135,10 @@ func _section(count: int) -> Dictionary:
 	chevron.resized.connect(func() -> void: chevron.pivot_offset = chevron.size / 2.0)
 	row.add_child(chevron)
 	body.add_child(header)
-	var cards := VBoxContainer.new()
-	cards.add_theme_constant_override("separation", 12)
+	var cards := GridContainer.new()
+	cards.columns = MIN_COLUMNS
+	cards.add_theme_constant_override("h_separation", CARD_GAP)
+	cards.add_theme_constant_override("v_separation", CARD_GAP)
 	body.add_child(cards)
 	var section := {"header": header, "cards": cards, "label": label, "chevron": chevron}
 	header.pressed.connect(func() -> void:
@@ -123,9 +147,10 @@ func _section(count: int) -> Dictionary:
 	return section
 
 
+## A grid card: the story's name, whose it is and its colors in order.
 func _story_card(story: Dictionary) -> Button:
 	var button := Button.new()
-	button.custom_minimum_size.y = 204
+	button.custom_minimum_size.y = CARD_HEIGHT
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.theme_type_variation = "ChoiceButton"
 	button.toggle_mode = true
@@ -134,22 +159,25 @@ func _story_card(story: Dictionary) -> Button:
 	var inset := MarginContainer.new()
 	inset.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	inset.minimum_size_changed.connect(func() -> void:
-		button.custom_minimum_size.y = maxf(204, inset.get_combined_minimum_size().y))
+		button.custom_minimum_size.y = maxf(CARD_HEIGHT, inset.get_combined_minimum_size().y))
 	for side: String in ["left", "right", "top", "bottom"]:
-		inset.add_theme_constant_override("margin_" + side, 18)
+		inset.add_theme_constant_override("margin_" + side, 14)
 	button.add_child(inset)
 	var copy := VBoxContainer.new()
-	copy.add_theme_constant_override("separation", 8)
+	copy.add_theme_constant_override("separation", 6)
 	inset.add_child(copy)
-	var title := UI.label(story["name"], 32, GameTheme.GOLD)
+	var title := UI.label(story["name"], 28, GameTheme.GOLD)
 	title.max_lines_visible = 2
+	title.custom_minimum_size.x = 1
 	copy.add_child(title)
-	var about := UI.label("%d colors · %s" % [story["gems"].size(),
-		"Your story" if CustomThemes.is_custom(story["id"]) else "Collection story"], 25, GameTheme.TEXT_DIM)
-	copy.add_child(about)
+	if CustomThemes.is_custom(story["id"]):
+		copy.add_child(UI.label("Your story", 22, GameTheme.MINT))
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	copy.add_child(spacer)
 	var palette := TextureRect.new()
 	palette.texture = ColorStorySwatches.thumbnail(story["gems"], 48)
-	palette.custom_minimum_size.y = 48
+	palette.custom_minimum_size.y = 36
 	palette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	palette.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	copy.add_child(palette)

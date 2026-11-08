@@ -133,12 +133,12 @@ static func open(profile: Dictionary, pack: String, with_pick: bool, rng: Random
 			give(staged, power)
 			rewards.append(power)
 	# Completed themes are real bonus rewards, but never consume base draws.
+	# One new color can complete dozens, so more than one share a card.
 	var themes := Unlockables.themes_gained(profile["unlocks"], staged["unlocks"])
-	for theme: Dictionary in Unlockables.items("theme"):
-		if theme["id"] in themes:
-			theme["bonus"] = true
-			theme["pack"] = pack
-			rewards.append(theme)
+	if not themes.is_empty():
+		var theme := theme_reward(themes)
+		theme["pack"] = pack
+		rewards.append(theme)
 	# No yields or fallible UI work between granting and the single payment.
 	for item: Dictionary in rewards:
 		give(profile, item)
@@ -179,6 +179,21 @@ static func _reward_key(item: Dictionary) -> String:
 
 static func give(profile: Dictionary, item: Dictionary) -> void:
 	Unlockables.grant(profile, item)
+
+
+## The bonus card for color stories her new colors complete: the story
+## itself, or for several one card listing them all (`themes`, every one
+## granted with it).
+static func theme_reward(themes: Array) -> Dictionary:
+	var items := Unlockables.items("theme").filter(func(t: Dictionary) -> bool: return t["id"] in themes)
+	var reward: Dictionary = items[0]
+	if items.size() > 1:
+		var names := PackedStringArray(items.map(func(t: Dictionary) -> String: return t["name"]))
+		reward = {"kind": "theme", "id": items[0]["id"], "name": "%d new color stories" % items.size(),
+				"about": "Your new colors complete %s." % ", ".join(names),
+				"themes": items.map(func(t: Dictionary) -> String: return t["id"])}
+	reward["bonus"] = true
+	return reward
 
 
 static func today() -> String:

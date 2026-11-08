@@ -167,9 +167,11 @@ static func grant(profile: Dictionary, item: Dictionary) -> void:
 				cuts.append(item["cut"])
 			unlocks["shapes"][item["shape"]] = cuts
 		_:
+			# A card of several color stories (Packs.theme_reward) gives each.
 			var list: Array = unlocks[KINDS[item["kind"]]["key"]]
-			if not item["id"] in list:
-				list.append(item["id"])
+			for id: String in item.get("themes", [item["id"]]):
+				if not id in list:
+					list.append(id)
 
 
 ## Brings a profile (new, or saved by any earlier version) up to date:

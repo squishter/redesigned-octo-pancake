@@ -147,14 +147,15 @@ func _build_card() -> void:
 	title.add_theme_color_override("font_color", GameTheme.GOLD)
 	_front.add_child(title)
 	var about := Label.new()
-	about.text = item.get("about", "")
+	# A card of several color stories lists them one per line below instead.
+	about.text = "Your new colors complete them all." if item.has("themes") else item.get("about", "")
 	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	about.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	about.add_theme_font_size_override("font_size", 30)
 	_front.add_child(about)
 	for theme_id: String in item.get("themes", []):
 		var theme_label := Label.new()
-		theme_label.text = "✦ %s theme completed!" % GemCatalog.theme_name(theme_id)
+		theme_label.text = "✦ %s" % GemCatalog.theme_name(theme_id)
 		theme_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		theme_label.add_theme_font_size_override("font_size", 26)
