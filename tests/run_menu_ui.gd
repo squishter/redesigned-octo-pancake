@@ -12,6 +12,7 @@ const SplashScreen := preload("res://scenes/game/splash_screen.gd")
 const GemMenuReveal := preload("res://scenes/game/gem_menu_reveal.gd")
 var _failures := 0
 var _checks := 0
+var _pen_at := Vector2.ZERO
 
 
 func _init() -> void:
@@ -35,6 +36,7 @@ func _run() -> void:
 	await _test_transitions()
 	await _test_completion_rewards()
 	await _test_stroke_limit()
+	await _test_pen_carry()
 	await _test_light_finales()
 	await _test_unlock_all()
 	_test_camera_helper()
@@ -658,6 +660,93 @@ func _test_stroke_limit() -> void:
 	play.queue_free()
 	await process_frame
 	SaveStore.delete_puzzle(profile, meta["id"])
+
+
+## A stylus (the S Pen) reaches the game as a mouse; App turns on touch
+## emulation for it, so it taps, and carries gems from the row, as a finger.
+func _test_pen_carry() -> void:
+	print("Stylus taps and carrying gems from the row")
+	var was := Input.emulate_touch_from_mouse
+	Input.emulate_touch_from_mouse = true
+	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
+	var slots := []
+	for k in 4:
+		var ruby := k < 2
+		slots.append({"id": k, "region": 0 if ruby else 1, "shape": "round", "cut": "brilliant",
+			"x": 20 + k * 20, "y": 50, "rotation": 0.0, "size": 10.0, "width": 10.0,
+			"target_gem": "ruby" if ruby else "sapphire", "target_color": Color.RED if ruby else Color.BLUE})
+	var picture := {"type": "collage", "width": 100, "height": 100, "slots": slots,
+		"regions": [{"id": 0, "color": Color.RED}, {"id": 1, "color": Color.BLUE}],
+		"puzzle": {"type": "mandala", "theme": "rainbow"}}
+	var meta := SaveStore.add_puzzle(profile, picture)
+	var play := PlayScreen.new()
+	play.profile = profile
+	play.puzzle_id = meta["id"]
+	root.add_child(play)
+	await _layout_frames()
+	var a: int = play._type_of[0]
+	var b: int = play._type_of[3]
+	var card_a: Vector2 = (play._items[a] as Control).get_global_rect().get_center()
+	var card_b: Vector2 = (play._items[b] as Control).get_global_rect().get_center()
+	var slot_screen := func(i: int) -> Vector2:
+		var s: Dictionary = play._overlay.slots[i]
+		return play._board.get_global_transform_with_canvas() * (play._board.view_transform() * Vector2(s["x"], s["y"]))
+	await _pen(true, card_b)
+	await _pen(false, card_b)
+	_check(play._selected == b and play._carry == -1, "A pen tap on a gem card picks it")
+	await _pen(true, card_a)
+	await _pen_move(card_a + Vector2(0, 80))
+	_check(play._carry == a and play._selected == a, "Dragging a card down lifts its gem and picks it")
+	await _pen_move(slot_screen.call(3))
+	_check(play._carry_slot == -1, "Another gem's slot isn't a target")
+	await _pen(false, slot_screen.call(3))
+	_check(play._carry == -1 and play._filled == 0 and play._selected == a,
+		"Letting go off its slots places nothing and keeps it picked")
+	await _pen(true, card_a)
+	await _pen_move(card_a + Vector2(0, 80))
+	await _pen_move(slot_screen.call(1) + Vector2(3, 2))
+	_check(play._carry_slot == 1, "Over one of its open slots, that slot is the target")
+	await _pen(false, slot_screen.call(1) + Vector2(3, 2))
+	_check(play._filled == 1 and play._overlay.placed[1] != 0 and play._overlay.placed[0] == 0,
+		"Letting go there places exactly that stone")
+	await _pen(true, card_a)
+	await _pen_move(card_a + Vector2(80, 4))
+	_check(play._carry == -1, "A sideways drag on the row scrolls rather than lifting a gem")
+	await _pen(false, card_a + Vector2(80, 4))
+	_check(play._filled == 1, "Scrolling the row places nothing")
+	play.queue_free()
+	await process_frame
+	SaveStore.delete_puzzle(profile, meta["id"])
+	Input.emulate_touch_from_mouse = was
+
+
+## The pen touching down or lifting at `at`, as Android reports it: the left
+## mouse button.
+func _pen(pressed: bool, at: Vector2) -> void:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	e.pressed = pressed
+	# Input takes window px; the screens work in the stretched 1080×2400.
+	e.position = root.get_final_transform() * at
+	e.global_position = e.position
+	_pen_at = at
+	Input.parse_input_event(e)
+	await process_frame
+
+
+func _pen_move(at: Vector2) -> void:
+	for k in 4:
+		var e := InputEventMouseMotion.new()
+		e.button_mask = MOUSE_BUTTON_MASK_LEFT
+		e.pressure = 0.5
+		var to := _pen_at.lerp(at, (k + 1) / 4.0)
+		e.relative = root.get_final_transform().basis_xform(to - _pen_at.lerp(at, k / 4.0))
+		e.position = root.get_final_transform() * to
+		e.global_position = e.position
+		Input.parse_input_event(e)
+		await process_frame
+	_pen_at = at
 
 
 func _test_completion_rewards() -> void:

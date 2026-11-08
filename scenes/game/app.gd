@@ -28,6 +28,12 @@ var _reveal: GemMenuReveal
 
 
 func _ready() -> void:
+	# Android hands a stylus such as the S Pen over as a mouse, and Godot only
+	# turns mouse presses into touches when there's no touchscreen; every
+	# gesture in the game listens for touches, so turn that on here too.
+	# Fingers still come as touches, and the mouse events copied from them
+	# are marked emulated, so they never come back round as touches.
+	Input.emulate_touch_from_mouse = true
 	get_tree().root.theme = GameTheme.build()
 	RenderingServer.set_default_clear_color(GameTheme.BG)
 	_backdrop = MenuBackdrop.new()

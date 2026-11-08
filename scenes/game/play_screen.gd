@@ -22,6 +22,12 @@ extends Control
 ##
 ## The stones button up top sets how many stones one tap or drag can place:
 ## 1, 3, 5 or any number (see STROKE_LIMITS); it's kept in the settings.
+##
+## A gem can also be carried from the row: a drag that starts on a card and
+## heads up or down (rather than sideways, which scrolls) picks that gem and
+## lifts it off the row; let go over one of its open slots and it goes in
+## there (a gold ring shows which). Let go anywhere else and it stays picked.
+## Fingers, a mouse and a stylus such as the S Pen all work (see App).
 
 signal back_requested
 signal collection_requested
@@ -59,6 +65,12 @@ const SPRINKLE := 40
 ## picking a gem, and how fast a fling slows (per second).
 const ROW_DEADZONE := 20.0
 const FLING_DECAY := 4.0
+## A gem carried from the row: how far off a slot it may be let go and still
+## go in (screen px), how big it's drawn, and how far above the point it
+## floats so the slot underneath stays in sight.
+const DROP_SLOP := 22.0
+const CARRY_PX := 130.0
+const CARRY_LIFT := 0.75
 ## Placement styles and power-ups this screen knows: GemCatalog.ANIMATIONS
 ## and POWERS must be among them (an unknown style pops in).
 const FILL_STYLES := ["pop", "fly", "drop", "spin", "twinkle", "bounce", "comet", "firework", "beam", "halo"]
@@ -105,6 +117,14 @@ var _row_last_ms := 0
 var _row_moved := false
 var _scroll_x := 0.0
 var _fling := 0.0
+## The gem type being carried from the row (-1 none), where it is on screen,
+## and the slot it would go into if let go now (-1 none).
+var _carry := -1
+var _carry_at := Vector2.ZERO
+var _carry_slot := -1
+var _carry_layer: Control
+## A carried gem is going in: it pops into place where it was let go.
+var _carry_drop := false
 var _flights: GemFlights
 ## "fly" or "pop" (see SaveStore.DEFAULT_SETTINGS).
 var _fill_animation := "fly"
@@ -281,6 +301,11 @@ func _ready() -> void:
 	_flights.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_flights.landed.connect(_on_landed)
 	add_child(_flights)
+	_carry_layer = Control.new()
+	_carry_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_carry_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_carry_layer.draw.connect(_draw_carry)
+	add_child(_carry_layer)
 
 	_load()
 
@@ -478,13 +503,22 @@ func _input(event: InputEvent) -> void:
 			_fling = 0.0
 		elif not event.pressed and event.index == _row_touch:
 			_row_touch = -1
-			if not _row_moved:
+			if _carry >= 0:
+				_drop_carry(event.position)
+			elif not _row_moved:
 				_tap_row(event.position)
 	elif event is InputEventScreenDrag and event.index == _row_touch:
 		var dx: float = event.position.x - _row_last.x
-		if not _row_moved and absf(event.position.x - _row_start.x) > ROW_DEADZONE:
-			_row_moved = true
-		if _row_moved:
+		if not _row_moved and _carry < 0:
+			var travel: Vector2 = event.position - _row_start
+			if absf(travel.y) > ROW_DEADZONE and absf(travel.y) > absf(travel.x):
+				_row_moved = true
+				_lift(_card_at(_row_start), event.position)
+			elif absf(travel.x) > ROW_DEADZONE:
+				_row_moved = true
+		if _carry >= 0:
+			_move_carry(event.position)
+		elif _row_moved:
 			_scroll_x -= dx / _row_scale()
 			_apply_scroll()
 			var now := Time.get_ticks_msec()
@@ -511,14 +545,91 @@ func _row_scale() -> float:
 	return _palette.get_global_transform_with_canvas().get_scale().x
 
 
-## Picks the card under screen point `at`, by where the cards really are
-## (the row's scroll can move under it when a card goes).
+## Picks the card under screen point `at` (or lets go of it if picked).
 func _tap_row(at: Vector2) -> void:
+	var t := _card_at(at)
+	if t >= 0:
+		_select(-1 if t == _selected else t)
+
+
+## The gem type whose card is under screen point `at`, or -1, by where the
+## cards really are (the row's scroll can move under it when a card goes).
+func _card_at(at: Vector2) -> int:
 	for t: int in _items:
 		var b: Control = _items[t]
 		if b.get_global_rect().has_point(at):
-			_select(-1 if t == _selected else t)
-			return
+			return t
+	return -1
+
+
+## Lifts gem type t (if any) off the row to be carried, picking it.
+func _lift(t: int, at: Vector2) -> void:
+	if t < 0 or _done or _types[t]["left"] <= 0:
+		return
+	_carry = t
+	_fling = 0.0
+	if _selected != t:
+		_select(t)
+	_move_carry(at)
+
+
+func _move_carry(at: Vector2) -> void:
+	_carry_at = at
+	var slot := -1
+	var p := _board_point(at)
+	if Rect2(Vector2.ZERO, _board.size).has_point(_board.get_global_transform_with_canvas().affine_inverse() * at):
+		slot = _overlay.slot_at(p, _carry, DROP_SLOP / _board.scale_px())
+	_carry_slot = slot
+	_carry_layer.queue_redraw()
+
+
+## Lets go of the carried gem at screen point `at`: it goes into the open
+## slot there, as a tap would place it (so Big brush and the stones limit
+## count), else it just stays picked.
+func _drop_carry(at: Vector2) -> void:
+	_move_carry(at)
+	var t := _carry
+	var slot := _carry_slot
+	_end_carry()
+	if slot < 0 or _done:
+		return
+	_stroke_type = t
+	_stroke_placed = 0
+	_carry_drop = true
+	_fill_at(_board_point(at), DROP_SLOP)
+	_carry_drop = false
+	_stroke_type = -1
+
+
+func _end_carry() -> void:
+	_carry = -1
+	_carry_slot = -1
+	_carry_layer.queue_redraw()
+
+
+## A screen point in board units.
+func _board_point(at: Vector2) -> Vector2:
+	return _board.screen_to_board(_board.get_global_transform_with_canvas().affine_inverse() * at)
+
+
+## The carried gem, floating just above the finger or pen, and a gold ring
+## round the slot it would go into.
+func _draw_carry() -> void:
+	if _carry < 0:
+		return
+	var to_layer := _carry_layer.get_global_transform_with_canvas().affine_inverse()
+	if _carry_slot >= 0:
+		var s: Dictionary = _overlay.slots[_carry_slot]
+		var at := to_layer * (_board.get_global_transform_with_canvas() * (_board.view_transform()
+				* Vector2(s["x"], s["y"])))
+		var r := maxf(maxf(float(s["size"]), float(s["width"])) / 2.0 * _board.scale_px() * 1.2, 14.0)
+		_carry_layer.draw_arc(at, r, 0.0, TAU, 48, GameTheme.GOLD, 5.0, true)
+	var icon: Texture2D = _types[_carry].get("icon")
+	if icon == null:
+		return
+	var center := to_layer * _carry_at - Vector2(0.0, CARRY_PX * CARRY_LIFT)
+	var rect := Rect2(center - Vector2(CARRY_PX, CARRY_PX) / 2.0, Vector2(CARRY_PX, CARRY_PX))
+	_carry_layer.draw_texture_rect(icon, rect, false, Color(1, 1, 1, 0.92 if _carry_slot >= 0 else 0.7))
 
 
 ## The first gem type after `t` with slots left (wrapping round), or -1.
@@ -609,14 +720,17 @@ func _fill(i: int) -> void:
 	_overlay.place(i)
 	var s: Dictionary = _overlay.slots[i]
 	var moved := false
-	match _fill_animation:
+	# Only the carried stone itself pops; any others it sets off go as usual.
+	var dropped := _carry_drop
+	_carry_drop = false
+	match "pop" if dropped else _fill_animation:
 		"fly", "drop", "spin", "bounce", "comet", "firework", "beam", "halo":
 			moved = _send(i, t, _fill_animation)
 		"twinkle":
 			_board.fill_slot(i)
 			_flights.burst(Vector2(s["x"], s["y"]), s["size"], _types[t]["color"])
 	if not moved:
-		if _fill_animation != "twinkle":
+		if dropped or _fill_animation != "twinkle":
 			_board.fill_slot(i)
 			_flights.burst(Vector2(s["x"], s["y"]), s["size"], _types[t]["color"])
 		_buzz()
@@ -700,6 +814,8 @@ func _update_board_input() -> void:
 	_stroke_type = -1
 	_row_touch = -1
 	_fling = 0.0
+	if is_instance_valid(_carry_layer):
+		_end_carry()
 
 
 ## The power-ups she has charges of (or has on), each with a button.
