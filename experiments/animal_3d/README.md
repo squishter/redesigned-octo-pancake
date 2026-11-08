@@ -1,5 +1,10 @@
 # Rigged 3D animals → 2D puzzle art
 
+The current direction is **sourced meshes first**. See
+[asset sourcing findings](ASSET_SOURCES.md) for the Quaternius shortlist,
+downloaded model inventory, species coverage and import checks. The procedural
+meshes below remain pipeline experiments; a parametric fallback is deferred.
+
 This is a working investigation of a replacement for the animal generator.
 It uses the app wiring from `ccr-7d680ac7-axod0b` and leaves the production
 generator in place while the replacement is evaluated.
