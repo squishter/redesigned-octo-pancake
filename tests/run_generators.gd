@@ -352,10 +352,10 @@ func test_swirls() -> void:
 			graph["paths"].size()])
 
 
-## Animals: 24 in a row meet every species, never one again within
-## AVOID_RECENT; every line has a family and the silhouette is closed; every
-## coat draws its markings, whose areas share a group; facing left mirrors
-## facing right. Writes a contact sheet.
+## Animals: a run meets every species, never one again within AVOID_RECENT;
+## every line has a family and the silhouette is closed; every pose of every
+## body plan holds together; every coat draws its markings, whose areas
+## share a group; facing left mirrors facing right. Writes a contact sheet.
 func test_animals() -> void:
 	print("Animals")
 	var count := AnimalGenerator.SPECIES.size()
@@ -367,82 +367,101 @@ func test_animals() -> void:
 	for i in count:
 		var seed_value := 7300 + i
 		var lines := PictureSources.mandala_lines(seed_value, {"variant": "animal", "recent": recent, "frame": false})
-		var m: Dictionary = lines["mandala"]
-		var an: Dictionary = m["animal"]
+		var an: Dictionary = lines["mandala"]["animal"]
 		var last := recent.slice(maxi(0, recent.size() - AnimalGenerator.AVOID_RECENT)).map(
 				func(r: Dictionary) -> String: return r["species"])
 		check(not an["species"] in last, "seed %d: %s again within %d" % [seed_value, an["species"],
 				AnimalGenerator.AVOID_RECENT])
+		check(an["pose"] in AnimalGenerator.PLANS[an["plan"]], "seed %d: a %s can't %s" % [seed_value, an["species"],
+				an["pose"]])
 		recent.append(an)
 		seen[an["species"]] = true
-		var w: int = lines["width"]
-		var h: int = lines["height"]
-		var map := RegionMap.build(lines["mask"], w, h, int(w * h * 0.0005))
-		print("  seed %d %-9s %-12s %-6s %-5s %-6s %3d regions" % [seed_value, an["species"], an["coat"], an["pose"],
-				an["facing"], an["scene"], map.regions.size()])
-		check(m["symmetry"] == "none", "seed %d: animals aren't symmetric" % seed_value)
-		check(m["families"].size() == m["polylines"].size(), "seed %d: lines without a family" % seed_value)
-		check(map.regions.size() >= 4, "seed %d: only %d regions" % [seed_value, map.regions.size()])
-		var outline: int = m["family_names"].find("outline")
-		for k in m["polylines"].size():
-			if m["families"][k] == outline:
-				check(m["closed"][k] == 1, "seed %d: the silhouette is open" % seed_value)
+		print("  seed %d %-9s %-8s %-12s %-5s %-6s" % [seed_value, an["species"], an["pose"], an["coat"], an["facing"],
+				an["scene"]])
+		check_animal(lines, "seed %d" % seed_value)
 		sheet_cell(sheet, lines, i, cell)
 	for species: String in AnimalGenerator.SPECIES:
 		check(seen.has(species), "%s never showed up in %d animals" % [species, count])
 	sheet.save_png(out_dir.path_join("animals_contact_sheet.png"))
 
-	# Every coat draws markings (bar solid), and their areas are joined.
-	for coat: String in CoatPatterns.COATS:
-		var opts := {"variant": "animal", "species": "horse", "coat": coat, "scene": "none", "frame": false}
+	# Every pose, on a species of each body plan that takes it.
+	var by_plan := {}
+	for species: String in AnimalGenerator.SPECIES:
+		by_plan[AnimalGenerator.SPECIES[species]["plan"]] = species
+	var posed := {}
+	for plan: String in AnimalGenerator.PLANS:
+		for pose: String in AnimalGenerator.PLANS[plan]:
+			var lines := PictureSources.mandala_lines(7350 + posed.size(), {"variant": "animal", "species": by_plan[plan],
+					"pose": pose, "scene": "none", "frame": false})
+			check(lines["mandala"]["animal"]["pose"] == pose, "%s: asked to %s" % [by_plan[plan], pose])
+			check_animal(lines, "%s %s" % [by_plan[plan], pose])
+			posed[pose] = true
+	for pose: String in AnimalGenerator.POSES:
+		check(posed.has(pose), "no body plan takes the %s pose" % pose)
+
+	# Every coat draws its markings, and their areas are joined.
+	for coat: String in AnimalGenerator.COATS:
+		var opts := {"variant": "animal", "species": "dog", "pose": "stand", "coat": coat, "scene": "none",
+				"frame": false, "markings": []}
 		var lines := PictureSources.mandala_lines(7400, opts)
 		var m: Dictionary = lines["mandala"]
-		var family: int = m["family_names"].find("markings")
+		var name: String = AnimalGenerator.COAT_FAMILY.get(coat, "markings")
+		var family: int = m["family_names"].find(name)
 		var drawn: int = m["families"].count(family) if family >= 0 else 0
-		check((drawn > 0) == (coat != "solid"), "%s coat drew %d marking lines" % [coat, drawn])
+		check((drawn > 0) == (coat != "solid"), "%s coat drew %d %s lines" % [coat, drawn, name])
 		if coat == "solid":
 			continue
 		var w: int = lines["width"]
 		var map := RegionMap.build(lines["mask"], w, lines["height"], 0)
 		var groups := RegionPaint.motif_groups(map, RegionPaint.symmetry_groups(map, "none"), lines["motifs"]["areas"])
-		var marked := {}
+		var distinct := {}
 		for mark: Dictionary in lines["motifs"]["areas"]:
 			if mark["family"] == family:
 				var at: Vector2 = mark["at"]
 				var r := map.labels[int(at.y) * w + int(at.x)]
 				if r >= 0:
-					marked[r] = groups[r]
-		var distinct := {}
-		for r in marked:
-			distinct[marked[r]] = true
-		check(marked.size() > 0 and distinct.size() == 1, "%s coat: %d marked areas in %d groups" % [coat, marked.size(),
-				distinct.size()])
+					distinct[groups[r]] = true
+		check(distinct.size() == 1, "%s coat: its areas fall in %d groups" % [coat, distinct.size()])
 
 	# Facing left is facing right in a mirror.
 	var right := PictureSources.mandala_lines(7500, {"variant": "animal", "facing": "right", "scene": "none",
 			"frame": false, "size": 384})
 	var left := PictureSources.mandala_lines(7500, {"variant": "animal", "facing": "left", "scene": "none",
 			"frame": false, "size": 384})
-	var mirrored := PackedByteArray()
-	mirrored.resize(right["mask"].size())
-	for y in 384:
-		for x in 384:
-			mirrored[y * 384 + x] = left["mask"][y * 384 + 383 - x]
 	var lit := 0
 	var differ := 0
-	for i in mirrored.size():
-		if right["mask"][i]:
-			lit += 1
-		if (mirrored[i] != 0) != (right["mask"][i] != 0):
-			differ += 1
+	for y in 384:
+		for x in 384:
+			var a: bool = right["mask"][y * 384 + x] != 0
+			if a:
+				lit += 1
+			if a != (left["mask"][y * 384 + 383 - x] != 0):
+				differ += 1
 	check(differ < lit * 0.05, "facing left differs from the mirror of facing right in %d of %d px" % [differ, lit])
 
-	# A wild animal blends two species; genes can be set outright.
+	# A wild animal blends two species of one family; genes can be set outright.
 	var wild := AnimalGenerator.generate(7600, {"species": "wild"})
 	check(wild["blend"] != "" and wild["blend"] != wild["species"], "wild animal didn't blend: %s" % wild["blend"])
+	check(AnimalGenerator.KIN[AnimalGenerator.SPECIES[wild["blend"]]["plan"]] == AnimalGenerator.KIN[wild["plan"]],
+			"wild %s blended with a %s" % [wild["species"], wild["blend"]])
 	var set := AnimalGenerator.generate(7601, {"species": "cat", "genes": {"horns": "antlers", "tail": "bushy"}})
 	check(set["horns"] == "antlers" and set["tail"] == "bushy", "genes option ignored: %s, %s" % [set["horns"],
 			set["tail"]])
+
+
+## An animal's line art: families for every line, a closed silhouette, and
+## enough areas.
+func check_animal(lines: Dictionary, what: String) -> void:
+	var m: Dictionary = lines["mandala"]
+	check(m["symmetry"] == "none", "%s: animals aren't symmetric" % what)
+	check(m["families"].size() == m["polylines"].size(), "%s: lines without a family" % what)
+	var outline: int = m["family_names"].find("outline")
+	for k in m["polylines"].size():
+		if m["families"][k] == outline:
+			check(m["closed"][k] == 1, "%s: the silhouette is open" % what)
+	var w: int = lines["width"]
+	var map := RegionMap.build(lines["mask"], w, lines["height"], int(w * w * 0.0005))
+	check(map.regions.size() >= 4, "%s: only %d regions" % [what, map.regions.size()])
 
 
 ## Animal prints: every print shows up over a run, splits carry two, and

@@ -705,7 +705,8 @@ const PUZZLES := {
 	"swirl": {"name": "Swirl collage", "source": "Swirl", "variant": "swirl",
 			"about": "Free-flowing line art: waves, whirls, blooms, scales and more, no two alike."},
 	"animal": {"name": "Animal collage", "source": "Animal", "variant": "animal",
-			"about": "Animals from tigers to giraffes, and some that never were, each in its own coat."},
+			"about": "Cats, dogs, foxes, horses, elephants and more: sitting, pouncing, curled up asleep, swimming,"
+					+ " each in its own coat."},
 	"animal_print": {"name": "Animal print collage", "source": "Animal print", "variant": "animal_print",
 			"about": "Stripes, spots, rosettes and patches all over, sometimes two prints at once."},
 	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,

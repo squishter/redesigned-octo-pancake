@@ -5,13 +5,13 @@ extends RefCounted
 ## markings' outlines are its zero iso-line (see FieldLines). Nothing about
 ## them is symmetric.
 ##
-## Coordinates are "coat space": an animal's own space, its body 1 long
-## (AnimalGenerator), or the board scaled (AnimalPrintGenerator). Striped
-## coats also take a flow coordinate `phi` (distance along the body, so
-## stripes wrap round legs and ring the tail) and `v` (-1 on the back to 1
-## at the belly, scaled by how much the part tapers its stripes).
+## Coordinates are "coat space": a part of an animal unrolled (along the
+## part, and across it in body lengths; see AnimalGenerator), or the board
+## scaled (AnimalPrintGenerator). Striped coats also take a flow coordinate
+## `phi` (distance along the part, so stripes cross it) and `v` (-1 on its
+## top edge to 1 on its bottom, scaled by how much the part tapers its
+## stripes toward the belly).
 ##
-##   solid: no markings
 ##   tiger: narrow stripes across the flow, forking and thinning to the belly
 ##   zebra: bold, even stripes, belly to back
 ##   cow: big irregular patches (Holstein)
@@ -21,16 +21,12 @@ extends RefCounted
 ##   leopard: rosettes, rings broken into 2-4 pieces
 ##   giraffe: a net of patches with narrow coat between
 ##   dapple: soft round spots of mixed sizes, in clusters
-##   appaloosa: a blanket over the rump, spotted (a second field, value2)
-##   saddle: one wide band round the middle (a belted cow, a tapir)
-##   countershade: a paler belly, its edge wavy along the flank
-## The last three need an animal's body (rump, belly) to place them.
+## Markings that belong to a body's shape (a pale belly, a blanket over the
+## rump, socks) are AnimalGenerator's.
 
-const COATS := ["solid", "tiger", "zebra", "cow", "pinto", "dalmatian", "cheetah", "leopard", "giraffe", "dapple",
-		"appaloosa", "saddle", "countershade"]
-const BODY_COATS := ["appaloosa", "saddle", "countershade"]
+const COATS := ["tiger", "zebra", "cow", "pinto", "dalmatian", "cheetah", "leopard", "giraffe", "dapple"]
 ## Coats that also work as an all-over print.
-const PRINTS := ["tiger", "zebra", "cow", "pinto", "dalmatian", "cheetah", "leopard", "giraffe", "dapple"]
+const PRINTS := COATS
 const LATTICE := 64
 
 var coat := "solid"
@@ -44,35 +40,24 @@ var _p := {}
 ## by grid cell (Vector2i of `_cell`-sized cells).
 var _spots := {}
 var _cell := 0.2
-var _second: CoatPatterns = null
-## For body coats: the torso as [[x, center y, radius], ...] from rump to
-## chest, and the rump's top.
-var _spine := []
 
 
-## A coat. `bounds` is the coat-space area markings are scattered over;
-## `body` describes the animal for body coats: {"spine": [[x, cy, r], ...]
-## rump to chest, "rump": Vector2 (top of the rump), "rump_r": float}.
-static func make(coat_name: String, seed_value: int, bounds: Rect2, body: Dictionary = {}, scale_by := 1.0) \
-		-> CoatPatterns:
+## A coat (any name not in COATS has no markings). `bounds` is the
+## coat-space area markings are scattered over.
+static func make(coat_name: String, seed_value: int, bounds: Rect2, scale_by := 1.0) -> CoatPatterns:
 	var c := CoatPatterns.new()
 	c.coat = coat_name if coat_name in COATS else "solid"
 	c.rng.seed = hash([seed_value, "coat", c.coat])
 	c.scale = scale_by
-	c._spine = body.get("spine", [])
 	c._lattice.resize(LATTICE * LATTICE)
 	for i in c._lattice.size():
 		c._lattice[i] = c.rng.randf_range(-1.0, 1.0)
 	c._shift = Vector2(c.rng.randf_range(0.0, 50.0), c.rng.randf_range(0.0, 50.0))
-	c._setup(bounds, body, seed_value)
+	c._setup(bounds)
 	return c
 
 
-func has_second() -> bool:
-	return _second != null
-
-
-func _setup(bounds: Rect2, body: Dictionary, seed_value: int) -> void:
+func _setup(bounds: Rect2) -> void:
 	var k := scale
 	match coat:
 		"tiger":
@@ -117,18 +102,6 @@ func _setup(bounds: Rect2, body: Dictionary, seed_value: int) -> void:
 					y += spacing
 				x += spacing
 			_p = {"gap": rng.randf_range(0.024, 0.03) * k}
-		"appaloosa":
-			var rump: Vector2 = body.get("rump", bounds.get_center())
-			var r: float = body.get("rump_r", 0.2)
-			_p = {"rump": rump + Vector2(rng.randf_range(-0.05, 0.08), r * 0.15), "size": r * rng.randf_range(1.5, 1.9)}
-			_second = CoatPatterns.make("dalmatian", seed_value + 1, bounds, {}, 0.85 * k)
-		"saddle":
-			var mid := bounds.get_center().x
-			if _spine.size() >= 2:
-				mid = lerpf(_spine[0][0], _spine[_spine.size() - 1][0], 0.5)
-			_p = {"at": mid + rng.randf_range(-0.12, 0.08), "half": rng.randf_range(0.12, 0.18)}
-		"countershade":
-			_p = {"level": rng.randf_range(0.1, 0.4)}
 
 
 ## Positive inside a marking. `a` in coat space; `phi` and `v` see above.
@@ -149,32 +122,13 @@ func value(a: Vector2, phi: float, v: float) -> float:
 			return _rosette_value(a)
 		"giraffe":
 			return _giraffe_value(a)
-		"appaloosa":
-			var q: Vector2 = (a - _p["rump"]) / Vector2(1.0, 0.8)
-			return _p["size"] - q.length() + 0.05 * _noise(a * 4.0)
-		"saddle":
-			return _p["half"] - absf(a.x - _p["at"] + 0.05 * _noise(Vector2(1.0, a.y * 3.0)))
-		"countershade":
-			var at := _spine_at(a.x)
-			return a.y - (at.x + at.y * _p["level"]) + 0.035 * _noise(Vector2(a.x * 4.0, 2.0))
 	return -1.0
-
-
-## The second field (appaloosa spots inside the blanket), positive inside;
-## -1 where there is none.
-func value2(a: Vector2, phi: float, v: float) -> float:
-	if _second == null:
-		return -1.0
-	return minf(_second.value(a, phi, v), value(a, phi, v) - 0.035)
 
 
 ## Coat-space points inside the markings, when the coat knows them (spot
 ## centers, the middle of each piece of a rosette, giraffe patches), so
-## small markings get marked too; empty for the others. `second`: the second
-## field's (appaloosa spots).
-func mark_points(second := false) -> PackedVector2Array:
-	if second:
-		return _second.mark_points() if _second != null else PackedVector2Array()
+## small markings get marked too; empty for the others.
+func mark_points() -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if not coat in ["dalmatian", "cheetah", "dapple", "leopard", "giraffe"]:
 		return out
@@ -191,8 +145,6 @@ func mark_points(second := false) -> PackedVector2Array:
 				out.append(c + Vector2.from_angle((a + b) * 0.5) * spot[1])
 	return out
 
-
-# --- spots -------------------------------------------------------------------------
 
 ## Scatters spots `apart` apart (dart throwing) with radii in r0..r1;
 ## `cluster` > 0 thins them out where a low-frequency noise is low.
@@ -275,22 +227,6 @@ func _giraffe_value(a: Vector2) -> float:
 	if f2 == INF:
 		return -1.0
 	return (f2 - f1) * 0.5 - _p["gap"]
-
-
-## The torso's [center y, radius] at x (clamped to its ends).
-func _spine_at(x: float) -> Vector2:
-	if _spine.is_empty():
-		return Vector2(0.0, 0.3)
-	if x <= _spine[0][0]:
-		return Vector2(_spine[0][1], _spine[0][2])
-	for i in range(1, _spine.size()):
-		var b: Array = _spine[i]
-		if x <= b[0]:
-			var a: Array = _spine[i - 1]
-			var t: float = (x - a[0]) / maxf(0.0001, b[0] - a[0])
-			return Vector2(lerpf(a[1], b[1], t), lerpf(a[2], b[2], t))
-	var last: Array = _spine[_spine.size() - 1]
-	return Vector2(last[1], last[2])
 
 
 # --- noise -------------------------------------------------------------------------

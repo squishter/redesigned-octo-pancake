@@ -31,8 +31,8 @@ const SWIRL_FRAME_CHANCE := 0.25
 ## symmetric, rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
 ## (shape, border, body, antennae, fore, hind), "snowflake" (center, arm,
 ## tip, between, details), "swirl" (layout, shape, patch, strings, ribbon, motifs),
-## "animal" (species, blend, coat, pose, facing, scene, feet, ears, horns, tail,
-## mane, markings) or "animal_print" (coats, shape, split, angle).
+## "animal" (species, blend, plan, coat, pose, facing, scene, feet, ears, horns,
+## tail, mane, markings) or "animal_print" (coats, shape, split, angle).
 ## Swirls, animals and animal prints aren't symmetric; instead they also return "families" (an id per
 ## polyline; a frame's lines get one more) and "marks" ([{"at", "family"}],
 ## points inside motif areas), see SwirlGenerator.
@@ -67,8 +67,8 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		"animal":
 			design = AnimalGenerator.generate(seed_value, options)
 			symmetry = "none"
-			keys = ["species", "blend", "coat", "pose", "facing", "scene", "feet", "ears", "horns", "tail", "mane",
-					"markings"]
+			keys = ["species", "blend", "plan", "coat", "pose", "facing", "scene", "feet", "ears", "horns", "tail",
+					"mane", "markings"]
 		"animal_print":
 			design = AnimalPrintGenerator.generate(seed_value, options)
 			symmetry = "none"
