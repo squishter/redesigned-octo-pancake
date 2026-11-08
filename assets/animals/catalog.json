@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "models": {
+    "farm_cow": {
+      "scene": "res://assets/animals/models/farm_Cow.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "93317f8fd27623363dc590137485ac3f3d4f8a73e22407cc24d4d871a666adf5",
+      "display_name": "Cow (Farm)"
+    },
+    "farm_horse": {
+      "scene": "res://assets/animals/models/farm_Horse.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "5755af6fc782f27d892399bd740008dfe3dedebb1b6fecfb291a23630dfbb59d",
+      "display_name": "Horse (Farm)"
+    },
+    "farm_llama": {
+      "scene": "res://assets/animals/models/farm_Llama.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "97586ce661df79bedb243bce28764ee60bb4fb677b52c78fb46269dd87a118fa",
+      "display_name": "Llama"
+    },
+    "farm_pig": {
+      "scene": "res://assets/animals/models/farm_Pig.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "4bb9acd7c35e40af8f0758db372d8f218e017b4683567165db2ca060a829b799",
+      "display_name": "Pig"
+    },
+    "farm_pug": {
+      "scene": "res://assets/animals/models/farm_Pug.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "1763b461ef34daaaff44b1fd2ebc6015a795ae0d3725db6e4651928341a4fa3d",
+      "display_name": "Pug"
+    },
+    "farm_sheep": {
+      "scene": "res://assets/animals/models/farm_Sheep.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "26b4cfee2b36681b3b04dc75c347813bfcef86832246bfbc5f3b385d4996b521",
+      "display_name": "Sheep"
+    },
+    "farm_zebra": {
+      "scene": "res://assets/animals/models/farm_Zebra.glb",
+      "rig": "farm",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "2aeaa23e4fefede778f754c953bc7009650dbf6b6c617055ae771d303516dab8",
+      "display_name": "Zebra"
+    },
+    "ultimate_alpaca": {
+      "scene": "res://assets/animals/models/ultimate_Alpaca.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "1a0e7fb9c851f59e1e0e7354ab73b89822c27185ba487bcf0cccbcf2061205a3",
+      "display_name": "Alpaca"
+    },
+    "ultimate_bull": {
+      "scene": "res://assets/animals/models/ultimate_Bull.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "18d46a7b11046ca859591e2a1263ffa1f4572c596a87032f94190971daed3e4f",
+      "display_name": "Bull"
+    },
+    "ultimate_cow": {
+      "scene": "res://assets/animals/models/ultimate_Cow.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "6b283031c9a215aa6238543c798bf99b3e182d51bb24689eeafdea3e80f33de4",
+      "display_name": "Cow"
+    },
+    "ultimate_deer": {
+      "scene": "res://assets/animals/models/ultimate_Deer.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "cc87686bd67dfc381cedf6688bd315661d393c29bc82a2db9bb892d0f64fb773",
+      "display_name": "Deer"
+    },
+    "ultimate_donkey": {
+      "scene": "res://assets/animals/models/ultimate_Donkey.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "6e9c715a4bedc3db40152beaa8850d1473c823f81fec4982b713aa3c00851a54",
+      "display_name": "Donkey"
+    },
+    "ultimate_fox": {
+      "scene": "res://assets/animals/models/ultimate_Fox.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "cd979f3ceff5b2fc8953adea65a4d110cceae52af52cfe4cfd0ae7413caf0f1d",
+      "display_name": "Fox"
+    },
+    "ultimate_horse": {
+      "scene": "res://assets/animals/models/ultimate_Horse.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "6ff57851818cbf8d4920ca69a1cd40176999605f5f2f625eab181750bedd2c6d",
+      "display_name": "Horse"
+    },
+    "ultimate_horse_white": {
+      "scene": "res://assets/animals/models/ultimate_Horse_White.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "d04fbf4c81921e08b6cea9bd882a354247708877cf674d78f275be6615453cfc",
+      "display_name": "Horse White"
+    },
+    "ultimate_husky": {
+      "scene": "res://assets/animals/models/ultimate_Husky.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "ac0c5f4ffb12435324d79b79742e69d2754c2f097e8cfab803ac981af2b3d6d4",
+      "display_name": "Husky"
+    },
+    "ultimate_shibainu": {
+      "scene": "res://assets/animals/models/ultimate_ShibaInu.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "b70fc1c59a4cce9d9184bed0fabc8e80f5c075bb5c81ff747d19ac89a7833b22",
+      "display_name": "Shiba Inu"
+    },
+    "ultimate_stag": {
+      "scene": "res://assets/animals/models/ultimate_Stag.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "fceffc460e9424fcadd14d5a452dfd286100e2cfbd7175685188c721a99cc2f2",
+      "display_name": "Stag"
+    },
+    "ultimate_wolf": {
+      "scene": "res://assets/animals/models/ultimate_Wolf.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "5fa3a4c79373952ab2ff4ad68be96672ec6baff2c49fb3b77ed929c4eff1774b",
+      "display_name": "Wolf"
+    },
+    "vol2_cat": {
+      "scene": "res://assets/animals/models/vol2_cat.glb",
+      "rig": "legacy",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "9f256aabc8ecd4e349ef2208accef13fc35f93cfd7645802ca750997c09a4913",
+      "display_name": "Cat (Quaternius)"
+    },
+    "vol2_dog": {
+      "scene": "res://assets/animals/models/vol2_dog.glb",
+      "rig": "legacy",
+      "locomotion": "quadruped",
+      "coat_flow": true,
+      "sha256": "71e42052104929a92ed31f99cc83fa238edae6931101249061344970f6ac8e27",
+      "display_name": "Dog (Quaternius)"
+    },
+    "daydaze_elephant": {
+      "scene": "res://assets/animals/models/daydaze_elephant.glb",
+      "rig": "elephant",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "d51b66c9d715bf3330f2ed9964469007d22bc079f28e1e4b6ecb4dcfc11597bd",
+      "display_name": "Elephant"
+    },
+    "daydaze_labrador": {
+      "scene": "res://assets/animals/models/daydaze_labrador.glb",
+      "rig": "labrador",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "aef45c117671eccfc6882f0b20930a3e6ee41d75d1a99d783aee1128742236cc",
+      "display_name": "Labrador"
+    },
+    "daydaze_lion": {
+      "scene": "res://assets/animals/models/daydaze_lion.glb",
+      "rig": "lion",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "f2196e8997f64e291e67e0ee8b6c2577d1241bf9db5ea32799a0c55745d9da75",
+      "display_name": "Lion cub"
+    },
+    "gobkit_anglerfish": {
+      "scene": "res://assets/animals/models/gobkit_anglerfish.glb",
+      "rig": "gobkit",
+      "locomotion": "free",
+      "coat_flow": false,
+      "sha256": "8d07bd212527ec2e0ba2d42367dcf65ae91eb35538fb3b57a2bfd8e1d8ac60fa",
+      "display_name": "Anglerfish"
+    },
+    "gobkit_bat": {
+      "scene": "res://assets/animals/models/gobkit_bat.glb",
+      "rig": "gobkit",
+      "locomotion": "free",
+      "coat_flow": false,
+      "sha256": "1a4317609094c64d3f751adb9150df628aaf7902f7440174afcb642c30e0e072",
+      "display_name": "Bat"
+    },
+    "gobkit_corgi": {
+      "scene": "res://assets/animals/models/gobkit_corgi.glb",
+      "rig": "gobkit",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "95cd2c4d53d70ee9dd2e1329dcb6de7d4a725301d504a4f2f00ecb34dc1a0851",
+      "display_name": "Corgi"
+    },
+    "gobkit_duck": {
+      "scene": "res://assets/animals/models/gobkit_duck.glb",
+      "rig": "gobkit",
+      "locomotion": "bird",
+      "coat_flow": false,
+      "sha256": "6550a5807bc83edbadec0759155b3d9242b6ce6b980213a3872b49db80dfd579",
+      "display_name": "Duck"
+    },
+    "gobkit_hippo": {
+      "scene": "res://assets/animals/models/gobkit_hippo.glb",
+      "rig": "gobkit",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "6a911f141482994f890911429e0863353a10fb567822e553b91a273e0fb1d5bd",
+      "display_name": "Hippo"
+    },
+    "gobkit_jellyfish": {
+      "scene": "res://assets/animals/models/gobkit_jellyfish.glb",
+      "rig": "gobkit",
+      "locomotion": "free",
+      "coat_flow": false,
+      "sha256": "b0625fa8a726c594afc47a317b997d98da97b163fe551b15e32262854c99ea46",
+      "display_name": "Jellyfish"
+    },
+    "gobkit_platypus": {
+      "scene": "res://assets/animals/models/gobkit_platypus.glb",
+      "rig": "gobkit",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "9d5e67a5147dabe04c5e3f677b10aa8042ed4efe337378bccc3b7dd6338d99b6",
+      "display_name": "Platypus"
+    },
+    "gobkit_red": {
+      "scene": "res://assets/animals/models/gobkit_red.glb",
+      "rig": "gobkit",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "412df0483b64f3339dfa8405c75c194effb90b72bb279bd233bfb4653d70c7a8",
+      "display_name": "Red panda"
+    },
+    "gobkit_rhino": {
+      "scene": "res://assets/animals/models/gobkit_rhino.glb",
+      "rig": "gobkit",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "65cea4e6533e50d00efdde03de3e792f7337736d97b8f8c8f8b12c4bc0ee5017",
+      "display_name": "Rhino"
+    },
+    "gobkit_shark": {
+      "scene": "res://assets/animals/models/gobkit_shark.glb",
+      "rig": "gobkit",
+      "locomotion": "free",
+      "coat_flow": false,
+      "sha256": "0fc450c99f0fd9f2e5d774ef58cd42b8d8d927bed138444254204b366595dc42",
+      "display_name": "Shark"
+    },
+    "shepherd_shepherd": {
+      "scene": "res://assets/animals/models/shepherd_shepherd.glb",
+      "rig": "quaternius",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "ca9925e5aeb95242dd77a7474f6b54db93ad5de4beb45de290024cf6447ccd65",
+      "display_name": "German Shepherd"
+    },
+    "toon_cat_toon_cat_free": {
+      "scene": "res://assets/animals/models/toon_cat_toon_cat_free.glb",
+      "rig": "toon_cat",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "f76291f5d37d60fc58e8006a1111a5960958545fc4d9592988682ad3a9aaef81",
+      "display_name": "Toon cat"
+    },
+    "tuxedo_cat_tuxedo_cat": {
+      "scene": "res://assets/animals/models/tuxedo_cat_tuxedo_cat.glb",
+      "rig": "tuxedo_cat",
+      "locomotion": "quadruped",
+      "coat_flow": false,
+      "sha256": "7c6e8721df9cbd104355c303c70344d002285d0a2979867599d0ae794da35604",
+      "display_name": "Tuxedo cat"
+    }
+  }
+}

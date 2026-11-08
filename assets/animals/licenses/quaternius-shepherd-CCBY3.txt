@@ -1,0 +1,3 @@
+German Shepard by Quaternius, via Poly Pizza: https://poly.pizza/m/Hssa6NPc6W
+Distribution license: https://creativecommons.org/licenses/by/3.0/
+Original model and native Idle / Walk clips retained. Display scale, path control and an illustrative alert-head motion during barking are locally authored. No jaw or body-size acoustic calibration is claimed.

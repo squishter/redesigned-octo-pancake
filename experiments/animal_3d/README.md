@@ -9,6 +9,11 @@ meshes below remain pipeline experiments; a parametric fallback is deferred.
 two-channel UV exports for all 21 initial sources, 16 additional rigged meshes,
 license credits, previews and reproduction commands.
 
+[Runtime sourced-animal posing](../../gen/animal_3d/README.md) now loads all
+37 bundled models, freezes authored poses and adds constrained seeded variations.
+The pose studio offers an interactive review; projection/line-art integration
+of these sourced meshes is the next stage.
+
 This is a working investigation of a replacement for the animal generator.
 It uses the app wiring from `ccr-7d680ac7-axod0b` and leaves the production
 generator in place while the replacement is evaluated.

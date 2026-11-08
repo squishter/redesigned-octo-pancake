@@ -9,15 +9,17 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 
-def render(model, mode="colors", size=360):
+def render(model, mode="colors", size=360, frame=None):
     vertices = np.array(model["vertices"])
     extent = np.ptp(vertices, axis=0)
-    yaw = math.radians(25 if extent[0] > extent[1] else 65)
+    yaw = math.radians(frame["yaw"] if frame else (25 if extent[0] > extent[1] else 65))
     right = np.array((math.cos(yaw), math.sin(yaw), 0))
     direction = np.array((math.sin(yaw) * 0.97, -math.cos(yaw) * 0.97, 0.243))
     up = np.cross(direction, right)
     screen = np.column_stack((vertices @ right, -vertices @ up))
     lo, hi = screen.min(axis=0), screen.max(axis=0)
+    if frame:
+        lo, hi = np.array(frame["low"]), np.array(frame["high"])
     screen = (screen - (lo + hi) / 2) * (size * 0.86 / max(hi - lo)) + size / 2
     depths = vertices @ direction
     zbuffer = np.full((size, size), -np.inf)

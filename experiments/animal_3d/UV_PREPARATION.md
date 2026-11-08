@@ -80,8 +80,10 @@ remains a good lead; its download requires sign-in and was not obtained.
   additional meshes, using a CPU preview of source colors. This approximates
   materials; it is not a final Godot render or a claim of consistent art direction.
 
-Model binaries remain evaluation artifacts outside Git. Code, provenance,
-inventories and validation reports are versioned on `codex/realistic-animals`.
+The original preparation artifacts remain at those workspace locations. The
+37 selected GLBs are now also bundled in `assets/animals/` for the
+[runtime posing library](../../gen/animal_3d/README.md), with licenses and hashes.
+The Blender sources remain outside Git. All work is on `codex/realistic-animals`.
 
 ## Reproduce
 
