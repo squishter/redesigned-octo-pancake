@@ -12,7 +12,9 @@ extends RefCounted
 ##     powers (the whole-puzzle power-ups on for it)}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
 ##   <id>.progress: which stones are placed, one bit per slot;
-##   <id>.png: a small thumbnail for the menu.
+##   <id>.png: a small thumbnail for the menu;
+##   <id>.lines: its kept lines' groups (LinePaint.build), worked out the
+##     first time it's played (meta's lines_painted lists those painted).
 ## Every puzzle keeps its own files, so starting a new one never touches the
 ## others. Files are written to a temporary name and then moved into place,
 ## so a crash mid-write leaves the old file whole.
@@ -23,8 +25,10 @@ const DIR := "user://saves"
 ## a newer version) are kept as they are.
 const VERSION := 2
 ## Her settings and their defaults: how a placed gem goes in and the
-## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES), and frame cap.
-const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "light_shimmer", "fps_cap": 30, "stroke_limit": 0}
+## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES), frame cap,
+## stones per gesture and painted lines' finish (GemCatalog.LINE_FINISHES).
+const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "light_shimmer", "fps_cap": 30, "stroke_limit": 0,
+		"line_finish": "metal"}
 ## Player frame caps, with 0 leaving the rate uncapped by the engine.
 const FPS_CAPS := [30, 45, 60, 90, 120, 0]
 ## Debug builds only: the setting that lends her everything for testing.
@@ -211,7 +215,7 @@ static func delete_puzzle(profile: Dictionary, id: String) -> void:
 		if puzzles[i]["id"] == id:
 			puzzles.remove_at(i)
 			break
-	for ext in ["json", "progress", "png"]:
+	for ext in ["json", "progress", "png", "lines"]:
 		if FileAccess.file_exists(_path(id, ext)):
 			DirAccess.remove_absolute(_path(id, ext))
 	save_profile(profile)
@@ -245,6 +249,22 @@ static func save_progress(id: String, placed: PackedByteArray) -> Error:
 		if placed[i] != 0:
 			bits[i >> 3] = bits[i >> 3] | (1 << (i & 7))
 	return _write(_path(id, "progress"), bits)
+
+
+## The puzzle's cached line groups, {} when none are cached or they were
+## worked out by another LinePaint.FORMAT.
+static func load_line_groups(id: String) -> Dictionary:
+	var path := _path(id, "lines")
+	if not FileAccess.file_exists(path):
+		return {}
+	var data: Variant = bytes_to_var(FileAccess.get_file_as_bytes(path))
+	if not data is Dictionary or int(data.get("format", -1)) != LinePaint.FORMAT:
+		return {}
+	return data
+
+
+static func save_line_groups(id: String, lines: Dictionary) -> Error:
+	return _write(_path(id, "lines"), var_to_bytes(lines))
 
 
 static func save_thumbnail(id: String, img: Image) -> Error:

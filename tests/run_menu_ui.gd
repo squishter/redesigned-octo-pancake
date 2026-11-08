@@ -12,6 +12,7 @@ const SplashScreen := preload("res://scenes/game/splash_screen.gd")
 const GemMenuReveal := preload("res://scenes/game/gem_menu_reveal.gd")
 var _failures := 0
 var _checks := 0
+var _pen_at := Vector2.ZERO
 
 
 func _init() -> void:
@@ -35,6 +36,8 @@ func _run() -> void:
 	await _test_transitions()
 	await _test_completion_rewards()
 	await _test_stroke_limit()
+	await _test_pen_carry()
+	await _test_line_paint()
 	await _test_light_finales()
 	await _test_unlock_all()
 	_test_camera_helper()
@@ -681,6 +684,240 @@ func _test_stroke_limit() -> void:
 	play.queue_free()
 	await process_frame
 	SaveStore.delete_puzzle(profile, meta["id"])
+
+
+## A stylus (the S Pen) reaches the game as a mouse; App turns on touch
+## emulation for it, so it taps, and carries gems from the row, as a finger.
+func _test_pen_carry() -> void:
+	print("Stylus taps and carrying gems from the row")
+	var was := Input.emulate_touch_from_mouse
+	Input.emulate_touch_from_mouse = true
+	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
+	var slots := []
+	for k in 4:
+		var ruby := k < 2
+		slots.append({"id": k, "region": 0 if ruby else 1, "shape": "round", "cut": "brilliant",
+			"x": 20 + k * 20, "y": 50, "rotation": 0.0, "size": 10.0, "width": 10.0,
+			"target_gem": "ruby" if ruby else "sapphire", "target_color": Color.RED if ruby else Color.BLUE})
+	var picture := {"type": "collage", "width": 100, "height": 100, "slots": slots,
+		"regions": [{"id": 0, "color": Color.RED}, {"id": 1, "color": Color.BLUE}],
+		"puzzle": {"type": "mandala", "theme": "rainbow"}}
+	var meta := SaveStore.add_puzzle(profile, picture)
+	var play := PlayScreen.new()
+	play.profile = profile
+	play.puzzle_id = meta["id"]
+	root.add_child(play)
+	await _layout_frames()
+	var a: int = play._type_of[0]
+	var b: int = play._type_of[3]
+	var card_a: Vector2 = (play._items[a] as Control).get_global_rect().get_center()
+	var card_b: Vector2 = (play._items[b] as Control).get_global_rect().get_center()
+	var slot_screen := func(i: int) -> Vector2:
+		var s: Dictionary = play._overlay.slots[i]
+		return play._board.get_global_transform_with_canvas() * (play._board.view_transform() * Vector2(s["x"], s["y"]))
+	await _pen(true, card_b)
+	await _pen(false, card_b)
+	_check(play._selected == b and play._carry == -1, "A pen tap on a gem card picks it")
+	await _pen(true, card_a)
+	await _pen_move(card_a + Vector2(0, 80))
+	_check(play._carry == a and play._selected == a, "Dragging a card down lifts its gem and picks it")
+	await _pen_move(slot_screen.call(3))
+	_check(play._carry_slot == -1, "Another gem's slot isn't a target")
+	await _pen(false, slot_screen.call(3))
+	_check(play._carry == -1 and play._filled == 0 and play._selected == a,
+		"Letting go off its slots places nothing and keeps it picked")
+	await _pen(true, card_a)
+	await _pen_move(card_a + Vector2(0, 80))
+	await _pen_move(slot_screen.call(1) + Vector2(3, 2))
+	_check(play._carry_slot == 1, "Over one of its open slots, that slot is the target")
+	await _pen(false, slot_screen.call(1) + Vector2(3, 2))
+	_check(play._filled == 1 and play._overlay.placed[1] != 0 and play._overlay.placed[0] == 0,
+		"Letting go there places exactly that stone")
+	await _pen(true, card_a)
+	await _pen_move(card_a + Vector2(80, 4))
+	_check(play._carry == -1, "A sideways drag on the row scrolls rather than lifting a gem")
+	await _pen(false, card_a + Vector2(80, 4))
+	_check(play._filled == 1, "Scrolling the row places nothing")
+	play.queue_free()
+	await process_frame
+	SaveStore.delete_puzzle(profile, meta["id"])
+	Input.emulate_touch_from_mouse = was
+
+
+## A picture with kept lines: a square outline split down the middle, so
+## three groups of lines (left area to outside, right area to outside, and
+## the middle line between the areas), in two colors.
+static func _lines_picture() -> Dictionary:
+	var w := 100
+	var lines := PackedByteArray()
+	lines.resize(w * w)
+	for y in w:
+		for x in w:
+			var ring := x >= 20 and x <= 80 and y >= 20 and y <= 80 and (x <= 22 or x >= 78 or y <= 22 or y >= 78)
+			var middle := x >= 49 and x <= 51 and y >= 20 and y <= 80
+			if ring or middle:
+				lines[y * w + x] = 255
+	var slots := []
+	for k in 4:
+		slots.append({"id": k, "region": k / 2, "shape": "round", "cut": "brilliant", "x": 35 if k < 2 else 65,
+			"y": 35 + (k % 2) * 30, "rotation": 0.0, "size": 8.0, "width": 8.0, "target_gem": "ruby",
+			"target_color": Color.RED})
+	return {"type": "collage", "width": w, "height": w, "setting": "metal", "lines": lines, "lines_visible": lines,
+		"regions": [
+			{"id": 0, "group": 0, "kind": "area", "area": 900, "color": Color.RED, "accent_color": Color.BLUE},
+			{"id": 1, "group": 1, "kind": "area", "area": 800, "color": Color.RED, "accent_color": Color.GREEN}],
+		"slots": slots, "puzzle": {"type": "mandala", "theme": "rainbow"}}
+
+
+func _test_line_paint() -> void:
+	print("Painting kept lines")
+	var picture := _lines_picture()
+	var lines := LinePaint.build(picture)
+	_check(lines["groups"].size() == 3, "A split square makes three line groups (%d)" % lines["groups"].size())
+	var colors := {}
+	for g: Dictionary in lines["groups"]:
+		colors[g["color"]] = true
+	_check(colors.has(Color.GREEN) and colors.has(Color.BLUE) and colors.size() == 2,
+		"Lines take the smaller side's accent color: %s" % [colors.keys()])
+	var labels: PackedByteArray = lines["labels"]
+	_check(labels[50 * 100 + 50] != LinePaint.NONE and labels[50 * 100 + 21] != labels[50 * 100 + 79]
+			and labels[50 * 100 + 21] != labels[50 * 100 + 50], "Left side, right side and middle are separate groups")
+	_check(labels[50 * 100 + 35] == LinePaint.NONE, "Only the kept lines are grouped")
+	_check(LinePaint.build(picture)["labels"] == labels, "The same picture always groups the same way")
+	_check(not LinePaint.has_lines({"width": 4, "height": 4, "lines_visible": PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0])}), "A picture with no kept lines has none to paint")
+
+	# A thick band down the middle touching four areas (two symmetry groups,
+	# split by a thin line across) stays one group.
+	var band := PackedByteArray()
+	band.resize(100 * 100)
+	for y in 100:
+		for x in 100:
+			if (x >= 38 and x <= 62) or (y >= 49 and y <= 51):
+				band[y * 100 + x] = 255
+	var band_slots := []
+	for at: Vector2 in [Vector2(15, 20), Vector2(15, 80), Vector2(85, 20), Vector2(85, 80)]:
+		band_slots.append({"id": band_slots.size(), "region": band_slots.size(), "shape": "round", "x": at.x, "y": at.y,
+			"size": 6.0, "width": 6.0, "target_color": Color.RED})
+	var band_regions := []
+	for r in 4:
+		band_regions.append({"id": r, "group": r % 2, "kind": "area", "area": 600, "color": Color.RED,
+			"accent_color": Color.BLUE if r % 2 == 0 else Color.GREEN})
+	var banded := LinePaint.build({"width": 100, "height": 100, "lines": band, "lines_visible": band,
+		"regions": band_regions, "slots": band_slots})
+	var bl: PackedByteArray = banded["labels"]
+	_check(bl[10 * 100 + 50] == bl[90 * 100 + 50] and bl[50 * 100 + 50] == bl[10 * 100 + 50]
+			and bl[30 * 100 + 40] == bl[70 * 100 + 60], "A thick band bordering many areas is one group")
+	_check(bl[50 * 100 + 10] != bl[10 * 100 + 50], "Thin lines leaving the band keep their own group")
+	_check(Array(GemBoard3D.LINE_FINISHES) == GemCatalog.LINE_FINISHES.keys(),
+		"The board knows every line finish, in the catalog's order")
+	var old := {"unlocks": {"line_finishes": ["metal", "pearl", "glow", "enamel"]}, "powers": {}}
+	Unlockables.normalize(old)
+	var migrated: Array = old["unlocks"]["line_finishes"]
+	migrated.sort()
+	_check(migrated == ["beads", "chalk", "metal", "rope"], "Retired line finishes become their replacements: %s" % [migrated])
+
+	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
+	_check("metal" in profile["unlocks"]["line_finishes"] and profile["unlocks"]["line_finishes"].size() == 1,
+		"Players start with the metal line finish only")
+	var meta := SaveStore.add_puzzle(profile, picture)
+	var play := PlayScreen.new()
+	play.profile = profile
+	play.puzzle_id = meta["id"]
+	root.add_child(play)
+	_check(play._board._paper_material.get_shader_parameter("line_paint") == true and play._board._line_pixels.is_empty(),
+		"While the lines are grouped they already show as empty outlines")
+	await _layout_frames()
+	play.finish_loading_lines()
+	await _layout_frames()
+	_check(play._painted.size() == 3 and play._paints.size() == 2, "The board has three line groups in two paints")
+	_check(play._items.has(PlayScreen.PAINT) and play._items.has(PlayScreen.PAINT + 1), "The row ends with a card per paint")
+	_check(FileAccess.file_exists("user://saves/%s.lines" % meta["id"]), "The grouping is kept for next time")
+	# Every stone in: the lines still need paint.
+	for i in play._overlay.placed.size():
+		play._stroke_type = play._type_of[i]
+		play._stroke_placed = 0
+		play._stroke_fill(i)
+	play._flights.land_all()
+	await _layout_frames()
+	_check(not play._done and play._progress.text.contains("0 / 3 lines"), "With every gem in, the lines still wait: %s" % play._progress.text)
+	var middle := 50 * 100 + 50
+	var k: int = play._paint_of[labels[middle]]
+	play._select(PlayScreen.PAINT + k)
+	var other: int = 1 - k
+	_check(play._stroke_gem(Vector2(50.5, 50.5)) == PlayScreen.PAINT + k, "A line of the picked paint can be painted")
+	var wrong_at := Vector2(21.5, 50.5) if play._paint_of[labels[50 * 100 + 21]] == other else Vector2(79.5, 50.5)
+	_check(play._stroke_gem(wrong_at) == -1, "Another paint's line can't")
+	var g: int = labels[middle]
+	play._stroke_type = play._stroke_gem(Vector2(50.5, 50.5))
+	play._stroke_placed = 0
+	play._fill_at(Vector2(50.5, 50.5), PlayScreen.TAP_SLOP)
+	_check(play._painted[g] == 1 and play._painted_count == 1, "Tapping it paints its whole group")
+	_check(play._board._line_times[middle] > play._board._clock - 0.01 and play._board._paint_until > play._board._clock,
+		"The paint runs along the line rather than appearing at once")
+	_check(play._line_target(Vector2(50.5, 50.5), -1, PlayScreen.TAP_SLOP) == -1, "A painted group can't be painted again")
+	# Carry the other paint onto one of its lines.
+	play._lift(PlayScreen.PAINT + other, Vector2.ZERO)
+	var target := Vector2.ZERO
+	for gg in 3:
+		if play._paint_of[gg] == other:
+			target = lines["groups"][gg]["at"]
+	var screen: Vector2 = play._board.get_global_transform_with_canvas() * (play._board.view_transform() * target)
+	play._move_carry(screen)
+	_check(play._carry_line >= 0, "Carrying a paint over its line targets that group")
+	play._drop_carry(screen)
+	_check(play._painted_count == 2, "Dropping it there paints the group")
+	play._save(false)
+	_check(play._meta["lines_painted"].size() == 2, "Painted lines are saved")
+	play.queue_free()
+	await process_frame
+	var again := PlayScreen.new()
+	again.profile = profile
+	again.puzzle_id = meta["id"]
+	root.add_child(again)
+	await _layout_frames()
+	again.finish_loading_lines()
+	_check(again._painted_count == 2, "Reopening restores painted lines from the kept grouping")
+	var last := again._painted.find(0)
+	again._select(PlayScreen.PAINT + again._paint_of[last])
+	again._stroke_type = again._selected
+	again._stroke_placed = 0
+	again._fill_at(lines["groups"][last]["at"], PlayScreen.TAP_SLOP)
+	await create_timer(0.3).timeout
+	_check(again._done, "Painting the last line finishes the picture")
+	again.queue_free()
+	await process_frame
+	SaveStore.delete_puzzle(profile, meta["id"])
+	_check(not FileAccess.file_exists("user://saves/%s.lines" % meta["id"]), "Deleting a puzzle deletes its kept grouping")
+
+
+## The pen touching down or lifting at `at`, as Android reports it: the left
+## mouse button.
+func _pen(pressed: bool, at: Vector2) -> void:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	e.pressed = pressed
+	# Input takes window px; the screens work in the stretched 1080×2400.
+	e.position = root.get_final_transform() * at
+	e.global_position = e.position
+	_pen_at = at
+	Input.parse_input_event(e)
+	await process_frame
+
+
+func _pen_move(at: Vector2) -> void:
+	for k in 4:
+		var e := InputEventMouseMotion.new()
+		e.button_mask = MOUSE_BUTTON_MASK_LEFT
+		e.pressure = 0.5
+		var to := _pen_at.lerp(at, (k + 1) / 4.0)
+		e.relative = root.get_final_transform().basis_xform(to - _pen_at.lerp(at, k / 4.0))
+		e.position = root.get_final_transform() * to
+		e.global_position = e.position
+		Input.parse_input_event(e)
+		await process_frame
+	_pen_at = at
 
 
 func _test_completion_rewards() -> void:

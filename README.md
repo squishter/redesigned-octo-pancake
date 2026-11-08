@@ -26,7 +26,7 @@ mode for trying out new pattern generation.
   black onyx, white and clear diamond), six themes made of those colors
   (rainbow, sunset, ocean, garden, starry night, ember) and one puzzle type:
   mandala collages, with no frames or collars, placing gems with Pop or
-  Fly and the Light shimmer finale. Everything else comes from packs
+  Fly, the Light shimmer finale and the Metal line finish. Everything else comes from packs
   (Ripple too; players from before keep the Ripple they had).
 - **Player UI.** The workshop, saved-puzzle cards, collection categories,
   settings, camera controls, gem tray, hint meter and power-up dialog share
@@ -199,7 +199,9 @@ mode for trying out new pattern generation.
   far out: Bounce, Comet, Firework, Beam, Halo), finales (Ripple, Spiral,
   Sweep, Shimmer, and a light version of each: Light ripple, Light spiral,
   Light sweep and Light shimmer, which flash the gems and light the paper in
-  the same pattern instead of swelling them) and power-up charges. Locked things stay a mystery: gems
+  the same pattern instead of swelling them), line finishes (Metal, Matte,
+  Glossy, Glitter, Chalk, Rope, Beads, Holographic; the Flourish pack gives
+  them) and power-up charges. Locked things stay a mystery: gems
   show only as flat silhouettes of their outline, and names, theme colors
   and descriptions stay hidden.
 - **Power-ups**, spent from *Power-ups* while playing. For the whole puzzle:
@@ -308,6 +310,35 @@ mode for trying out new pattern generation.
   light flashes over the gems, each in its own time), and the picture is left to look at, zoomed and
   panned at will, until *‹ Menu*. Progress saves every couple of seconds
   and whenever she leaves or the app goes to the background.
+- **Carrying gems, and the S Pen.** A drag that starts on a gem card and
+  heads up or down (sideways scrolls the row) lifts the gem off the row and
+  picks it; a gold ring marks the open slot under it, and letting go there
+  pops it in (letting go anywhere else leaves it picked). A stylus such as
+  the S Pen, which Android hands over as a mouse, taps, drags and pans like
+  a finger: the app turns on Godot's touch-from-mouse emulation, which the
+  engine otherwise only does on devices without a touchscreen.
+- **Painting lines.** Pictures that keep their lines as drawn outlines (the
+  metal setting) don't show them finished any more: the lines start as
+  faint gray outlines, split into groups (`LinePaint`), and are painted like
+  gems. A thin line's group is the pair of symmetry groups of areas on its
+  two sides, so every petal's outline, or a ring between two bands, is one
+  group; a thick part (a band or blob well wider than the lines) is one
+  group with its symmetric copies, however many areas it touches; tiny
+  pieces join a neighbor. Each group takes the accent color of
+  the smaller area it borders, and groups of one color share a **paint**:
+  the row ends with a card per paint (a swatch, "Lines" and how many groups
+  are left). Picking one tints its empty lines; tapping, dragging over or
+  carrying it onto one of its lines paints the whole group, the color
+  running out along the lines from there with a bright front and a burst
+  of sparkles. The stones limit, Big brush, Free hand, hints, Finish gem,
+  Sweep and Finder work with paints too. The picture is finished once
+  every gem is in and every line painted. Painted lines take the
+  *Line finish* chosen in Settings. Generating pictures is unchanged: the
+  groups are worked out from the saved picture the first time it's played
+  and kept in `<id>.lines` (meta's `lines_painted` and `lines_groups` refer
+  to them). Grouping, or loading the kept groups, and preparing the board's
+  paint all run on a worker thread; meanwhile the lines already show as
+  empty outlines, so nothing on screen jumps when they're ready.
 
 | File | What it does |
 | --- | --- |
@@ -333,6 +364,7 @@ mode for trying out new pattern generation.
 | `scenes/game/drag_scroll.gd` | `DragScroll`: makes a list scroll (and fling) wherever a drag starts, buttons included, without pressing them. |
 | `scenes/game/gem_icons.gd` | `GemIcons`: single gems laid out on an icon sheet, preserving each type's saved width / length for every shape and sized uniformly to stay inside their own cell. |
 | `scenes/game/gem_flights.gd` | `GemFlights`: gems flying from the row into their slots (following the board if it moves), with their sparkle trails and landing bursts. |
+| `game/line_paint.gd` | `LinePaint`: a picture's kept lines grouped for painting (by the symmetry groups on each side), their colors, and finding the group under a finger. |
 | `scenes/game/slot_overlay.gd` | `SlotOverlay`, drawn over the board: outlines and numbers of open slots, the selected gem's highlight, and finding the open slot under a finger. |
 
 ### Adding unlockables

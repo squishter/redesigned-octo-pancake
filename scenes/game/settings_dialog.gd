@@ -11,7 +11,7 @@ var done_text := "Done"
 
 func _init() -> void:
 	super("Your finishing touches", "Make the sparkle feel like you.", "settings")
-	preferred_height = 1420
+	preferred_height = 1600
 	hide()
 
 
@@ -19,9 +19,10 @@ func _ready() -> void:
 	super()
 	_setting("Placing gems", "fill_animation", GemCatalog.ANIMATIONS, "animations")
 	_setting("Grand finale", "finale", GemCatalog.FINALES, "finales")
+	_setting("Line finish", "line_finish", GemCatalog.LINE_FINISHES, "line_finishes")
 	_frame_rate_setting()
 	if show_debug_settings and OS.is_debug_build():
-		preferred_height = 1900
+		preferred_height = 2080
 		_unlock_all_setting()
 		_free_purchases_setting()
 		_performance_settings()

@@ -32,7 +32,7 @@ const PACKS := {
 	"shapes": {"name": "Shape pack", "about": "A new gem shape, in its classic cut."},
 	"cuts": {"name": "Facet pack", "about": "A new cut for a shape you have."},
 	"puzzles": {"name": "Picture pack", "about": "A new kind of puzzle."},
-	"features": {"name": "Flourish pack", "about": "Frames, collars and other picture touches."},
+	"features": {"name": "Flourish pack", "about": "Frames, collars, line finishes and other picture touches."},
 	"animations": {"name": "Sparkle pack", "about": "A new way for gems to go in, or a new finale."},
 	"powers": {"name": "Power-up pack", "about": "Two power-ups, with charges for each.", "rewards": 2},
 	"all": {"name": "Everything pack", "about": "Two new unlockables. 1 in 15 packs includes a third. Coins only.",
