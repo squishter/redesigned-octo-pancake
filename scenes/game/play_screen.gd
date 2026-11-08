@@ -936,7 +936,7 @@ func _show_rewards() -> void:
 		_reward_dialog.reward = _completion_reward.duplicate()
 		_reward_dialog.profile = profile
 		_reward_dialog.picture = SaveStore.load_thumbnail(puzzle_id)
-		_reward_dialog.puzzle_name = GemCatalog.puzzle_name(_meta.get("type", "mandala"))
+		_reward_dialog.puzzle_name = GemCatalog.puzzle_title(_meta)
 		_reward_dialog.menu_requested.connect(_leave)
 		_reward_dialog.packs_requested.connect(_open_collection)
 		_reward_dialog.closed.connect(_update_board_input)

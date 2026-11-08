@@ -39,6 +39,7 @@ const LAYOUT := "dense"
 
 
 ## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme, layout}.
+## Kits add the collage `picture` they're made from (GemCatalog.kit_picture).
 ## For one of her own color stories (CustomThemes) the caller adds its
 ## theme_name and theme_gems, which make() colors with instead.
 static func new_request(type_id: String, theme_id: String) -> Dictionary:
@@ -59,6 +60,10 @@ static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 	var seed_value: int = request["seed"]
 	var theme_id: String = request["theme"]
 	var info: Dictionary = GemCatalog.PUZZLES.get(request["type"], GemCatalog.PUZZLES["mandala"])
+	var is_kit: bool = info.get("kit", false)
+	# A kit paints one of the collage pictures (request `picture`) and lays
+	# drills over it.
+	var variant: String = GemCatalog.PUZZLES[GemCatalog.kit_picture(request)]["variant"] if is_kit else info["variant"]
 	var features: Array = unlocks.get("features", [])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "extras"])
@@ -66,7 +71,7 @@ static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 	if rng.randf() < EXTRAS_CHANCE:
 		extras.append(UNFRAMED_EXTRAS[rng.randi_range(0, UNFRAMED_EXTRAS.size() - 1)])
 	var opts := {
-		"variant": info["variant"],
+		"variant": variant,
 		"size": SIZE,
 		"theme": theme_id,
 		"theme_colors": (GemCatalog.colors_of(request["theme_gems"]) if request.get("theme_gems") is Array
@@ -90,7 +95,7 @@ static func make(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 		opts["collar"] = "none"
 	if "wobble" in features and rng.randf() < WOBBLE_CHANCE:
 		opts["wobble"] = rng.randf_range(0.2, 0.6)
-	var picture := _kit(seed_value, opts, unlocks, rng) if info.get("kit", false) else \
+	var picture := _kit(seed_value, opts, unlocks, rng) if is_kit else \
 			PictureSources.mandala_collage(seed_value, opts)
 	picture["puzzle"] = request.duplicate()
 	return picture
@@ -130,7 +135,8 @@ static func _photo(request: Dictionary, unlocks: Dictionary) -> Dictionary:
 	return picture
 
 
-## A Diamond kit as a board of slots: the mandala painted with the theme (or
+## A Diamond kit as a board of slots: a picture (opts `variant`: a mandala,
+## flower, heart, ...) painted with the theme (or
 ## `image`, a photo), turned into a grid of round or square drills
 ## (whichever are unlocked), one per cell, KIT_CELL px apart.
 static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: RandomNumberGenerator,
@@ -177,7 +183,8 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 		"symmetry": "none",
 		"drill": drill,
 		"kit_size": picked if picked != "" else (size if size is String else "%dx%d" % [size.x, size.y]),
-		"source": {"kind": "mandala", "seed": seed_value, "theme": opts.get("theme", "")},
+		"source": {"kind": "mandala", "seed": seed_value, "variant": opts.get("variant", "mandala"),
+				"theme": opts.get("theme", "")},
 		"lines": PackedByteArray(),
 		"lines_visible": PackedByteArray(),
 		"regions": [],

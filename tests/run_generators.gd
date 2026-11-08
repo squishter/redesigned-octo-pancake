@@ -1257,6 +1257,17 @@ func _with_exif(jpg: PackedByteArray, o: int, little: bool) -> PackedByteArray:
 	return out
 
 
+## A kit puzzle's grid as a small image, one pixel per drill.
+func render_kit_puzzle(picture: Dictionary) -> Image:
+	var grid: Dictionary = picture["kit_grid"]
+	var img := Image.create(grid["cols"], grid["rows"], false, Image.FORMAT_RGB8)
+	var cells: PackedByteArray = grid["cells"]
+	for i in cells.size():
+		img.set_pixel(i % int(grid["cols"]), i / int(grid["cols"]), grid["palette"][cells[i]]["color"])
+	img.resize(img.get_width() * 4, img.get_height() * 4, Image.INTERPOLATE_NEAREST)
+	return img
+
+
 ## Kits and unlocked picture features: a kit uses only unlocked colors and
 ## drills, and unlocked frames show up. Photos make collages and kits.
 func test_kit_puzzles() -> void:
@@ -1272,6 +1283,30 @@ func test_kit_puzzles() -> void:
 		if not s["shape"] in ["round", "square"] or not colors.has(str(s["target_gem"])):
 			bad += 1
 	check(bad == 0, "kit: %d drills in locked shapes or colors" % bad)
+	# Every collage picture makes a kit, of its own picture.
+	var mandala_cells: PackedByteArray = kit["kit_grid"]["cells"]
+	for picture: String in GemCatalog.PUZZLES:
+		if GemCatalog.PUZZLES[picture].get("kit", false):
+			continue
+		var req := {"type": "kit", "picture": picture, "seed": 12, "pattern_seed": 3, "theme": "ocean"}
+		var pk := PuzzleMaker.make(req, unlocks)
+		var variant: String = GemCatalog.PUZZLES[picture]["variant"]
+		check(pk.get("kind") == "kit" and pk["slots"].size() >= 2000, "%s kit has %d slots" % [picture, pk["slots"].size()])
+		check(pk["source"].get("variant") == variant, "%s kit is a %s" % [picture, pk["source"].get("variant")])
+		check(pk["kit_grid"]["palette"].size() >= 2, "%s kit has %d colors" % [picture, pk["kit_grid"]["palette"].size()])
+		if picture != "mandala":
+			check(pk["kit_grid"]["cells"] != mandala_cells, "%s kit is just the mandala" % picture)
+		var meta := SaveStore.puzzle_meta(pk, "t", 0)
+		check(meta.get("picture") == picture, "%s kit's meta forgets its picture" % picture)
+		var title := GemCatalog.puzzle_title(meta)
+		check(title == ("Diamond kit" if picture == "mandala" else "%s diamond kit" % GemCatalog.PUZZLES[picture]["source"]),
+				"%s kit is called %s" % [picture, title])
+		render_kit_puzzle(pk).save_png(out_dir.path_join("kit_puzzle_%s.png" % picture))
+	check(GemCatalog.kit_picture({"type": "kit"}) == "mandala", "older kits aren't mandalas")
+	check(GemCatalog.kit_picture({"type": "kit", "picture": "kit"}) == "mandala", "a kit of a kit")
+	check(GemCatalog.kit_pictures({"puzzles": ["mandala", "heart"]}).is_empty(), "kit pictures before kits")
+	check(GemCatalog.kit_pictures({"puzzles": ["mandala", "heart", "kit"]}) == ["mandala", "heart"],
+			"kit pictures: %s" % [GemCatalog.kit_pictures({"puzzles": ["mandala", "heart", "kit"]})])
 	var framed := 0
 	unlocks["features"] = ["frames", "backgrounds"]
 	for seed_value in [1, 2, 3, 4]:

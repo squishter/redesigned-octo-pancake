@@ -272,8 +272,10 @@ const PUZZLES := {
 	"swirl": {"name": "Swirl collage", "source": "Swirl", "variant": "swirl",
 			"about": "Free-flowing line art: waves, whirls, blooms, scales and more, no two alike."},
 	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,
-			"about": "A mandala as a grid of drills, one color per cell."},
+			"about": "Any of your pictures as a grid of drills, one color per cell."},
 }
+## The picture a kit request without `picture` is made from (see kit_picture).
+const KIT_PICTURE := "mandala"
 const STARTING_PUZZLES := ["mandala"]
 ## Puzzles made from her own photos: always there, not unlocked.
 const PHOTO_MODES := {
@@ -406,6 +408,33 @@ static func theme_name(theme_id: String) -> String:
 
 static func puzzle_name(type_id: String) -> String:
 	return PUZZLES.get(type_id, PHOTO_MODES.get(type_id, {"name": type_id.capitalize()}))["name"]
+
+
+## The collage picture a kit is made from (a request's or meta's `picture`):
+## kits from before every picture could be a kit have none and are mandalas.
+static func kit_picture(request: Dictionary) -> String:
+	var picture: String = str(request.get("picture", KIT_PICTURE))
+	return picture if PUZZLES.has(picture) and not PUZZLES[picture].get("kit", false) else KIT_PICTURE
+
+
+## A puzzle's name from its request or meta: kits say which picture they are
+## ("Butterfly diamond kit"), apart from the original mandala ones.
+static func puzzle_title(request: Dictionary) -> String:
+	var type_id: String = str(request.get("type", "mandala"))
+	if PUZZLES.get(type_id, {}).get("kit", false):
+		var picture := kit_picture(request)
+		if picture != KIT_PICTURE:
+			return "%s diamond kit" % PUZZLES[picture]["source"]
+	return puzzle_name(type_id)
+
+
+## Collage pictures she can make a kit from: every unlocked one, once kits
+## are unlocked (none before).
+static func kit_pictures(unlocks: Dictionary) -> Array:
+	var unlocked := unlocked_puzzles(unlocks)
+	if not unlocked.any(func(t: String) -> bool: return PUZZLES[t].get("kit", false)):
+		return []
+	return unlocked.filter(func(t: String) -> bool: return not PUZZLES[t].get("kit", false))
 
 
 ## Unlocked themes and puzzle types, in catalog order.

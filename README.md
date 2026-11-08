@@ -198,8 +198,14 @@ mode for trying out new pattern generation.
   selected gem's open slot nearest the middle of the view (never zooming
   out from a closer view) and rings it in gold. The button fills from the
   left along a quiet mint meter as the next hint comes closer.
-- **Diamond kits**: a mandala painted with the theme, turned into a grid of
-  round or square drills (whichever are unlocked), played like a collage.
+- **Diamond kits**: any of her unlocked collage pictures (mandala, flower,
+  snowflake, heart, butterfly, swirl) painted with the theme, turned into a
+  grid of round or square drills (whichever are unlocked), played like a
+  collage. Unlocking *Diamond kit* makes a kit of every picture she has, and
+  each picture she unlocks later comes as a kit too. The request and meta
+  keep the picture as `picture` (`GemCatalog.kit_picture`); kits from before
+  have none and are mandalas. Kits of other pictures are named after them
+  ("Butterfly diamond kit"; `GemCatalog.puzzle_title`).
   Drills fill 98% of their cell, so neighbors almost touch, like a real kit
   (square drills' slots are sized by `GemShapes.drill_length`, since a square
   draws at 75% of its slot to fit round collage slots).
@@ -212,8 +218,8 @@ mode for trying out new pattern generation.
   stay quick.
 - **Menu.** *New puzzle* opens a panel that asks in steps and shows only
   what applies: the kind (*Gem collage* or *Diamond kit*), then the picture
-  (her unlocked collage pictures, the mandala for kits once unlocked, or *A
-  photo*), then that picture's options (*Colors* for generated pictures;
+  (her unlocked collage pictures, for kits too once kits are unlocked, or
+  *A photo*), then that picture's options (*Colors* for generated pictures;
   *Photo* subject for photo collages; *Drill colors* for photo kits; *Kit
   size* for kits). It makes the puzzle on a worker thread.
   Recoloring opens the same panel with the kind and picture fixed and only

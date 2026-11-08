@@ -71,7 +71,7 @@ func _tile(meta: Dictionary) -> Button:
 	button.custom_minimum_size.x = 160
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.theme_type_variation = "ChoiceButton"
-	button.tooltip_text = "%s · %s" % [GemCatalog.puzzle_name(meta["type"]), color_name(meta)]
+	button.tooltip_text = "%s · %s" % [GemCatalog.puzzle_title(meta), color_name(meta)]
 	button.set_meta("puzzle_id", meta["id"])
 	var inset := MarginContainer.new()
 	inset.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -88,7 +88,7 @@ func _tile(meta: Dictionary) -> Button:
 	if art.texture == null:
 		art.texture = GameTheme.icon("picture")
 	copy.add_child(art)
-	var title := UI.label(GemCatalog.puzzle_name(meta["type"]), 24, GameTheme.GOLD, true)
+	var title := UI.label(GemCatalog.puzzle_title(meta), 24, GameTheme.GOLD, true)
 	title.max_lines_visible = 2
 	title.custom_minimum_size.y = 68
 	copy.add_child(title)

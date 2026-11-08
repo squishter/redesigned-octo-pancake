@@ -343,8 +343,9 @@ func _open_new(recolor: Dictionary) -> void:
 		_kind.select(1 if GemCatalog.PUZZLES.get(recolor["type"], {}).get("kit", false) else 0)
 	_fill_sources()
 	if not recolor.is_empty():
+		var picture: String = (GemCatalog.kit_picture(recolor) if _is_kit() else recolor["type"])
 		for i in _source.item_count:
-			if _source.get_item_metadata(i) == recolor["type"]:
+			if _source.get_item_metadata(i) == picture:
 				_source.select(i)
 	_kind.disabled = not recolor.is_empty()
 	_source.disabled = not recolor.is_empty()
@@ -396,7 +397,7 @@ func _on_story_chosen(_theme_id: String) -> void:
 	_direct_recolor = false
 	var theme_id := _selected_theme()
 	_request = PuzzleMaker.new_request(_recolor["type"], theme_id)
-	for key: String in ["seed", "pattern_seed", "kit_size", "layout"]:
+	for key: String in ["seed", "pattern_seed", "kit_size", "layout", "picture"]:
 		if _recolor.has(key):
 			_request[key] = _recolor[key]
 	_request["layout"] = _recolor.get("layout", "classic")
@@ -421,16 +422,18 @@ func _recolor_saved(picture: Dictionary, request: Dictionary) -> void:
 	_result = PuzzleRecolor.make(picture, request)
 
 
-## The sources for the chosen kind: her unlocked picture types of that kind,
-## then a photo (always there).
+## The sources for the chosen kind: her unlocked collage pictures (for kits,
+## each of them once kits are unlocked), then a photo (always there).
 func _fill_sources() -> void:
 	var kit := _is_kit()
 	var previous: Variant = _source.get_item_metadata(_source.selected) if _source.selected >= 0 else null
 	_source.clear()
-	for t: String in GemCatalog.unlocked_puzzles(profile["unlocks"]):
-		if GemCatalog.PUZZLES[t].get("kit", false) == kit:
-			_source.add_item(GemCatalog.PUZZLES[t].get("source", GemCatalog.puzzle_name(t)))
-			_source.set_item_metadata(_source.item_count - 1, t)
+	var pictures: Array = (GemCatalog.kit_pictures(profile["unlocks"]) if kit else
+			GemCatalog.unlocked_puzzles(profile["unlocks"]).filter(func(t: String) -> bool:
+				return not GemCatalog.PUZZLES[t].get("kit", false)))
+	for t: String in pictures:
+		_source.add_item(GemCatalog.PUZZLES[t].get("source", GemCatalog.puzzle_name(t)))
+		_source.set_item_metadata(_source.item_count - 1, t)
 	_source.add_item("A photo")
 	_source.set_item_metadata(_source.item_count - 1, "photo")
 	_source.select(0)
@@ -457,6 +460,8 @@ func _refresh_new() -> void:
 	var type_id: String = _photo_mode() if photo else str(_source.get_item_metadata(maxi(_source.selected, 0)))
 	var info: Dictionary = GemCatalog.PUZZLES.get(type_id, GemCatalog.PHOTO_MODES.get(type_id, {}))
 	_about.text = info.get("about", "")
+	if kit and not photo and GemCatalog.PUZZLES.has(type_id):
+		_about.text = "%s, as a grid of drills." % _about.text.trim_suffix(".")
 	_source.icon = GameTheme.icon("camera" if photo else "picture")
 	for i in _mode_buttons.size():
 		_mode_buttons[i].set_pressed_no_signal(i == _kind.selected)
@@ -501,7 +506,10 @@ func _start_making() -> void:
 		return
 	var type_id: String = _source.get_item_metadata(_source.selected)
 	var theme_id := _selected_theme()
-	_request = PuzzleMaker.new_request(type_id, theme_id)
+	# A kit's source is the collage picture it's made from.
+	_request = PuzzleMaker.new_request("kit" if _is_kit() else type_id, theme_id)
+	if _is_kit():
+		_request["picture"] = type_id
 	if CustomThemes.is_custom(theme_id):
 		var story := CustomThemes.find(profile, theme_id)
 		_request["theme_name"] = story.get("name", "My colors")
@@ -513,10 +521,13 @@ func _start_making() -> void:
 		_request["seed"] = _recolor["seed"]
 		_request["pattern_seed"] = _recolor["pattern_seed"]
 		_request["kit_size"] = _recolor.get("kit_size", _request["kit_size"])
+		_request.erase("picture")
+		if _recolor.has("picture"):
+			_request["picture"] = _recolor["picture"]
 		# Older puzzles were made before layouts: the same picture is classic.
 		_request["layout"] = _recolor.get("layout", "classic")
 	_new_panel.visible = false
-	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_name(_request["type"]).to_lower()
+	_busy_label.text = "Making your %s…" % GemCatalog.puzzle_title(_request).to_lower()
 	_busy.visible = true
 	var unlocks: Dictionary = (profile["unlocks"] as Dictionary).duplicate(true)
 	_task_id = WorkerThreadPool.add_task(_make.bind(_request.duplicate(), unlocks), false, "make puzzle")
@@ -707,7 +718,7 @@ func _card(meta: Dictionary) -> Control:
 	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(copy)
 	copy.add_child(UI.label("COMPLETE" if meta["done"] else "IN YOUR STUDIO", 25, GameTheme.MINT))
-	copy.add_child(UI.label(GemCatalog.puzzle_name(meta["type"]), 42, GameTheme.GOLD))
+	copy.add_child(UI.label(GemCatalog.puzzle_title(meta), 42, GameTheme.GOLD))
 	var colors := CompletedPuzzles.color_name(meta)
 	copy.add_child(UI.label("%s · %s" % [colors, _ago(meta["updated"])], 28, GameTheme.TEXT_DIM))
 	var fraction := float(meta["filled"]) / maxi(1, int(meta["total"]))

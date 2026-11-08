@@ -54,7 +54,7 @@ func _ask_restart() -> void:
 
 func _set_confirmation(confirming: bool) -> void:
 	_confirming = confirming
-	title_label.text = "Restart this puzzle?" if confirming else GemCatalog.puzzle_name(_puzzle["type"])
+	title_label.text = "Restart this puzzle?" if confirming else GemCatalog.puzzle_title(_puzzle)
 	subtitle_label.text = ("This will clear the placed gems and return the picture to your studio."
 		if confirming else CompletedPuzzles.color_name(_puzzle))
 	_admire.visible = not confirming

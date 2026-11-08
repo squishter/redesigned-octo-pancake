@@ -194,6 +194,29 @@ func _test_creation_choices() -> void:
 	_check(menu._mode_buttons.all(func(button: Button) -> bool: return button.disabled),
 		"Recoloring keeps the original puzzle mode fixed")
 	menu.go_back()
+	# With kits unlocked, every unlocked collage picture can be a kit.
+	menu.profile["unlocks"]["puzzles"] = ["mandala", "butterfly", "kit"]
+	menu._open_new({})
+	menu._mode_buttons[1].pressed.emit()
+	var kit_sources := []
+	for i in menu._source.item_count:
+		kit_sources.append(menu._source.get_item_metadata(i))
+	_check(kit_sources == ["mandala", "butterfly", "photo"], "Kits are made from every picture: %s" % [kit_sources])
+	menu._source.select(1)
+	menu._source.item_selected.emit(1)
+	_check(menu._about.text.ends_with("as a grid of drills."), "A butterfly kit says what it is: %s" % menu._about.text)
+	menu._mode_buttons[0].pressed.emit()
+	_check(not "kit" in range(menu._source.item_count).map(func(i: int) -> Variant: return menu._source.get_item_metadata(i)),
+		"Collages don't offer the kit itself as a picture")
+	menu.go_back()
+	menu._open_new({"type": "kit", "picture": "butterfly", "theme": "rainbow", "seed": 3, "pattern_seed": 4})
+	_check(menu._is_kit() and menu._source.get_item_metadata(menu._source.selected) == "butterfly",
+		"Recoloring a butterfly kit keeps it a butterfly kit")
+	menu.go_back()
+	menu._open_new({"type": "kit", "theme": "rainbow", "seed": 3, "pattern_seed": 4})
+	_check(menu._is_kit() and menu._source.get_item_metadata(menu._source.selected) == "mandala",
+		"Older kits recolor as mandala kits")
+	menu.go_back()
 	_check(menu._menu_scroll.process_mode == Node.PROCESS_MODE_INHERIT, "Closing a dialog restores menu input")
 	var menu_profile: Dictionary = SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0},
 		"settings": {"menu_studio_open": false, "menu_completed_open": false}})

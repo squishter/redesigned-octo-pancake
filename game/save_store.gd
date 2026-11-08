@@ -7,7 +7,8 @@ extends RefCounted
 ##     puzzles: [meta]}, where each meta is {id, type, seed,
 ##     pattern_seed, theme (with theme_name and theme_gems for her own
 ##     color stories), layout (see PuzzleMaker.LAYOUT; none before
-##     layouts, meaning "classic"), created, updated, total, filled, done, rewarded,
+##     layouts, meaning "classic"), picture (kits: the collage picture
+##     they're made from; none for older, mandala, kits), created, updated, total, filled, done, rewarded,
 ##     powers (the whole-puzzle power-ups on for it)}, newest first;
 ##   <id>.json: the puzzle's picture (PatternIO), written once;
 ##   <id>.progress: which stones are placed, one bit per slot;
@@ -191,6 +192,9 @@ static func puzzle_meta(picture: Dictionary, id: String, now: int) -> Dictionary
 	for key in ["theme_name", "theme_gems"]:
 		if request.has(key):
 			meta[key] = request[key]
+	# The picture a kit is made from, for recoloring and its name.
+	if request.has("picture"):
+		meta["picture"] = request["picture"]
 	return meta
 
 
