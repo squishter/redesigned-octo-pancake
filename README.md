@@ -621,6 +621,11 @@ frame.
   godot --headless -s res://tests/animal_sheet.gd -- --out=/tmp/animals --seeds=1,24 [--variant=animal_print] [--cell=320]
   ```
 
+- [Rigged 3D animal projection experiment](experiments/animal_3d/README.md):
+  cat, wolf and horse armatures, surface-attached coats and multiple camera
+  angles projected to vector line art, with checks through the existing
+  collage and kit pipelines. This does not replace the production generator.
+
 - One line art under several pattern seeds, side by side:
 
   ```sh
