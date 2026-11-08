@@ -46,10 +46,10 @@ extends RefCounted
 ## Proportions, in body lengths (the torso, rump to chest, is 1 long), and
 ## the range a wild blend may stray across.
 const GENE_RANGES := {
-	"back": [0.04, 0.12],  # how far the back rises above the spine
-	"chest": [0.18, 0.48],  # chest depth below the spine
+	"back": [0.04, 0.16],  # how far the back rises above the spine
+	"chest": [0.18, 0.62],  # chest depth below the spine
 	"tuck": [0.5, 1.1],  # waist depth, x chest
-	"rump": [0.13, 0.34],  # rump depth below the spine
+	"rump": [0.13, 0.46],  # rump depth below the spine
 	"arch": [-0.15, 0.3],  # how the back bows (up positive)
 	"hump": [0.0, 0.1],  # extra height over the shoulders (a bear's)
 	"neck": [0.05, 0.6],
@@ -63,10 +63,10 @@ const GENE_RANGES := {
 	"head_angle": [0.0, 70.0],  # nose below level
 	"trunk": [0.0, 0.8],
 	"leg": [0.08, 0.6],  # elbow to ground, standing
-	"leg_w": [0.03, 0.12],  # forearm half-width
-	"shoulder": [0.07, 0.17],
-	"thigh": [0.1, 0.22],
-	"paw": [0.035, 0.11],
+	"leg_w": [0.03, 0.14],  # forearm half-width
+	"shoulder": [0.07, 0.21],
+	"thigh": [0.1, 0.26],
+	"paw": [0.035, 0.14],
 	"ear_size": [0.5, 1.5],
 	"tail_len": [0.06, 0.85],
 	"tail_w": [0.02, 0.06],
@@ -186,10 +186,10 @@ const SPECIES := {
 			"thigh": 0.15, "paw": 0.04, "feet": "hoof", "ear_size": 1.25, "horns": "antlers", "tail": "short",
 			"tail_len": 0.13},
 			"coats": ["countershade", "dalmatian", "solid"], "belly": 0.5},
-	"elephant": {"plan": "heavy", "genes": {"back": 0.1, "chest": 0.45, "tuck": 1.0, "rump": 0.33, "arch": 0.1,
+	"elephant": {"plan": "heavy", "genes": {"back": 0.14, "chest": 0.58, "tuck": 1.0, "rump": 0.44, "arch": 0.12,
 			"neck": 0.08, "neck_w": 1.0, "neck_angle": 10.0, "head": 0.389, "skull": 0.235, "muzzle": 0.25,
-			"muzzle_w": 0.6, "jaw": 1.0, "head_angle": 72.0, "trunk": 0.7, "leg": 0.48, "leg_w": 0.105,
-			"shoulder": 0.17, "thigh": 0.21, "paw": 0.11, "feet": "pillar", "ears": "fan", "ear_size": 1.2,
+			"muzzle_w": 0.6, "jaw": 1.0, "head_angle": 72.0, "trunk": 0.7, "leg": 0.56, "leg_w": 0.125,
+			"shoulder": 0.2, "thigh": 0.25, "paw": 0.13, "feet": "pillar", "ears": "fan", "ear_size": 1.2,
 			"tail": "whip", "tail_len": 0.36, "tail_w": 0.025},
 			"coats": ["solid"]},
 	"hippo": {"plan": "heavy", "genes": {"back": 0.1, "chest": 0.4, "tuck": 1.08, "rump": 0.33, "arch": 0.03,
@@ -222,6 +222,22 @@ const REACH := 0.06
 ## How far (unit space) a mark in a thin area must be from its edge: past
 ## half a line's width.
 const TIGHT := 0.0085
+## Natural joint turns for each kind of foot (radians, from one bone's
+## heading to the next's, y down): [front elbow, front wrist, hind knee, hind
+## hock], resting and folded right up. A leg's pose blends between them.
+const JOINTS := {
+	"paw": {"rest": [-0.35, -0.25, 0.8, -0.95], "fold": [-1.4, 2.1, 2.1, -2.0]},
+	"hoof": {"rest": [-0.2, 0.0, 0.55, -0.7], "fold": [-1.2, 2.3, 1.9, -2.1]},
+	"pillar": {"rest": [-0.04, 0.0, 0.08, -0.08], "fold": [-0.9, 1.3, 1.4, -1.4]},
+	"plantigrade": {"rest": [-0.12, -1.3, 0.25, -1.5], "fold": [-1.3, 0.6, 1.9, -1.6]},
+}
+## How far each of those joints may turn: [least, most]. Knees only fold
+## forward and hocks back, so a leg never bends the wrong way.
+const JOINT_LIMITS := [[-2.5, 0.25], [-1.7, 2.7], [-0.15, 2.7], [-2.75, 0.3]]
+## The slant (from straight down, foot ahead positive) of the lowest bone
+## of a leg standing on the ground, by kind of foot: [front, hind].
+const PLANTED := {"paw": [[-0.1, 0.8], [-0.2, 0.6]], "hoof": [[-0.1, 0.45], [-0.1, 0.4]],
+		"pillar": [[-0.12, 0.12], [-0.12, 0.12]], "plantigrade": [[1.15, 1.4], [1.45, 1.55]]}
 ## Where along the body (fractions of the torso) the hips and shoulders sit.
 const HIP_AT := 0.17
 const SHOULDER_AT := 0.8
@@ -626,12 +642,16 @@ func _rig() -> void:
 			_legs["hind"] = [hind_h * 0.42, hind_h * 0.45, hind_h * 0.33]
 
 
+## How high above the ground the lowest bone ends when the foot stands on
+## it.
 func _paw_height() -> float:
 	match genes["feet"]:
 		"hoof":
-			return genes["leg_w"] * 0.2
+			return genes["leg_w"] * 2.1
 		"pillar":
-			return genes["leg_w"] * 0.3
+			return genes["leg_w"] * 0.6
+		"plantigrade":
+			return genes["leg_w"] * 0.75
 	return genes["paw"] * 0.62
 
 
@@ -692,20 +712,35 @@ func _low(f0: float, f1: float) -> float:
 	return y
 
 
-## The ground under standing legs: the shorter leg reaches it nearly
-## straight.
-func _standing_ground(stretch := 0.95) -> float:
-	var f: Array = _legs["front"]
-	var h: Array = _legs["hind"]
-	var paw := _paw_height()
-	# Hind legs stand with their zigzag (straight, for pillars).
-	var zigzag := {"pillar": 0.98, "hoof": 0.88}.get(genes["feet"], 0.84) as float
-	var front: float = _shoulder().y + (f[0] * 0.9 + f[1] + f[2] * 0.95) * stretch + paw
-	var hind: float = _hip().y + (h[0] + h[1] + h[2]) * stretch * zigzag + paw
-	if genes["feet"] == "plantigrade":
-		hind = _hip().y + (h[0] + h[1]) * stretch * 0.97 + paw
-		front = _shoulder().y + (f[0] * 0.9 + f[1]) * stretch + paw
-	return minf(front, hind)
+## Where a leg's foot rests when it stands at ease: its joints at their
+## resting turns (JOINTS), the wrist or hock under the shoulder or hip.
+## Returns the end of its lowest bone, relative to the joint it hangs from.
+## `ease` scales the turns (0.3: nearly straight).
+func _rest_reach(front: bool, ease := 1.0) -> Vector2:
+	var lens: Array = _legs["front" if front else "hind"]
+	var rest: Array = JOINTS[genes["feet"]]["rest"].map(func(t: float) -> float: return t * ease)
+	var k := 0 if front else 2
+	var best := Vector2.ZERO
+	var nearest := INF
+	for i in 121:
+		var a := lerpf(PI / 2.0 - 1.2, PI / 2.0 + 1.2, i / 120.0)
+		var mid: Vector2 = Vector2.from_angle(a) * lens[0]
+		var joint: Vector2 = mid + Vector2.from_angle(a + rest[k]) * lens[1]
+		var end: Vector2 = joint + Vector2.from_angle(a + rest[k] + rest[k + 1]) * lens[2]
+		if absf(joint.x) < nearest:
+			nearest = absf(joint.x)
+			best = end
+	return best
+
+
+## The ground under standing legs: halfway between where each pair, at
+## ease, puts its feet (one bends a little more, the other straightens), but
+## no further than either can reach nearly straight.
+func _standing_ground() -> float:
+	var front := _shoulder().y + _rest_reach(true).y
+	var hind := _hip().y + _rest_reach(false).y
+	var most := minf(_shoulder().y + _rest_reach(true, 0.3).y, _hip().y + _rest_reach(false, 0.3).y)
+	return minf((front + hind) * 0.5, most) + _paw_height()
 
 
 ## Solves a two-bone limb from `root` toward `target`: the middle joint,
@@ -718,21 +753,67 @@ static func _ik(root: Vector2, target: Vector2, a: float, b: float, bend: float)
 	return [mid, mid + (target - mid).normalized() * b]
 
 
-## A leg from its joint to a paw at `paw` (where the lowest segment ends),
-## that segment pointing `slant` radians from straight down (positive: paw
-## ahead).
-func _leg(name: String, front: bool, near: bool, paw: Vector2, slant: float) -> void:
+## The two joint turns of a limb bent at `mid` and `joint`, then pointing
+## `low`: the elbow and wrist of a front leg, or knee and hock of a hind one.
+static func _turns(root: Vector2, mid: Vector2, joint: Vector2, low: Vector2) -> Vector2:
+	var upper := (mid - root).angle()
+	var lower := (joint - mid).angle()
+	return Vector2(angle_difference(upper, lower), angle_difference(lower, low.angle()))
+
+
+## A leg from its joint to `paw` (where the lowest bone ends). The leg
+## finds its own shape: the slant of its lowest bone and which way its
+## joints bend, as near as it can to a resting leg blended toward a folded
+## one by `fold` (0..1), never past what a joint can do. A `planted` foot
+## stands flat on the ground, its lowest bone within the foot's range (or
+## `slants`: a foot lying along the ground); otherwise the bone points near
+## `hint` (radians from straight down, foot ahead positive).
+func _leg(name: String, front: bool, near: bool, paw: Vector2, hint: float, fold: float, planted: bool,
+		slants: Array = []) -> void:
 	var g := genes
 	var lw: float = g["leg_w"]
+	var feet: String = g["feet"]
 	var lens: Array = _legs["front" if front else "hind"]
 	var root := _shoulder() if front else _hip()
 	var at := _body_f(SHOULDER_AT if front else HIP_AT)
 	var up := (_sweep_at(_body["sweep"], at, -1.0) - _sweep_at(_body["sweep"], at, 1.0)).normalized()
-	var low := Vector2(sin(slant), cos(slant))
-	var feet: String = g["feet"]
-	var limb := _ik(root, paw - low * lens[2], lens[0], lens[1], 1.0 if front else -1.0)
-	var mid: Vector2 = limb[0]
-	var joint: Vector2 = limb[1]
+	var k := 0 if front else 2
+	var rest: Array = JOINTS[feet]["rest"]
+	var folded: Array = JOINTS[feet]["fold"]
+	var want := Vector2(lerpf(rest[k], folded[k], fold), lerpf(rest[k + 1], folded[k + 1], fold))
+	var lim0: Array = JOINT_LIMITS[k]
+	var lim1: Array = JOINT_LIMITS[k + 1]
+	var lo := hint - 1.3
+	var hi := hint + 1.3
+	var hint_weight := 0.35
+	if planted:
+		var range: Array = slants if not slants.is_empty() else PLANTED[feet][0 if front else 1]
+		lo = range[0]
+		hi = range[1]
+		hint = clampf(hint, lo, hi)
+		hint_weight = 0.15
+	var best := INF
+	var mid := root
+	var joint := root
+	var low := Vector2.DOWN
+	for i in 41:
+		var slant := lerpf(lo, hi, i / 40.0)
+		var dir := Vector2(sin(slant), cos(slant))
+		var target: Vector2 = paw - dir * lens[2]
+		var d := root.distance_to(target)
+		var short: float = maxf(0.0, d - (lens[0] + lens[1])) + maxf(0.0, absf(lens[0] - lens[1]) - d)
+		for bend in [1.0, -1.0]:
+			var limb := _ik(root, target, lens[0], lens[1], bend)
+			var t: Vector2 = _turns(root, limb[0], limb[1], dir)
+			var over := maxf(0.0, lim0[0] - t.x) + maxf(0.0, t.x - lim0[1]) + maxf(0.0, lim1[0] - t.y) \
+					+ maxf(0.0, t.y - lim1[1])
+			var cost := (t - want).length_squared() + 60.0 * over * over + 400.0 * short * short \
+					+ hint_weight * (slant - hint) * (slant - hint)
+			if cost < best:
+				best = cost
+				mid = limb[0]
+				joint = limb[1]
+				low = dir
 	var end: Vector2 = joint + low * lens[2]
 	var depth := _sweep_at(_body["sweep"], at, -1.0).distance_to(_sweep_at(_body["sweep"], at, 1.0))
 	var top_r: float = minf(g["shoulder"] if front else g["thigh"], depth * (0.4 if front else 0.46))
@@ -752,20 +833,27 @@ func _leg(name: String, front: bool, near: bool, paw: Vector2, slant: float) -> 
 	var part := _part(name, "coat", "legs")
 	_add_chain(part, pts, radii)
 	var length: float = part["len"]
+	# A foot standing on the ground is flat; one lying along it, or raised,
+	# follows its bone.
 	var toe := low.rotated(-PI / 2.0)
+	var down := low
+	if planted and slants.is_empty():
+		toe = Vector2.RIGHT
+		down = Vector2.DOWN
+	elif planted:
+		toe = low
+		down = low
 	var paw_r: float = g["paw"]
 	match feet:
 		"hoof":
-			_add_chain(part, PackedVector2Array([end, end + low * lw * 1.25]), [lw * 0.78, lw * 0.98], length)
+			_add_chain(part, PackedVector2Array([end, end + down * lw * 1.15]), [lw * 0.78, lw * 0.98], length)
 			part["hoof_at"] = length
 		"pillar":
-			_ellipse(part, end + low * lw * 0.15, Vector2(lw * 1.12, lw * 0.5), toe.angle(), length)
+			_ellipse(part, end + down * lw * 0.1, Vector2(lw * 1.15, lw * 0.5), toe.angle(), length)
 		"plantigrade":
-			_ellipse(part, end + toe * paw_r * 0.6 - low * paw_r * 0.1, Vector2(paw_r * 1.3, paw_r * 0.62), toe.angle(),
-					length)
+			_ellipse(part, end + toe * paw_r * 0.45, Vector2(paw_r * 1.2, paw_r * 0.6), toe.angle(), length)
 		_:
-			_ellipse(part, end + low * paw_r * 0.25 + toe * paw_r * 0.45, Vector2(paw_r * 1.15, paw_r * 0.62),
-					toe.angle(), length)
+			_ellipse(part, end + toe * paw_r * 0.45, Vector2(paw_r * 1.15, paw_r * 0.62), toe.angle(), length)
 	part["foot_at"] = length
 
 
@@ -1036,6 +1124,16 @@ func _pose(pose: String) -> void:
 		front_slant = PI / 2.0 - 0.3
 	var stride := rng.randf_range(0.6, 1.0)
 	var lw: float = g["leg_w"]
+	var flat := [1.3, 1.62]
+	# A leg standing on the ground with its foot at x, folded `fold` (0..1,
+	# a little different each leg).
+	var plant := func(front: bool, x: float, fold: float) -> Array:
+		return [Vector2(x, _ground - paw), front_slant if front else hind_slant,
+				clampf(fold + rng.randf_range(-0.06, 0.06), 0.0, 1.0), true]
+	# A leg whose foot lies flat along the ground from its heel at x.
+	var lay := func(front: bool, x: float, fold: float) -> Array:
+		var foot: float = f[2] if front else h[2]
+		return [Vector2(x + foot, _ground - lw * 0.8), PI / 2.0 - 0.05, fold, true, flat]
 	match pose:
 		"stand", "walk", "graze":
 			if pose == "graze":
@@ -1049,15 +1147,16 @@ func _pose(pose: String) -> void:
 					[false, true, -spread], [true, true, spread]]
 			if pose != "walk":
 				spots = [[true, false, -0.06], [false, false, 0.06], [false, true, -0.02], [true, true, 0.03]]
+			var relax := 0.0 if pose != "walk" else 0.08
+			var at_ease := {true: _shoulder().x + _rest_reach(true).x, false: _hip().x + _rest_reach(false).x}
 			for i in spots.size():
 				var front: bool = spots[i][0]
-				var x: float = (_shoulder().x + 0.02 if front else _hip().x - 0.05) + spots[i][2]
-				var p := Vector2(x, _ground - paw)
-				var slant: float = front_slant if front else hind_slant
+				var x: float = at_ease[front] + spots[i][2]
+				var leg: Array = plant.call(front, x, relax * (0.6 if front else 1.0))
 				if i == lifted:
-					p += Vector2(-0.06, -(0.12 + 0.12 * stride) * reach_f)
-					slant = -1.1 if front else -0.5
-				legs[_leg_name(front, spots[i][1])] = [p, slant]
+					leg = [leg[0] + Vector2(-0.06, -(0.12 + 0.12 * stride) * reach_f), -1.1 if front else -0.5,
+							rng.randf_range(0.6, 0.85), false]
+				legs[_leg_name(front, spots[i][1])] = leg
 			if pose == "stand":
 				tail = [PI / 2.0 + deg_to_rad(rng.randf_range(20.0, 50.0)), rng.randf_range(-1.0, 0.5),
 						rng.randf_range(-2.5, 1.0)]
@@ -1065,40 +1164,51 @@ func _pose(pose: String) -> void:
 			_body["sweep"] = _spine(deg_to_rad(rng.randf_range(-6.0, 2.0)), bow - 0.15, neck_angle * 0.5)
 			head_angle *= 0.6
 			_ground = _standing_ground() + 0.1
-			var gathered := false
+			# Stretched out in flight, or gathered with the legs folded under.
+			var gathered := rng.randf() < 0.4
 			for front in [true, false]:
 				for near in [false, true]:
 					var root: Vector2 = _shoulder() if front else _hip()
 					var reach: float = reach_f if front else reach_h
 					var lean: float
+					var leg: Array
 					if gathered:
-						lean = (-0.35 if front else 0.5) + (0.12 if near else -0.08)
+						lean = (-0.3 if front else 0.55) + (0.12 if near else -0.1)
+						leg = [root + Vector2(sin(lean), cos(lean)) * reach * 0.6, -1.4 if front else 0.6,
+								0.8 if front else 0.65, false]
 					else:
 						lean = (1.05 if front else -0.95) + (0.12 if near else -0.15) * (1.0 if front else -1.0)
-					var p: Vector2 = root + Vector2(sin(lean), cos(lean)) * reach * 0.88
-					var slant: float = lean + (0.9 if front else -0.4) * (1.0 if not gathered else -0.8)
-					legs[_leg_name(front, near)] = [p, slant]
+						leg = [root + Vector2(sin(lean), cos(lean)) * reach * 0.88, lean + (0.9 if front else -0.4),
+								0.15 if near else 0.3, false]
+					legs[_leg_name(front, near)] = leg
 			tail = [PI - 0.2, rng.randf_range(-0.5, 0.5), rng.randf_range(-1.0, 1.0)]
 		"pounce":
 			# Crouched low, about to spring: rump a touch high, head low.
 			_body["sweep"] = _spine(deg_to_rad(rng.randf_range(2.0, 7.0)), bow * 0.5, deg_to_rad(rng.randf_range(-8.0, 8.0)))
 			head_angle = deg_to_rad(rng.randf_range(0.0, 15.0))
 			_ground = minf(_hip().y + reach_h * 0.5, _shoulder().y + reach_f * 0.62)
-			legs["front"] = [Vector2(_shoulder().x + 0.18, _ground - paw), 0.6]
-			legs["far_front"] = [Vector2(_shoulder().x + 0.06, _ground - paw), 0.5]
-			legs["hind"] = [Vector2(_hip().x + 0.14, _ground - paw), 1.2]
-			legs["far_hind"] = [Vector2(_hip().x + 0.06, _ground - paw), 1.15]
+			legs["front"] = plant.call(true, _shoulder().x + 0.16, 0.45)
+			legs["far_front"] = plant.call(true, _shoulder().x + 0.05, 0.4)
+			legs["hind"] = plant.call(false, _hip().x + 0.12, 0.85)
+			legs["far_hind"] = plant.call(false, _hip().x + 0.05, 0.8)
 			tail = [PI + deg_to_rad(rng.randf_range(-5.0, 15.0)), rng.randf_range(-0.3, 0.3), rng.randf_range(-2.5, 2.5)]
 		"leap":
 			_body["sweep"] = _spine(-deg_to_rad(rng.randf_range(12.0, 25.0)), bow - 0.2, neck_angle * 0.4)
 			head_angle *= 0.5
 			_ground = _standing_ground() + 0.25
+			# Forepaws reaching out, or tucked up under the chest.
+			var tuck := rng.randf() < 0.4
 			for near in [false, true]:
-				var lean_f := 1.35 + (0.15 if near else 0.0)
-				legs[_leg_name(true, near)] = [_shoulder() + Vector2(sin(lean_f), cos(lean_f)) * reach_f * 0.85,
-						lean_f + 0.5]
+				if tuck:
+					legs[_leg_name(true, near)] = [_shoulder() + Vector2(0.06 if near else 0.0, reach_f * 0.5), -1.6, 0.9,
+							false]
+				else:
+					var lean_f := 1.35 + (0.15 if near else 0.0)
+					legs[_leg_name(true, near)] = [_shoulder() + Vector2(sin(lean_f), cos(lean_f)) * reach_f * 0.85,
+							lean_f + 0.5, 0.1, false]
 				var lean_h := -0.8 - (0.15 if near else 0.0)
-				legs[_leg_name(false, near)] = [_hip() + Vector2(sin(lean_h), cos(lean_h)) * reach_h * 0.95, lean_h - 0.2]
+				legs[_leg_name(false, near)] = [_hip() + Vector2(sin(lean_h), cos(lean_h)) * reach_h * 0.92, lean_h - 0.2,
+						0.05 if near else 0.25, false]
 			tail = [PI - 0.15, rng.randf_range(-0.6, 0.2), rng.randf_range(-1.0, 1.0)]
 		"sit", "howl":
 			# The body rises until the front legs stand straight with the rump
@@ -1123,9 +1233,8 @@ func _pose(pose: String) -> void:
 			_body["sweep"] = _spine(hi, bow + 0.6, neck, 0.0, 0.0, lumbar)
 			_ground = _low(0.0, 0.35)
 			for near in [false, true]:
-				legs[_leg_name(true, near)] = [Vector2(_shoulder().x + (0.05 if near else -0.02), _ground - paw), 0.15]
-				var hock := Vector2(_hip().x - (0.0 if near else 0.03), _ground - lw * 0.8)
-				legs[_leg_name(false, near)] = [hock + Vector2(h[2], 0.0), PI / 2.0 - 0.06]
+				legs[_leg_name(true, near)] = plant.call(true, _shoulder().x + (0.05 if near else -0.02), 0.0)
+				legs[_leg_name(false, near)] = lay.call(false, _hip().x - (0.0 if near else 0.03), 1.0)
 			tail = [PI * 0.62, 0.0, -3.5]
 			tail_ground = true
 			_depth["tail"] = 6.5
@@ -1144,12 +1253,12 @@ func _pose(pose: String) -> void:
 				var x0: float = _shoulder().x
 				if tucked:
 					# Forelegs folded back under the chest.
-					legs[_leg_name(true, near)] = [Vector2(x0 - 0.04 + (0.05 if near else 0.0), _ground - lw), -PI / 2.0 + 0.2]
+					legs[_leg_name(true, near)] = [Vector2(x0 - f[1] * 0.35 + (0.05 if near else 0.0), _ground - lw),
+							-PI / 2.0, 1.0, true, [-1.75, -1.35]]
 				else:
-					var reach_x: float = (f[0] + f[1]) * (0.72 if near else 0.62)
-					legs[_leg_name(true, near)] = [Vector2(x0 + reach_x + f[2], _ground - paw), PI / 2.0 - 0.1]
-				var hock := Vector2(_hip().x + (0.0 if near else -0.03), _ground - lw * 0.8)
-				legs[_leg_name(false, near)] = [hock + Vector2(h[2], 0.0), PI / 2.0 - 0.06]
+					# Forearms along the ground.
+					legs[_leg_name(true, near)] = lay.call(true, x0 + (f[0] + f[1]) * (0.72 if near else 0.62), 0.55)
+				legs[_leg_name(false, near)] = lay.call(false, _hip().x + (0.0 if near else -0.03), 1.0)
 			tail = [PI * 0.75, -0.5, 1.0]
 			tail_ground = true
 		"curl":
@@ -1187,24 +1296,28 @@ func _pose(pose: String) -> void:
 			_ground = _hip().y + reach_h * 0.88
 			head_angle = deg_to_rad(rng.randf_range(-5.0, 10.0))
 			for near in [false, true]:
-				legs[_leg_name(true, near)] = [Vector2(_shoulder().x + (f[0] + f[1]) * (0.8 if near else 0.7) + f[2],
-						_ground - paw), PI / 2.0 - 0.1]
-				legs[_leg_name(false, near)] = [Vector2(_hip().x + (0.03 if near else -0.03), _ground - paw), hind_slant]
+				legs[_leg_name(true, near)] = lay.call(true, _shoulder().x + (f[0] + f[1]) * (0.8 if near else 0.7), 0.35)
+				legs[_leg_name(false, near)] = plant.call(false, _hip().x + (0.03 if near else -0.03), 0.05)
 			tail = [-PI / 2.0 - deg_to_rad(rng.randf_range(10.0, 50.0)), rng.randf_range(-1.0, 1.0),
 					rng.randf_range(-2.0, 2.0)]
 		"swim":
 			_body["sweep"] = _spine(-deg_to_rad(rng.randf_range(3.0, 8.0)), bow * 0.5, neck_angle * 0.8 + deg_to_rad(8.0))
 			head_angle *= 0.6
 			_ground = _standing_ground() + 0.2
-			for k: Array in [[true, true, 0.9], [true, false, -0.2], [false, true, -0.9], [false, false, 0.3]]:
+			# Paddling: one pair reaching, the other drawn back and folded.
+			for k: Array in [[true, true, 0.9, 0.2], [true, false, -0.2, 0.75], [false, true, -0.9, 0.1],
+					[false, false, 0.3, 0.7]]:
 				var root: Vector2 = _shoulder() if k[0] else _hip()
 				var reach: float = reach_f if k[0] else reach_h
 				var lean: float = k[2]
-				legs[_leg_name(k[0], k[1])] = [root + Vector2(sin(lean), cos(lean)) * reach * 0.85, lean + 0.4]
+				var fold: float = k[3]
+				legs[_leg_name(k[0], k[1])] = [root + Vector2(sin(lean), cos(lean)) * reach * lerpf(0.88, 0.6, fold),
+						lean + 0.4, fold, false]
 			tail = [PI - 0.1, rng.randf_range(-0.4, 0.4), rng.randf_range(-0.8, 0.8)]
 	for name: String in legs:
 		var leg: Array = legs[name]
-		_leg(name, name.ends_with("front"), not name.begins_with("far"), leg[0], leg[1])
+		_leg(name, name.ends_with("front"), not name.begins_with("far"), leg[0], leg[1], leg[2], leg[3],
+				leg[4] if leg.size() > 4 else [])
 	if _body.has("tuck"):
 		_build_tuck(_body["tuck"][0], _body["tuck"][1])
 	_build_head(head_angle)
