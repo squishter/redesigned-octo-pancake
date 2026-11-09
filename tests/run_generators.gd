@@ -912,6 +912,7 @@ func test_cluster_layout() -> void:
 func test_fine_layout() -> void:
 	print("Fine layout")
 	var curves := 0
+	var echo2 := 0
 	for i in 4:
 		var seed_value := 2030 + i
 		var opts := {"variant": MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()], "pattern_seed": i,
@@ -933,6 +934,8 @@ func test_fine_layout() -> void:
 					"seed %d: a fine area is %s / %s" % [seed_value, r["fill"], r["style"]])
 			if r["style"] in SlotPacker.CURVES:
 				curves += 1
+			if r["style"] == "echo2":
+				echo2 += 1
 		check(count_overlaps(fine["slots"], fine["width"] * 0.002) == 0, "seed %d: overlapping fine stones" % seed_value)
 		var touching := count_outline_overlaps(fine["slots"])
 		check(touching == 0, "seed %d: %d fine stones overlap by their real outlines" % [seed_value, touching])
@@ -940,6 +943,7 @@ func test_fine_layout() -> void:
 				fine["setting"], n, fine["gem_types"], fine["loose_dropped"]])
 		render_collage(fine).save_png(out_dir.path_join("layout_%d_fine.png" % seed_value))
 	check(curves > 0, "no fine area took a line pattern")
+	check(echo2 > 0, "no fine area took echo2")
 
 
 ## The tight packer's line patterns fill a disc and a ring with tidy rows
@@ -976,8 +980,8 @@ func test_line_patterns() -> void:
 		check(tones.size() >= want, "%s: %d tones, not %d" % [style, tones.size(), want])
 		check(count_overlaps(slots, 0.5) == 0, "%s: overlapping stones" % style)
 		print("  %-7s %d stones, tones %s" % [style, slots.size(), tones.keys()])
-	# A disc with two small holes: tight echo rows follow the disc's outline
-	# alone (echo2), around neither hole and never inside one.
+	# A disc with two small holes: echo2 rows follow the disc's outline
+	# alone, around neither hole and never inside one.
 	mask.fill(0)
 	var holes := [c + Vector2(-50, 10), c + Vector2(40, -30)]
 	for y in w:
@@ -992,7 +996,7 @@ func test_line_patterns() -> void:
 	for r in map.regions:
 		if (r["centroid"] as Vector2).distance_to(c) < 30.0 and r["area"] > 20000:
 			disc = r["id"]
-	var echo_slots := SlotPacker.pack(map, {"tight": true, "styles": {disc: "echo"}, "unit": unit, "seed": 3})
+	var echo_slots := SlotPacker.pack(map, {"tight": true, "styles": {disc: "echo2"}, "unit": unit, "seed": 3})
 	check(map.regions[disc]["style"] == "echo2", "a disc with holes took %s, not echo2" % map.regions[disc]["style"])
 	var in_disc := 0
 	for s in echo_slots:
@@ -1024,43 +1028,6 @@ func test_line_patterns() -> void:
 				part, list.max() - list.min()])
 	check(rows >= 3, "echo2: only %d rows" % rows)
 	print("  echo2   %d stones in a disc with two holes" % in_disc)
-	# echo3: a plain disc takes bigger stones than one dotted with holes, and
-	# its rows reach the middle.
-	var widths := {}
-	for busy: bool in [false, true]:
-		mask.fill(0)
-		var dots := []
-		if busy:
-			for k in 10:
-				dots.append(c + Vector2.from_angle(TAU * k / 10.0) * 85.0)
-		for y in w:
-			for x in w:
-				var q := Vector2(x + 0.5, y + 0.5)
-				var on := absf(q.distance_to(c) - 140.0) < 1.5
-				for hc: Vector2 in dots:
-					on = on or absf(q.distance_to(hc) - 10.0) < 1.5
-				mask[y * w + x] = 255 if on else 0
-		map = RegionMap.build(mask, w, w, 10)
-		var id := -1
-		for r in map.regions:
-			if (r["centroid"] as Vector2).distance_to(c) < 30.0 and r["area"] > 20000:
-				id = r["id"]
-		var e3 := SlotPacker.pack(map, {"tight": true, "echo_mode": "echo3", "styles": {id: "echo"}, "unit": unit,
-				"seed": 3})
-		check(map.regions[id]["style"] == "echo3", "echo3 mode packed %s" % map.regions[id]["style"])
-		var list := []
-		var nearest := INF
-		for s in e3:
-			if s["region"] == id:
-				list.append(float(s["width"]))
-				nearest = minf(nearest, Vector2(s["x"], s["y"]).distance_to(c))
-		list.sort()
-		widths[busy] = list[list.size() / 2]
-		check(nearest < unit * 4.0, "echo3 rows stop %.0f px short of the middle" % nearest)
-		check(count_overlaps(e3, 0.5) == 0, "echo3: overlapping stones")
-	check(widths[true] < widths[false], "echo3: a busy disc's stones (%.1f) aren't smaller than a plain one's (%.1f)" % [
-			widths[true], widths[false]])
-	print("  echo3   stones %.1f px in a plain disc, %.1f px in a busy one" % [widths[false], widths[true]])
 	# A square and a long strip, both asked for a solitaire.
 	mask.fill(0)
 	for y in w:

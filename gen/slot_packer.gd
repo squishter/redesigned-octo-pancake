@@ -44,30 +44,17 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ## echo2: echo rows that follow only the region's outer outline, as if its
 ##   holes (the areas it surrounds) were filled: rows stop where a hole cuts
 ##   them and go on past it rather than bending around it. Tight packing
-##   gives it to echo regions that have holes.
-## echo3: echo2's rows, sized from the region itself (only with the
-##   "echo_mode" option, see ECHO_MODES): stones are smaller the busier the
-##   region (its outline and holes' edges against its size) and small enough
-##   that its typical width holds two rows from each side, and the rows are
-##   scaled a little so they fill its depth evenly to the middle.
+##   gives it to about half the groups that pick echo (ECHO2_CHANCE); in a
+##   region without holes it lays the same rows as echo.
 ## Sparse fills, only used when asked for (see DesignPlan):
 ## scatter: an airy lattice of small stones
 ## accent: a single stone at the region's heart, as big as fits
 ## outline: only a row of small stones along the edge
 ## bare: no stones
 const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave",
-		"spiral", "swirl", "waves", "zigzag", "taper", "echo2", "echo3"]
-## How tight packing lays echo rows: "echo2" (areas with holes take echo2,
-## the rest plain echo; the default) or "echo3" (every echo area takes echo3).
-const ECHO_MODES := ["echo2", "echo3"]
-## echo3: the outline (holes' edges included) a plain disc has for its size,
-## perimeter / sqrt(area); busier areas score higher and take smaller stones.
-const DISC_OUTLINE := 3.545
-## echo3: the biggest and smallest first-row stone (in units), and how far
-## rows may be scaled to fill the depth evenly.
-const ECHO3_MAX := 1.5
-const ECHO3_MIN := 0.55
-const ECHO3_FIT := 0.2
+		"spiral", "swirl", "waves", "zigzag", "taper", "echo2"]
+## Tight packing: how often a group that picks echo takes echo2 instead.
+const ECHO2_CHANCE := 0.5
 ## Tight packing: the line patterns, how often a roomy group takes one
 ## instead of the row or lattice pattern it picked, and their weights.
 const CURVES := {"spiral": 1.0, "swirl": 1.0, "waves": 1.0, "zigzag": 0.6, "taper": 1.2}
@@ -155,8 +142,6 @@ var allow_spacers := true
 ## smaller ones dotted into the gaps), and chains and solitaires get none.
 ## Roomy groups often take line patterns (CURVES) instead of rows.
 var tight := false
-## "echo2" or "echo3" (see ECHO_MODES).
-var echo_mode := "echo2"
 ## The gap between stones of groups that aren't dense.
 var _base_gap := 2.0
 ## The picture is symmetric (radial or mirror): regions that map onto
@@ -205,7 +190,6 @@ var _part := 0
 ##   allow_spacers (bool, default true): false keeps groups from picking spacer
 ##     rows themselves (`spacers` still forces them),
 ##   tight (bool, default false): see `tight`,
-##   echo_mode ("echo2" | "echo3", default "echo2"): echo rows in tight packing,
 ##   styles (Dictionary region id -> style, to force a style or sparse fill),
 ##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
 ##     regions that map onto themselves get patterns as symmetric,
@@ -270,7 +254,6 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	dense_groups = options.get("dense_groups", {})
 	allow_spacers = options.get("allow_spacers", true)
 	tight = options.get("tight", false)
-	echo_mode = options.get("echo_mode", "echo2")
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
@@ -321,6 +304,9 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 			c_rng.seed = hash([seed_value, group, "curves"])
 			if c_rng.randf() < CURVE_CHANCE:
 				style = _pick(CURVES, c_rng)
+		# ...and half its echo rows for echo2, from another stream.
+		if tight and style == "echo" and float(hash([seed_value, group, "echo2"]) & 0xffff) / 65536.0 < ECHO2_CHANCE:
+			style = "echo2"
 	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)] * (DENSE_SIZE if dense else 1.0)
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
@@ -500,14 +486,10 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	# a wide area its branches scatter stones about.
 	if tight and style == "spine" and region["max_dist"] > unit * TIGHT_SPINE_DEPTH:
 		style = "echo"
-	# Tight echo rows ignore the region's internal features (echo2).
+	# echo2's rows ignore the region's internal features.
 	var outline := {}
-	if tight and style == "echo":
+	if style == "echo2":
 		outline = SlotPatterns.filled_outline(self, region)
-		if echo_mode == "echo3":
-			style = "echo3"
-		elif outline["holes"]:
-			style = "echo2"
 	region["style"] = style
 	var u: float = unit * design.get("scale", 1.0)
 	if tight and style in ["solitaire", "accent"]:
@@ -557,18 +539,6 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			SlotPatterns.outline_rows(self, outline, radii, shapes, tones)
 			_tone = 1 if toning == "heart" else 0
 			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
-		"echo3":
-			var field := SlotPatterns.filled_distance(outline)
-			outline["field"] = field
-			var radii := _echo3_rows(outline, field, design["grade"])
-			var shapes := []
-			var tones := []
-			for k in radii.size():
-				shapes.append(design["row_shape"])
-				tones.append(_row_tone(toning, k))
-			SlotPatterns.outline_rows(self, outline, radii, shapes, tones)
-			_tone = 1 if toning == "heart" else 0
-			_fill_rest([radii[-1] if not radii.is_empty() else r_row])
 		"halo":
 			var rows: int = design["halo_rows"]
 			# Tight halos keep their rows going inward, as echo does, so the
@@ -840,60 +810,6 @@ func _center_stone(region: Dictionary, cap: float, design: Dictionary) -> void:
 	if el > 1.5 and _try_capsule(long[0] if el > 2.2 else long[1], c, region["axis"], r * 0.95):
 		return
 	_place(design["center_shape"], c, region["axis"], r, 0.0)
-
-
-## echo3's row radii, outermost first, from the region's filled outline:
-## the first row's stones by how busy the region is (DISC_OUTLINE), capped
-## so its typical width (twice the median distance to the outline) holds two
-## rows from each side; later rows graded by `grade` (kept within 0.85-1.15);
-## then all scaled (within ECHO3_FIT) so the rows reach the middle evenly.
-func _echo3_rows(outline: Dictionary, field: PackedFloat32Array, grade: float) -> Array:
-	var rect: Rect2i = outline["rect"]
-	var bw := rect.size.x
-	var inside: PackedByteArray = outline["inside"]
-	var filled: PackedByteArray = outline["filled"]
-	var depths := []
-	var edge := 0
-	var area := 0
-	var depth := 0.0
-	for i in field.size():
-		if filled[i] == 0:
-			continue
-		area += 1
-		depth = maxf(depth, field[i])
-		depths.append(field[i])
-		if inside[i] == 1:
-			# An edge pixel: beside the outside or a hole.
-			for j: int in [i - 1, i + 1, i - bw, i + bw]:
-				if j >= 0 and j < inside.size() and inside[j] == 0:
-					edge += 1
-					break
-	if area == 0:
-		return []
-	depths.sort()
-	var typical: float = 2.0 * depths[depths.size() / 2]
-	var busy := float(edge) / sqrt(float(area)) / DISC_OUTLINE
-	var r0 := unit * clampf(ECHO3_MAX / maxf(1.0, busy), ECHO3_MIN, ECHO3_MAX)
-	r0 = minf(r0, maxf(unit * ECHO3_MIN, (typical / 2.0 - gap * 2.0) / 2.0))
-	var g := clampf(grade, 0.85, 1.15)
-	var radii := []
-	var d := gap
-	var r := r0
-	while radii.size() < 30 and d + r <= depth + r * 0.35:
-		radii.append(r)
-		d += 2.0 * r + gap
-		r = clampf(r * g, unit * ECHO3_MIN, unit * ECHO3_MAX)
-	if radii.is_empty():
-		return [r0]
-	# Scale the stones so the rows end at the middle, not short of it.
-	var stones := 0.0
-	for rk: float in radii:
-		stones += 2.0 * rk
-	var room := depth - gap * radii.size()
-	var s := clampf(room / maxf(1.0, stones), 1.0 - ECHO3_FIT, 1.0 + ECHO3_FIT)
-	for k in radii.size():
-		radii[k] = radii[k] * s
-	return radii
 
 
 ## Whether the stones from `first` on (one center stone) cover at least
