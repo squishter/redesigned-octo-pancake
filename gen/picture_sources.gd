@@ -72,7 +72,7 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 		opts["source"]["snowflake"] = mandala["snowflake"]
 	if mandala.has("mandala"):
 		opts["source"]["mandala"] = mandala["mandala"]
-	for key: String in ["swirl", "animal", "animal_print"]:
+	for key: String in ["swirl", "animal", "animal_mesh", "animal_print"]:
 		if mandala.has(key):
 			opts["source"][key] = mandala[key]
 	if lines.has("motifs"):

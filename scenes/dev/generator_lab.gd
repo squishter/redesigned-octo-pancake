@@ -290,7 +290,7 @@ func _options(parent: Control, label: String, items: Array) -> OptionButton:
 	_label(parent, label)
 	var ob := OptionButton.new()
 	for item in items:
-		ob.add_item(str(item).capitalize())
+		ob.add_item("Posed animals" if item == "animal_mesh" else str(item).capitalize())
 		ob.set_item_metadata(ob.item_count - 1, item)
 	ob.item_selected.connect(func(_i: int) -> void: _generate())
 	_fill_row(ob)
@@ -498,6 +498,9 @@ func _process(_delta: float) -> void:
 			if p["source"].has("animal_print"):
 				var ap: Dictionary = p["source"]["animal_print"]
 				flower = ", %s print on a %s" % [" | ".join(PackedStringArray(ap["coats"])), ap["shape"]]
+			if p["source"].has("animal_mesh"):
+				var an: Dictionary = p["source"]["animal_mesh"]
+				flower = ", %s, %s, %s coat" % [an["species"], an["pose"], an["coat"]["style"]]
 			if p["source"].has("frame"):
 				var fr: Dictionary = p["source"]["frame"]
 				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],

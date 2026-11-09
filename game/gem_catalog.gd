@@ -704,9 +704,8 @@ const PUZZLES := {
 			"about": "Mirrored wings with spots and veins."},
 	"swirl": {"name": "Swirl collage", "source": "Swirl", "variant": "swirl",
 			"about": "Free-flowing line art: waves, whirls, blooms, scales and more, no two alike."},
-	"animal": {"name": "Animal collage", "source": "Animal", "variant": "animal",
-			"about": "Cats, dogs, foxes, horses, elephants and more: sitting, pouncing, curled up asleep, swimming,"
-					+ " each in its own coat."},
+	"animal": {"name": "Animal collage", "source": "Animal", "variant": "animal_mesh",
+			"about": "Posed cats, dogs, horses and wild animals, with natural coats or decorative markings."},
 	"animal_print": {"name": "Animal print collage", "source": "Animal print", "variant": "animal_print",
 			"about": "Stripes, spots, rosettes and patches all over, sometimes two prints at once."},
 	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,

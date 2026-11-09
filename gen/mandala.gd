@@ -14,7 +14,7 @@ extends RefCounted
 ## most pictures with FrameDesign, and holds the small shape helpers they
 ## share.
 
-const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_print"]
+const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_mesh", "animal_print"]
 ## Swirls are framed less often than the rest (unless `frame` says), so
 ## their own outlines show.
 const SWIRL_FRAME_CHANCE := 0.25
@@ -69,6 +69,11 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			symmetry = "none"
 			keys = ["species", "blend", "plan", "coat", "pose", "facing", "scene", "feet", "ears", "horns", "tail",
 					"mane", "markings"]
+		"animal_mesh":
+			design = AnimalMeshGenerator.generate(seed_value, options)
+			symmetry = "none"
+			keys = ["species", "model", "plan", "pose", "camera", "coat", "pose_record",
+					"source_sha256", "pose_data_sha256", "projection", "backend"]
 		"animal_print":
 			design = AnimalPrintGenerator.generate(seed_value, options)
 			symmetry = "none"
@@ -86,7 +91,10 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var framing := {"polylines": design["polylines"], "closed": design["closed"], "frame": {}, "scale": 1.0}
 	if _frameable(variant, design):
 		var frame_options := options
-		if variant == "swirl" and not options.has("frame"):
+		if variant == "animal_mesh" and not options.has("frame"):
+			frame_options = options.duplicate()
+			frame_options["frame"] = false
+		elif variant == "swirl" and not options.has("frame"):
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash([seed_value, "swirl frame"])
 			frame_options = options.duplicate()

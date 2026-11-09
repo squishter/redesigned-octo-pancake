@@ -1,5 +1,11 @@
 # Animal asset credits
 
+`posed/*.dat` contains frozen, normalized pose derivatives of these same models,
+with anatomical coordinates and masks added for generated coat markings. The
+original creators and licenses below also apply to those derivatives and their
+projected animal artwork. Procedural coats and pose changes were added in this
+project; they are not the creators' original textures or animations.
+
 The 21 core Quaternius models (`models/farm_*`, `models/ultimate_*`, and
 `models/vol2_*`) are CC0. Creator pack links and original conversion notices
 are in `licenses/` and the experiment source inventories.

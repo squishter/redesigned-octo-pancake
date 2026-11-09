@@ -13,12 +13,16 @@ license credits, previews and reproduction commands.
 37 bundled models, freezes authored poses, solves custom species/rig-specific
 poses, and adds constrained seeded variations. Its 24 pose types include canine
 sitting/play bows, feline crouches and equine trot/gallop phases. The pose studio
-also offers curated silhouette views and three front head crops. Production
-line-art integration of these sourced meshes is the next stage.
+also offers curated silhouette views and three front head crops. The main Animal
+source now projects these meshes with 18 natural/decorative surface coats into
+playable collage and kit art. `preview_surface_coats.py` pairs the shaded surface
+with the actual extracted lines; `bake_pose_library.gd` rebuilds the worker-safe
+700-pose library. See the runtime README for APIs and reproduction commands.
 
 This is a working investigation of a replacement for the animal generator.
-It uses the app wiring from `ccr-7d680ac7-axod0b` and leaves the production
-generator in place while the replacement is evaluated.
+It uses the app wiring from `ccr-7d680ac7-axod0b`. The sourced-mesh backend now
+drives the main Animal entry; the original 2D and procedural prototypes remain
+available for comparison and older seeds.
 
 The pipeline works. The procedural meshes are **rough anatomy prototypes**,
 not finished realistic animal assets. Better meshes and skin weights remain

@@ -5,6 +5,14 @@ var _world: Node3D
 var _camera: Camera3D
 var _portrait: MeshInstance3D
 var _floor: MeshInstance3D
+var _coats: OptionButton
+var _render_mode: OptionButton
+var _coat_seed: SpinBox
+var _preview: TextureRect
+var _preview_task := -1
+var _preview_serial := 0
+var _pending_preview := {}
+var _preview_result := {}
 var _animal: AnimalPoseModel
 var _models: OptionButton
 var _poses: OptionButton
@@ -68,6 +76,23 @@ func _ready() -> void:
 			_frame_camera()
 	)
 	view_row.add_child(_views)
+	var coat_row := HBoxContainer.new()
+	column.add_child(coat_row)
+	_coats = OptionButton.new()
+	_coats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_coats.item_selected.connect(func(_index): _frame_camera())
+	coat_row.add_child(_coats)
+	_coat_seed = SpinBox.new()
+	_coat_seed.max_value = 2147483647
+	_coat_seed.value = 42
+	_coat_seed.prefix = "Coat seed "
+	_coat_seed.value_changed.connect(func(_value): _frame_camera())
+	coat_row.add_child(_coat_seed)
+	_render_mode = OptionButton.new()
+	for label in ["Original model", "Coated model", "Line art"]:
+		_render_mode.add_item(label)
+	_render_mode.item_selected.connect(func(_index): _frame_camera())
+	coat_row.add_child(_render_mode)
 	var viewport_container := SubViewportContainer.new()
 	viewport_container.stretch = true
 	viewport_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -78,6 +103,13 @@ func _ready() -> void:
 	viewport.size = Vector2i(960, 720)
 	viewport.own_world_3d = true
 	viewport_container.add_child(viewport)
+	_preview = TextureRect.new()
+	_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_preview.hide()
+	viewport_container.add_child(_preview)
 	_world = Node3D.new()
 	viewport.add_child(_world)
 	_camera = Camera3D.new()
@@ -113,6 +145,14 @@ func _ready() -> void:
 	floor_mesh.material_override = material
 	_world.add_child(floor_mesh)
 	_floor = floor_mesh
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+	var controls := VBoxContainer.new()
+	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(controls)
+	column = controls
 	_amount = _slider(column, "Variation strength", 0, 1, 0.75)
 	_amount.value_changed.connect(func(_value): _apply())
 	_phase = _slider(column, "Pose phase", 0, 1, 0.25)
@@ -205,6 +245,10 @@ func _load_model() -> void:
 		if preset == "idle":
 			_poses.select(_poses.item_count - 1)
 	var supported := _animal.supported_controls()
+	_coats.clear()
+	for style: String in AnimalSurfaceCoat.available(_animal.model_id):
+		_coats.add_item(style.capitalize())
+		_coats.set_item_metadata(_coats.item_count - 1, style)
 	for key: String in _sliders:
 		_sliders[key].editable = key in supported
 	_apply()
@@ -289,6 +333,7 @@ func _frame_camera() -> void:
 	var aspect := maxf(0.1, float(viewport_size.x) / maxf(1, viewport_size.y))
 	if _views.item_count > 0 and _views.get_selected_metadata() != "manual":
 		AnimalCameraPresets.apply(_camera, _animal, _views.get_selected_metadata(), aspect)
+		_queue_projection()
 		return
 	_camera.near = 0.01
 	_camera.far = 100.0
@@ -303,6 +348,69 @@ func _frame_camera() -> void:
 	_camera.size = (
 		maxf(bounds.size.y, Vector2(bounds.size.x, bounds.size.z).length() / aspect) * 1.35
 	)
+	_queue_projection()
+
+
+func _queue_projection() -> void:
+	_preview_serial += 1
+	_preview.visible = _render_mode.selected != 0
+	if not _preview.visible:
+		_pending_preview = {}
+		return
+	var view: String = _views.get_selected_metadata()
+	var data := _animal.portrait_snapshot() if view.begins_with("head_") else _animal.snapshot()
+	var camera := AnimalCameraPresets.frame(_animal, view)
+	if view == "manual":
+		camera = {
+			"transform": _animal.global_transform.affine_inverse() * _camera.global_transform,
+			"size": _camera.size * maxf(1, _camera.get_viewport().get_visible_rect().size.aspect()),
+			"near": 0.01,
+			"far": 100.0
+		}
+	_pending_preview = {
+		"serial": _preview_serial,
+		"data": data,
+		"camera": camera,
+		"coat":
+		AnimalSurfaceCoat.make(
+			_animal.model_id, _coats.get_selected_metadata(), int(_coat_seed.value)
+		),
+		"lines": _render_mode.selected == 2
+	}
+	_start_preview()
+
+
+func _start_preview() -> void:
+	if _preview_task >= 0 or _pending_preview.is_empty():
+		return
+	var job := _pending_preview
+	_pending_preview = {}
+	_preview_task = WorkerThreadPool.add_task(
+		_render_preview.bind(job), false, "animal coat projection"
+	)
+
+
+func _render_preview(job: Dictionary) -> void:
+	var projection := AnimalSurfaceProjection.project(job.data, job.camera, job.coat, 384)
+	var image: Image = (
+		AnimalSurfaceProjection.line_image(projection.design) if job.lines else projection.image
+	)
+	_preview_result = {"serial": job.serial, "image": image}
+
+
+func _process(_delta: float) -> void:
+	if _preview_task < 0 or not WorkerThreadPool.is_task_completed(_preview_task):
+		return
+	WorkerThreadPool.wait_for_task_completion(_preview_task)
+	_preview_task = -1
+	if _preview_result.serial == _preview_serial:
+		_preview.texture = ImageTexture.create_from_image(_preview_result.image)
+	_start_preview()
+
+
+func _exit_tree() -> void:
+	if _preview_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_preview_task)
 
 
 func _slider(parent: Node, caption: String, low: float, high: float, value: float) -> HSlider:

@@ -1,8 +1,90 @@
 # Sourced animal posing
 
-The 37 sourced GLBs are bundled under `assets/animals/`, with their licenses and
-source hashes. This is the runtime posing stage for the forthcoming 3D-to-2D
-generator. The existing puzzle catalog still uses its current line-art generator.
+The main app's Animal collage and Animal diamond-kit pictures now use these
+37 sourced meshes, posed and projected with seeded surface coats. The source
+GLBs, licenses and hashes live under `assets/animals/`. The pose studio supports
+live rig editing; puzzle generation uses a compressed library of 700 reviewed
+pose variants so it can run entirely on the app's background thread.
+
+## Coats and puzzle generation
+
+There are 18 surface-coat styles. Natural choices are restricted by species:
+source colors, canine saddles and patches, feline tabby/point/tuxedo/rosette
+markings, equine pinto/dapple/socks, bovine patches and zebra stripes. Decorative
+ribbons, petals, stars, scales, mosaic and lace are available across the roster.
+`AnimalSurfaceCoat.available(model_id, "natural" | "decorative" | "all")` reports
+the actual choices. The default mixed mode chooses natural coats 65% of the time.
+
+Every vertex carries immutable neutral-surface coordinates, anatomical flow,
+face coordinates, component IDs and feature masks through skinning and head
+crops. Limb and tail flow starts at the body's attachment phase. Facial bands
+turn across the forehead/cheeks and blend into the neck. Materials, semantic
+bones and base-color/geometry cues protect eyes, mouths, hooves, horns, tusks and
+accessories. Authored atlas UVs remain intact for source color sampling. Extra
+meshes with overlapping or mirrored atlases use the same neutral-space fields.
+
+The projector resolves frontmost triangles, interpolates their surface
+coordinates and evaluates coat fields per visible pixel. It extracts silhouettes,
+visible component occlusions, source features and coat boundaries into one shared
+vector graph. Small isolated markings are removed at puzzle resolution. Triangle
+edges are omitted. Each connected paint area gets a family mark, so spots and
+stripes become coordinated collage elements and ordinary kit color regions.
+
+```gdscript
+var lines := PictureSources.mandala_lines(42, {
+    "variant": "animal_mesh", "model": "ultimate_husky", "pose": "sit",
+    "coat": "spots", "coat_seed": 17, "camera": "three_quarter_left"
+})
+var collage := PictureSources.mandala_collage(42, {"theme": "sunset"}, lines)
+var kit_image := PictureSources.mandala_image(42, {"theme": "sunset"}, lines)
+```
+
+Optional controls: `model`, `pose`, `camera`, `coat`, `coat_seed`, `coat_scale`
+(0.5–1.8), `coat_mode` (`mixed`, `natural`, `decorative`), and `recent` model
+records. Unspecified choices are seeded. Mesh, pose and camera eligibility remain
+enforced. The saved `animal_mesh` metadata includes the source/model-data hashes,
+pose recipe and coat version/seed/scale. Passing that metadata back as options
+reproduces the same picture, including after a JSON round trip. Collages and
+kits both retain it. The old `animal` variant remains available for older designs;
+the main catalog selects `animal_mesh`, labelled “Posed animals” in Generator Lab.
+
+For a live edited pose, first obtain a snapshot on the scene thread, then pass
+the plain data to a worker:
+
+```gdscript
+var surface := animal.portrait_snapshot()  # Or snapshot() for the whole body.
+var camera_frame := AnimalCameraPresets.frame(animal, "head_front")
+var coat := AnimalSurfaceCoat.make(animal.model_id, "petals", 42)
+var projection := AnimalSurfaceProjection.project(surface, camera_frame, coat, 384)
+var shaded_image: Image = projection.image
+var line_image := AnimalSurfaceProjection.line_image(projection.design)
+```
+
+The result also includes pixel labels/depth. `design` follows the existing unit
+polylines/closed/families/marks contract. Surface data and field evaluation need
+no rendering server, GPU viewport or Blender. Preview shading uses sampled
+source colors rather than the assets' full PBR material stack.
+
+## Frozen pose assets
+
+`assets/animals/posed/catalog.json` indexes compressed `.dat` arrays: static
+surface attributes are stored once per model, with posed vertices/normals and
+eligible camera frames per state. Two seeded mutator variants cover every one
+of the 274 model/preset combinations; locomotion and jump clips also include
+additional phases. Live arbitrary posing remains available through the API
+below. Updating a rig or adding poses requires rebaking the production library:
+
+```sh
+godot --headless -s res://experiments/animal_3d/bake_pose_library.gd
+# After changing only coat coordinates/masks:
+godot --headless -s res://experiments/animal_3d/bake_pose_library.gd -- --attributes-only
+```
+
+The frozen data is about 41 MiB. Android export presets include these arrays and
+the asset credits/licenses. The exported resource pack is tested by loading all
+37 datasets, checking their hashes, and generating line art without source scenes.
+Android device timing remains to be profiled; the runtime projection is 320 px
+before vector paths are rasterized at the app's requested puzzle resolution.
 
 ## Use in Godot
 
@@ -149,20 +231,28 @@ Run `tools/animal_pose_studio.tscn` in the editor, or:
 godot --path . res://tools/animal_pose_studio.tscn
 ```
 
-The viewer has animal/preset selection, seed, variation strength, head, tail,
+The viewer has original/coated/line-art display modes, coat selection and a
+separate coat seed, plus animal/preset selection, variation strength, head, tail,
 stance and trunk controls, a pose phase slider, eight curated camera/crop choices
 and manual orbit. Unsupported poses, cameras and controls are hidden or disabled.
 “Reset controls to seed” restores the generated variation.
+Coated previews run on a worker and discard stale results while controls change.
 
 ```sh
 godot --headless --editor --import
 godot --headless -s res://tests/run_animal_poses.gd -- --out=/tmp/animal-poses
 godot --headless -s res://tests/run_animal_pose_views.gd -- --out=/tmp/animal-views
+godot --headless -s res://tests/run_animal_coats.gd -- --out=/tmp/animal-coats
 python3 experiments/animal_3d/check_pose_bind_space.py --input=/tmp/animal-poses/bind_checks
 python3 experiments/animal_3d/preview_pose_variants.py \
   --input=/tmp/animal-poses --out=/tmp/animal-poses/comparison.png
 python3 experiments/animal_3d/preview_pose_views.py \
   --input=/tmp/animal-views --out=/tmp/animal-views/gallery
+python3 experiments/animal_3d/preview_surface_coats.py \
+  --input=/tmp/animal-coats --out=/tmp/animal-coats/gallery
+godot --headless --export-pack Android /tmp/animal-surfaces.pck
+godot --headless --main-pack /tmp/animal-surfaces.pck \
+  -s "$PWD/tests/run_animal_pack.gd"
 ```
 
 The runtime checks cover all 37 models and every advertised preset: seeded mesh
@@ -179,5 +269,8 @@ diagonal trot contacts and 17 gait phases with/without variation on every equine
 `snapshot()` uses reference CPU skinning, including up to eight weights, morph
 targets, and rigid bone attachments. Vertices and normals use this node's local
 Y-up space; UVs stay attached to the imported skin. Sampling is useful for bounds,
-tests and the next projection stage. Orthographic contour extraction and puzzle
-line-art integration remain separate work.
+tests and projection. Coat checks cover all 37 animals, all 18 styles, natural
+eligibility, deformation-invariant coordinates/UVs, body/head projections, closed
+paint regions and family separation. An independent overlapping-plane fixture
+checks hidden markings and absence of triangle edges. Worker generation, studio
+previews, JSON replay, collage slots, kits and packaged assets are also verified.

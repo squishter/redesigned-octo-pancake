@@ -3,6 +3,7 @@ extends RefCounted
 ## Reference CPU skinning for pose validation, bounds and later projection.
 ## Surface UVs remain the imported mesh's immutable per-vertex attributes.
 
+var coat_attributes := {}
 var _space: Node3D
 var _surfaces: Array[Dictionary] = []
 var _images := {}
@@ -49,6 +50,37 @@ func affects_geometry(skeleton: Skeleton3D, ancestor: int) -> bool:
 				return true
 			index = skeleton.get_bone_parent(index)
 	return false
+
+
+func protected_vertices() -> PackedByteArray:
+	var result := PackedByteArray()
+	for surface in _surfaces:
+		var material: StandardMaterial3D = surface.material
+		var label: String = surface.instance.name.to_lower()
+		if material != null:
+			label += " " + material.resource_name.to_lower()
+		var protect := false
+		for word in [
+			"eye",
+			"pupil",
+			"teeth",
+			"tooth",
+			"tongue",
+			"mouth",
+			"hoof",
+			"horn",
+			"antler",
+			"claw",
+			"collar",
+			"bell",
+			"whisk",
+			"tusk",
+			"ivory"
+		]:
+			protect = protect or word in label
+		for _vertex in surface.arrays[Mesh.ARRAY_VERTEX].size():
+			result.append(1 if protect else 0)
+	return result
 
 
 func indices_for_bones(
@@ -250,7 +282,7 @@ func sample(attributes := true, topology := false) -> Dictionary:
 			else:
 				for i in positions.size():
 					triangles.append(offset + i)
-	return {
+	var result := {
 		"vertices": vertices,
 		"normals": normals,
 		"atlas": atlas,
@@ -258,6 +290,9 @@ func sample(attributes := true, topology := false) -> Dictionary:
 		"colors": colors,
 		"triangles": triangles
 	}
+	if attributes:
+		result.merge(coat_attributes)
+	return result
 
 
 func _color(material: StandardMaterial3D, uv: Vector2) -> Color:

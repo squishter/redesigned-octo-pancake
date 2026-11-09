@@ -95,6 +95,7 @@ func configure(id: String, info: Dictionary, model: Node3D, target_height: float
 		_flush()
 		_head_rest_basis = _bone(_profile.head).basis.orthonormalized()
 		_restore_live(saved)
+	_sampler.coat_attributes = AnimalCoatSurface.capture(self)
 	return true
 
 

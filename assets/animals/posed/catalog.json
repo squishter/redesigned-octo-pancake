@@ -1,0 +1,650 @@
+{
+	"models": {
+		"daydaze_elephant": {
+			"anatomy": "elephant",
+			"data_sha256": "5cc62948754f76ed6193b8c9884e4022e3f6462572ba93f6bda1ca587bffb391",
+			"file": "res://assets/animals/posed/daydaze_elephant.dat",
+			"name": "Elephant",
+			"presets": [
+				"rest",
+				"eat",
+				"graze",
+				"idle",
+				"run",
+				"walk"
+			],
+			"source_sha256": "d51b66c9d715bf3330f2ed9964469007d22bc079f28e1e4b6ecb4dcfc11597bd",
+			"states": 16.0
+		},
+		"daydaze_labrador": {
+			"anatomy": "canine",
+			"data_sha256": "2491f84f2f949b9ab5f40531ec2364ffef0b2b37d416e1f8b95814f0dac3355a",
+			"file": "res://assets/animals/posed/daydaze_labrador.dat",
+			"name": "Labrador",
+			"presets": [
+				"rest",
+				"idle",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "aef45c117671eccfc6882f0b20930a3e6ee41d75d1a99d783aee1128742236cc",
+			"states": 14.0
+		},
+		"daydaze_lion": {
+			"anatomy": "feline",
+			"data_sha256": "468404895d5ed3d96a0dd2bcc624e0941b13d04780ac6cf3e6f8a069a188b632",
+			"file": "res://assets/animals/posed/daydaze_lion.dat",
+			"name": "Lion cub",
+			"presets": [
+				"rest",
+				"idle",
+				"crouch",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "f2196e8997f64e291e67e0ee8b6c2577d1241bf9db5ea32799a0c55745d9da75",
+			"states": 10.0
+		},
+		"farm_cow": {
+			"anatomy": "bovine",
+			"data_sha256": "f6330ae770a4c977e01f11a0975c00d8835b8d8bd31a79fc34e41f538a5a2590",
+			"file": "res://assets/animals/posed/farm_cow.dat",
+			"name": "Cow (Farm)",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk"
+			],
+			"source_sha256": "93317f8fd27623363dc590137485ac3f3d4f8a73e22407cc24d4d871a666adf5",
+			"states": 16.0
+		},
+		"farm_horse": {
+			"anatomy": "equine",
+			"data_sha256": "e93f4c49376859313662d455ea14780cbdb463d43cb81498ea7a454e374f42e5",
+			"file": "res://assets/animals/posed/farm_horse.dat",
+			"name": "Horse (Farm)",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk",
+				"trot"
+			],
+			"source_sha256": "5755af6fc782f27d892399bd740008dfe3dedebb1b6fecfb291a23630dfbb59d",
+			"states": 20.0
+		},
+		"farm_llama": {
+			"anatomy": "camelid",
+			"data_sha256": "ed9a4ec55955cdf83d288e7f9044d44656beced21fe16490378e59899f7c2ff6",
+			"file": "res://assets/animals/posed/farm_llama.dat",
+			"name": "Llama",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk"
+			],
+			"source_sha256": "97586ce661df79bedb243bce28764ee60bb4fb677b52c78fb46269dd87a118fa",
+			"states": 16.0
+		},
+		"farm_pig": {
+			"anatomy": "porcine",
+			"data_sha256": "0e70f5cf4ad4996e6761684911fed7dc6f97534cbb6307fc93e265c0f064493c",
+			"file": "res://assets/animals/posed/farm_pig.dat",
+			"name": "Pig",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk"
+			],
+			"source_sha256": "4bb9acd7c35e40af8f0758db372d8f218e017b4683567165db2ca060a829b799",
+			"states": 16.0
+		},
+		"farm_pug": {
+			"anatomy": "canine",
+			"data_sha256": "83b3aefe98e3c2cb5a0df585b946ccf4e2ee755f54e6577013d440c263baecaf",
+			"file": "res://assets/animals/posed/farm_pug.dat",
+			"name": "Pug",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "1763b461ef34daaaff44b1fd2ebc6015a795ae0d3725db6e4651928341a4fa3d",
+			"states": 26.0
+		},
+		"farm_sheep": {
+			"anatomy": "ovine",
+			"data_sha256": "0eb5fc8ee5efa59ede8060a33f660c3a0b83ca515128a0f6f68858a0fd199e6b",
+			"file": "res://assets/animals/posed/farm_sheep.dat",
+			"name": "Sheep",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk"
+			],
+			"source_sha256": "26b4cfee2b36681b3b04dc75c347813bfcef86832246bfbc5f3b385d4996b521",
+			"states": 16.0
+		},
+		"farm_zebra": {
+			"anatomy": "equine",
+			"data_sha256": "21724372a98e2c9e5805b3c79fd27215702cfbeef6f560359a7b8338fdc7a85b",
+			"file": "res://assets/animals/posed/farm_zebra.dat",
+			"name": "Zebra",
+			"presets": [
+				"rest",
+				"idle",
+				"jump",
+				"run",
+				"walk",
+				"trot"
+			],
+			"source_sha256": "2aeaa23e4fefede778f754c953bc7009650dbf6b6c617055ae771d303516dab8",
+			"states": 20.0
+		},
+		"gobkit_anglerfish": {
+			"anatomy": "fish",
+			"data_sha256": "b5010b7de1ecd3931365988e17a49c6af83526c6150713e1eac62b038cfdb624",
+			"file": "res://assets/animals/posed/gobkit_anglerfish.dat",
+			"name": "Anglerfish",
+			"presets": [
+				"rest",
+				"idle",
+				"swim"
+			],
+			"source_sha256": "8d07bd212527ec2e0ba2d42367dcf65ae91eb35538fb3b57a2bfd8e1d8ac60fa",
+			"states": 6.0
+		},
+		"gobkit_bat": {
+			"anatomy": "bat",
+			"data_sha256": "1b02a804dc6234b5e9d53e1af5e0461b9635f9f05bcab430ceec9fb83e66e88a",
+			"file": "res://assets/animals/posed/gobkit_bat.dat",
+			"name": "Bat",
+			"presets": [
+				"rest",
+				"idle",
+				"fly"
+			],
+			"source_sha256": "1a4317609094c64d3f751adb9150df628aaf7902f7440174afcb642c30e0e072",
+			"states": 6.0
+		},
+		"gobkit_corgi": {
+			"anatomy": "canine",
+			"data_sha256": "e02eb004a63602c4614af2a2f275ce6c864536ee0a0335ed95c73e3ccf8a9f0a",
+			"file": "res://assets/animals/posed/gobkit_corgi.dat",
+			"name": "Corgi",
+			"presets": [
+				"rest",
+				"idle",
+				"walk"
+			],
+			"source_sha256": "95cd2c4d53d70ee9dd2e1329dcb6de7d4a725301d504a4f2f00ecb34dc1a0851",
+			"states": 8.0
+		},
+		"gobkit_duck": {
+			"anatomy": "other",
+			"data_sha256": "7dc70d85a1728d1c60320a6c36743783dfecbc77905c637a92076b76fb358bc2",
+			"file": "res://assets/animals/posed/gobkit_duck.dat",
+			"name": "Duck",
+			"presets": [
+				"rest",
+				"idle",
+				"walk"
+			],
+			"source_sha256": "6550a5807bc83edbadec0759155b3d9242b6ce6b980213a3872b49db80dfd579",
+			"states": 8.0
+		},
+		"gobkit_hippo": {
+			"anatomy": "other",
+			"data_sha256": "9573b2702772e544d2f49305a5cada8a35832c01db287f8bcf8794621742d0d6",
+			"file": "res://assets/animals/posed/gobkit_hippo.dat",
+			"name": "Hippo",
+			"presets": [
+				"rest",
+				"idle",
+				"walk"
+			],
+			"source_sha256": "6a911f141482994f890911429e0863353a10fb567822e553b91a273e0fb1d5bd",
+			"states": 8.0
+		},
+		"gobkit_jellyfish": {
+			"anatomy": "jellyfish",
+			"data_sha256": "dc7733631f80cfb51415e1aeb875a9bc49712cf62c9effd52083ebab3b930aae",
+			"file": "res://assets/animals/posed/gobkit_jellyfish.dat",
+			"name": "Jellyfish",
+			"presets": [
+				"rest",
+				"idle",
+				"drift"
+			],
+			"source_sha256": "b0625fa8a726c594afc47a317b997d98da97b163fe551b15e32262854c99ea46",
+			"states": 6.0
+		},
+		"gobkit_platypus": {
+			"anatomy": "other",
+			"data_sha256": "d2624493c84e106797971cc4aac20323a84853cb39b0687d909f983b442e1d3a",
+			"file": "res://assets/animals/posed/gobkit_platypus.dat",
+			"name": "Platypus",
+			"presets": [
+				"rest",
+				"idle",
+				"walk"
+			],
+			"source_sha256": "9d5e67a5147dabe04c5e3f677b10aa8042ed4efe337378bccc3b7dd6338d99b6",
+			"states": 8.0
+		},
+		"gobkit_red": {
+			"anatomy": "other",
+			"data_sha256": "a0a260ace64e514db24601ce785a3a4878d69cadaf67ba7739129559f94e2dd7",
+			"file": "res://assets/animals/posed/gobkit_red.dat",
+			"name": "Red panda",
+			"presets": [
+				"rest",
+				"idle",
+				"walk"
+			],
+			"source_sha256": "412df0483b64f3339dfa8405c75c194effb90b72bb279bd233bfb4653d70c7a8",
+			"states": 8.0
+		},
+		"gobkit_rhino": {
+			"anatomy": "other",
+			"data_sha256": "c15fb6385d37d3e5f3fa3e0c545f971b145bbf61cf2fda627f11b6e2e77aeaec",
+			"file": "res://assets/animals/posed/gobkit_rhino.dat",
+			"name": "Rhino",
+			"presets": [
+				"rest",
+				"idle",
+				"walk"
+			],
+			"source_sha256": "65cea4e6533e50d00efdde03de3e792f7337736d97b8f8c8f8b12c4bc0ee5017",
+			"states": 8.0
+		},
+		"gobkit_shark": {
+			"anatomy": "fish",
+			"data_sha256": "47b0df0aca49f2c9f08010a862d40f70c0c3617d3801c70e12397cb8f2801624",
+			"file": "res://assets/animals/posed/gobkit_shark.dat",
+			"name": "Shark",
+			"presets": [
+				"rest",
+				"idle",
+				"swim"
+			],
+			"source_sha256": "0fc450c99f0fd9f2e5d774ef58cd42b8d8d927bed138444254204b366595dc42",
+			"states": 6.0
+		},
+		"shepherd_shepherd": {
+			"anatomy": "canine",
+			"data_sha256": "49e366ae0d7cd7b3fa1500ccfb2bf06e5d9124f448029f5496bd789f697bb382",
+			"file": "res://assets/animals/posed/shepherd_shepherd.dat",
+			"name": "German Shepherd",
+			"presets": [
+				"rest",
+				"eat",
+				"idle",
+				"alert",
+				"head_low",
+				"run",
+				"jump",
+				"walk",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "ca9925e5aeb95242dd77a7474f6b54db93ad5de4beb45de290024cf6447ccd65",
+			"states": 32.0
+		},
+		"toon_cat_toon_cat_free": {
+			"anatomy": "feline",
+			"data_sha256": "a559c72fac14c9bc0f76e3bd9980899844b2a6435501eed62c939f0c2d3810ea",
+			"file": "res://assets/animals/posed/toon_cat_toon_cat_free.dat",
+			"name": "Toon cat",
+			"presets": [
+				"rest",
+				"source",
+				"lie_down",
+				"crouch",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "f76291f5d37d60fc58e8006a1111a5960958545fc4d9592988682ad3a9aaef81",
+			"states": 12.0
+		},
+		"tuxedo_cat_tuxedo_cat": {
+			"anatomy": "feline",
+			"data_sha256": "c5c07ec691ea3d6d0247c2de4fc49f99bb7687ca6e08e52c7a28f43353b2a394",
+			"file": "res://assets/animals/posed/tuxedo_cat_tuxedo_cat.dat",
+			"name": "Tuxedo cat",
+			"presets": [
+				"rest",
+				"idle",
+				"sit",
+				"alert",
+				"walk",
+				"crouch",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "7c6e8721df9cbd104355c303c70344d002285d0a2979867599d0ae794da35604",
+			"states": 18.0
+		},
+		"ultimate_alpaca": {
+			"anatomy": "camelid",
+			"data_sha256": "3ba5903800c013751781c9de0fcde5ba9407a1502af70dce63b6bbeb357af8a7",
+			"file": "res://assets/animals/posed/ultimate_alpaca.dat",
+			"name": "Alpaca",
+			"presets": [
+				"rest",
+				"kick",
+				"graze",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk"
+			],
+			"source_sha256": "1a0e7fb9c851f59e1e0e7354ab73b89822c27185ba487bcf0cccbcf2061205a3",
+			"states": 26.0
+		},
+		"ultimate_bull": {
+			"anatomy": "bovine",
+			"data_sha256": "27cdc4981ee03ac1fa082eb0b157a489c2b3691b687b322273c6897344b52723",
+			"file": "res://assets/animals/posed/ultimate_bull.dat",
+			"name": "Bull",
+			"presets": [
+				"rest",
+				"headbutt",
+				"kick",
+				"graze",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk"
+			],
+			"source_sha256": "18d46a7b11046ca859591e2a1263ffa1f4572c596a87032f94190971daed3e4f",
+			"states": 28.0
+		},
+		"ultimate_cow": {
+			"anatomy": "bovine",
+			"data_sha256": "dadc393f184dfd641ef056723f4b2329a5d2e94e3ca0c386004204093fb8bde1",
+			"file": "res://assets/animals/posed/ultimate_cow.dat",
+			"name": "Cow",
+			"presets": [
+				"rest",
+				"headbutt",
+				"kick",
+				"graze",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk"
+			],
+			"source_sha256": "6b283031c9a215aa6238543c798bf99b3e182d51bb24689eeafdea3e80f33de4",
+			"states": 28.0
+		},
+		"ultimate_deer": {
+			"anatomy": "cervid",
+			"data_sha256": "db3ad88129775ad6010e3529fb18ddb21622c571aeb5476a69914c3b2f953722",
+			"file": "res://assets/animals/posed/ultimate_deer.dat",
+			"name": "Deer",
+			"presets": [
+				"rest",
+				"headbutt",
+				"kick",
+				"graze",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk"
+			],
+			"source_sha256": "cc87686bd67dfc381cedf6688bd315661d393c29bc82a2db9bb892d0f64fb773",
+			"states": 28.0
+		},
+		"ultimate_donkey": {
+			"anatomy": "equine",
+			"data_sha256": "e2c7e5589b446469c70caa89d44026cb798b6eafde38f863012b9b31582cd0b8",
+			"file": "res://assets/animals/posed/ultimate_donkey.dat",
+			"name": "Donkey",
+			"presets": [
+				"rest",
+				"kick",
+				"graze",
+				"gallop",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"trot"
+			],
+			"source_sha256": "6e9c715a4bedc3db40152beaa8850d1473c823f81fec4982b713aa3c00851a54",
+			"states": 30.0
+		},
+		"ultimate_fox": {
+			"anatomy": "canine",
+			"data_sha256": "51ba30fee4cb3b17bd7ee2cebd91117c1c813ef62965b9eff0542f81d83c5906",
+			"file": "res://assets/animals/posed/ultimate_fox.dat",
+			"name": "Fox",
+			"presets": [
+				"rest",
+				"eat",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "cd979f3ceff5b2fc8953adea65a4d110cceae52af52cfe4cfd0ae7413caf0f1d",
+			"states": 34.0
+		},
+		"ultimate_horse": {
+			"anatomy": "equine",
+			"data_sha256": "3cf5ae468e12b80bcaeeb71d316215a0b9eb37b5daa3b51301871737403cf0a4",
+			"file": "res://assets/animals/posed/ultimate_horse.dat",
+			"name": "Horse",
+			"presets": [
+				"rest",
+				"kick",
+				"graze",
+				"gallop",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"trot"
+			],
+			"source_sha256": "6ff57851818cbf8d4920ca69a1cd40176999605f5f2f625eab181750bedd2c6d",
+			"states": 30.0
+		},
+		"ultimate_horse_white": {
+			"anatomy": "equine",
+			"data_sha256": "396e2b694d9c6461ef86af27475ab6532ea1fec50349a35568f59f19b15b75d1",
+			"file": "res://assets/animals/posed/ultimate_horse_white.dat",
+			"name": "Horse White",
+			"presets": [
+				"rest",
+				"kick",
+				"graze",
+				"gallop",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"trot"
+			],
+			"source_sha256": "d04fbf4c81921e08b6cea9bd882a354247708877cf674d78f275be6615453cfc",
+			"states": 30.0
+		},
+		"ultimate_husky": {
+			"anatomy": "canine",
+			"data_sha256": "5339167cde93c3c58910da0f6391001b09c57d5a3ed5272a8f79a66b8eed0182",
+			"file": "res://assets/animals/posed/ultimate_husky.dat",
+			"name": "Husky",
+			"presets": [
+				"rest",
+				"eat",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "ac0c5f4ffb12435324d79b79742e69d2754c2f097e8cfab803ac981af2b3d6d4",
+			"states": 34.0
+		},
+		"ultimate_shibainu": {
+			"anatomy": "canine",
+			"data_sha256": "2db5c29eb83d19ea7b7995a0db61a36e86b97d69fac64168ca7763706b6f84c5",
+			"file": "res://assets/animals/posed/ultimate_shibainu.dat",
+			"name": "Shiba Inu",
+			"presets": [
+				"rest",
+				"eat",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "b70fc1c59a4cce9d9184bed0fabc8e80f5c075bb5c81ff747d19ac89a7833b22",
+			"states": 34.0
+		},
+		"ultimate_stag": {
+			"anatomy": "cervid",
+			"data_sha256": "ce9341bc6d298bc5987090e5379c2cabe72265fc09301affb240044614e5b64a",
+			"file": "res://assets/animals/posed/ultimate_stag.dat",
+			"name": "Stag",
+			"presets": [
+				"rest",
+				"headbutt",
+				"kick",
+				"graze",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk"
+			],
+			"source_sha256": "fceffc460e9424fcadd14d5a452dfd286100e2cfbd7175685188c721a99cc2f2",
+			"states": 28.0
+		},
+		"ultimate_wolf": {
+			"anatomy": "canine",
+			"data_sha256": "b256bf4cd6f2efa82e7a28ec5ca7f838756b65febbdac795da4f549fec9ddc09",
+			"file": "res://assets/animals/posed/ultimate_wolf.dat",
+			"name": "Wolf",
+			"presets": [
+				"rest",
+				"eat",
+				"run",
+				"jump",
+				"idle",
+				"alert",
+				"head_low",
+				"landing",
+				"walk",
+				"sit",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "5fa3a4c79373952ab2ff4ad68be96672ec6baff2c49fb3b77ed929c4eff1774b",
+			"states": 34.0
+		},
+		"vol2_cat": {
+			"anatomy": "feline",
+			"data_sha256": "021d0d60fb5538296377e7146eb51c1e8df34db8ff0e3168491d856cfa3e3281",
+			"file": "res://assets/animals/posed/vol2_cat.dat",
+			"name": "Cat (Quaternius)",
+			"presets": [
+				"rest",
+				"idle",
+				"walk",
+				"lie_down",
+				"crouch",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "9f256aabc8ecd4e349ef2208accef13fc35f93cfd7645802ca750997c09a4913",
+			"states": 16.0
+		},
+		"vol2_dog": {
+			"anatomy": "canine",
+			"data_sha256": "d4da519afa4b4d5cd37064197880f002e3b10b371e61b58dff7a0fdef0a20564",
+			"file": "res://assets/animals/posed/vol2_dog.dat",
+			"name": "Dog (Quaternius)",
+			"presets": [
+				"rest",
+				"idle",
+				"walk",
+				"lie_down",
+				"play_bow",
+				"stretch",
+				"look_back"
+			],
+			"source_sha256": "71e42052104929a92ed31f99cc83fa238edae6931101249061344970f6ac8e27",
+			"states": 16.0
+		}
+	},
+	"pose_version": 2.0,
+	"version": 1.0
+}

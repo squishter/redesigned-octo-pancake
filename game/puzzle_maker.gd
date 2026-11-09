@@ -151,8 +151,14 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 	var picked: String = opts.get("kit_size", "")
 	var kit_options := {"size": size, "colors": clampi(gems.size(), 6, 20), "gems": gems, "drill": drill,
 			"seed": seed_value}
+	var animal_info := {}
 	if image == null:
-		image = PictureSources.mandala_image(seed_value, opts)
+		if opts.get("variant", "") == "animal_mesh":
+			var lines := PictureSources.mandala_lines(seed_value, opts)
+			animal_info = lines["mandala"]["animal_mesh"]
+			image = PictureSources.mandala_image(seed_value, opts, lines)
+		else:
+			image = PictureSources.mandala_image(seed_value, opts)
 		if KitGenerator.LONG_SIDES.has(picked):
 			size = KitGenerator.board_long(image, KitGenerator.LONG_SIDES[picked])
 			kit_options["size"] = size
@@ -192,6 +198,8 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 		# of thousands), and turned back into slots on loading (kit_slots).
 		"kit_grid": {"cols": w, "rows": h, "cells": kit["cells"], "palette": palette, "drill": drill, "cut": cut},
 	}
+	if not animal_info.is_empty():
+		picture["source"]["animal_mesh"] = animal_info
 	picture["slots"] = kit_slots(picture)
 	return picture
 
