@@ -32,10 +32,12 @@ const PHOTO_DITHER := 0.85
 const PHOTO_OWN_DITHER := 0.5
 ## Picture features make() knows (GemCatalog.FEATURES must be among them).
 const FEATURES := ["frames", "backgrounds", "collars", "zoom", "wobble"]
-## How closely new collages' stones sit (CollageGenerator.LAYOUTS). Requests
-## from before layouts have none and stay "classic", so recoloring an older
+## How closely new collages' stones sit (CollageGenerator.LAYOUTS): new
+## puzzles are cluster pictures (about 500 stones in 10-15 gem types, in
+## tight groups). Saved requests keep their own layout, and those from
+## before layouts have none and stay "classic", so recoloring an older
 ## puzzle makes the same picture again.
-const LAYOUT := "dense"
+const LAYOUT := "cluster"
 
 
 ## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme, layout}.

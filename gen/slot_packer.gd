@@ -100,6 +100,14 @@ var spacers := false
 ## Symmetry groups packed dense: smaller stones, closer together, more often
 ## with spacer rows (see DENSE_GAP).
 var dense_groups := {}
+## Groups may get spacer rows (off in the cluster layout, where they're filler).
+var allow_spacers := true
+## Tight packing (the cluster layout): no pave (its free-form stones sit
+## loose; those groups take echo rows instead), no lattices graded smaller
+## toward the rim, rows counted to the nearest number of stones (shrunk to
+## fit) rather than spread out, and chains of stones respaced to the size
+## each stone really gets, so stones sit as close as the gap says.
+var tight := false
 ## The gap between stones of groups that aren't dense.
 var _base_gap := 2.0
 ## The picture is symmetric (radial or mirror): regions that map onto
@@ -145,6 +153,9 @@ var _part := 0
 ##   spacers (bool): every row pattern gets thin rows of small stones between
 ##     its main rows (otherwise only some groups, picked per seed),
 ##   dense_groups (Dictionary group -> true): groups packed dense (see DENSE_GAP),
+##   allow_spacers (bool, default true): false keeps groups from picking spacer
+##     rows themselves (`spacers` still forces them),
+##   tight (bool, default false): see `tight`,
 ##   styles (Dictionary region id -> style, to force a style or sparse fill),
 ##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
 ##     regions that map onto themselves get patterns as symmetric,
@@ -207,6 +218,8 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	gap = options.get("gap", unit * GAP)
 	_base_gap = gap
 	dense_groups = options.get("dense_groups", {})
+	allow_spacers = options.get("allow_spacers", true)
+	tight = options.get("tight", false)
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
@@ -248,6 +261,8 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 				weights["rosette"] = 0.12
 				weights["sunburst"] = 0.15
 			style = _pick(weights, g_rng)
+		if style == "pave" and tight:
+			style = "echo"
 	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)] * (DENSE_SIZE if dense else 1.0)
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
@@ -260,7 +275,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"row_r": row_r,
 		"row_shape": shape,
 		# Every other row smaller, like alternating bead sizes.
-		"spacers": spacers or g_rng.randf() < (DENSE_SPACERS if dense else 0.25),
+		"spacers": spacers or (g_rng.randf() < (DENSE_SPACERS if dense else 0.25) and allow_spacers),
 		# Stones of the fills that go by the unit (pave, spine, solitaire's
 		# corners) shrink with the rows.
 		"scale": DENSE_SIZE if dense else 1.0,
@@ -272,7 +287,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		# below 1 the stones shrink toward the middle, above 1 they grow.
 		"grade": [1.0, 0.85, 0.8, 1.15, 1.25][g_rng.randi_range(0, 4)],
 		# Honeycomb stones shrink toward the edge, like a halftone.
-		"gradient": g_rng.randf() < 0.35,
+		"gradient": g_rng.randf() < 0.35 and not tight,
 		"scatter_space": u * g_rng.randf_range(1.2, 2.0),
 		# Tiers: big stones (radius) and how many medium ones go in first.
 		"large": u * g_rng.randf_range(2.2, 3.2) if tiers and max_d > u * 2.6 and g_rng.randf() < 0.5 else 0.0,
@@ -594,8 +609,10 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 	var n: int
 	var step: float
 	var start := 0.0
+	# Tight rows take the nearest count rather than the most that fit, and
+	# shrink their stones to it, so stones are never most of a stone apart.
 	if closed:
-		n = maxi(1, floori(length / pitch))
+		n = maxi(1, roundi(length / pitch) if tight else floori(length / pitch))
 		if mirror_axes and Geometry2D.is_point_in_polygon(_pic_center, pts):
 			# A row around the picture's center keeps its symmetry.
 			var lay := Symmetry.ring_layout(n, _row_sym(), pts, _pic_center)
@@ -603,10 +620,12 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 			start = lay[1]
 		step = length / n
 	else:
-		n = floori(length / pitch) + 1
+		n = (roundi(length / pitch) if tight else floori(length / pitch)) + 1
 		step = length / (n - 1) if n > 1 else 0.0
 		if n == 1:
 			start = length / 2.0
+	if tight and n > 1 and step < pitch:
+		r = maxf(r * 0.5, (step - gap) / (2.0 * aspect))
 	var floor_r := maxf(r * 0.5, unit * MIN_STONE)
 	for i in n:
 		var at: Array = Contours.sample(pts, closed, fposmod(start + step * i, length) if closed else start + step * i)
@@ -756,6 +775,15 @@ func _spine(region: Dictionary, r_max: float, r_min: float) -> void:
 				# The next stone sits just past this one, sized for where it lands.
 				var ahead: Vector2 = Contours.sample(pts, closed, s + 2.0 * r + gap)[0]
 				var nr := clampf(_dist_at(ahead) - gap, r_min, minf(r_max, r * 1.4))
+				if tight:
+					# Where the region narrows the next stone comes out smaller
+					# than guessed: step back to touch it.
+					for _k in 3:
+						var q: Vector2 = Contours.sample(pts, closed, s + r + gap + nr)[0]
+						var got := minf(r_max * _scale_at(q), _free_at(q) - gap)
+						if got >= nr - 0.5 or got < r_min:
+							break
+						nr = got
 				s += r + gap + nr
 			else:
 				s += 1.0

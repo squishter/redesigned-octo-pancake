@@ -51,6 +51,8 @@ const ACCENT_MAX_SPREAD := 2.5
 ##   line_style: one of LINE_STYLES or "auto" (default "auto")
 ##   unit: base stone radius in px, as for SlotPacker (default SlotPacker.UNIT of the picture)
 ##   dense: 0..1, the share of groups packed dense (default 0)
+##   tight: bool, sparse groups only go bare or accent, never scatter or
+##          outline, whose stones sit loose (default false; the cluster layout)
 ## Returns {sparsity, line_style, fills: PackedStringArray per region,
 ##          outlined: PackedByteArray per region, dense: PackedByteArray per
 ##          region, keep_outer: bool}.
@@ -65,6 +67,7 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 	if not line_style in LINE_STYLES:
 		line_style = _weighted_pick(AUTO_LINE_WEIGHTS, rng)
 	var unit: float = options.get("unit", minf(map.width, map.height) * SlotPacker.UNIT)
+	var tight: bool = options.get("tight", false)
 
 	var n_groups := 0
 	for g in groups:
@@ -113,7 +116,7 @@ static func make(map: RegionMap, groups: PackedInt32Array, options: Dictionary, 
 		# One stone that fills most of the region, not one adrift in it.
 		if depth >= unit * 1.6 and depth <= unit * ACCENT_MAX_DEPTH and group_spread[g] <= ACCENT_MAX_SPREAD:
 			choices.append("accent")
-		if depth >= unit * 3.0:
+		if depth >= unit * 3.0 and not tight:
 			choices.append_array(["scatter", "scatter", "outline"])
 		# Small bare regions read as holes, not negative space.
 		if depth >= unit * BARE_MIN_DEPTH and bare_area + group_area[g] <= MAX_BARE_AREA * total_area:
