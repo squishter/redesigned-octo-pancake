@@ -14,6 +14,9 @@ var _preview_serial := 0
 var _pending_preview := {}
 var _preview_result := {}
 var _animal: AnimalPoseModel
+## The whole animal's pose-independent coat coordinates, so head crops lay
+## out decorative motifs exactly as the generator does.
+var _coat_layout := {}
 var _models: OptionButton
 var _poses: OptionButton
 var _views: OptionButton
@@ -208,6 +211,8 @@ func _load_model() -> void:
 	if _animal == null:
 		_status.text = "Could not load this animal."
 		return
+	var whole := _animal.snapshot()
+	_coat_layout = {"rest": whole.rest, "regions": whole.regions}
 	var labels := {
 		"rest": "Stand",
 		"idle": "Idle",
@@ -367,14 +372,16 @@ func _queue_projection() -> void:
 			"near": 0.01,
 			"far": 100.0
 		}
+	var coat := AnimalSurfaceCoat.make(
+		_animal.model_id, _coats.get_selected_metadata(), int(_coat_seed.value)
+	)
+	if coat != null:
+		coat.fit(_coat_layout)
 	_pending_preview = {
 		"serial": _preview_serial,
 		"data": data,
 		"camera": camera,
-		"coat":
-		AnimalSurfaceCoat.make(
-			_animal.model_id, _coats.get_selected_metadata(), int(_coat_seed.value)
-		),
+		"coat": coat,
 		"lines": _render_mode.selected == 2
 	}
 	_start_preview()

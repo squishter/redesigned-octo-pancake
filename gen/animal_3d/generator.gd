@@ -52,6 +52,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var data: Dictionary = stored.attributes.duplicate()
 	data.vertices = state.vertices
 	data.normals = state.normals
+	var whole := data
 	if view.begins_with("head_"):
 		data = AnimalSkinSampler.subset(data, stored.head_indices)
 	var mode: String = options.get("coat_mode", "mixed")
@@ -71,6 +72,8 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		options.get("coat_seed", coat_record.get("seed", seed_value)),
 		options.get("coat_scale", coat_record.get("scale", 1.0))
 	)
+	if coat != null:
+		coat.fit(whole)  # Head crops share the full body's motif layout.
 	var result := AnimalSurfaceProjection.project(data, state.cameras[view], coat, 320)
 	if result.is_empty():
 		return {}

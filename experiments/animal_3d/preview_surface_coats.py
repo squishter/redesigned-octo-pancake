@@ -34,9 +34,9 @@ def main():
         "ultimate_cow_patches_three_quarter_left", "farm_zebra_zebra_three_quarter_left",
     ], args.out / "natural_coats.png")
     sheet(args.input, [
-        "ultimate_husky_stars_three_quarter_left", "ultimate_husky_mosaic_three_quarter_left",
-        "ultimate_husky_lace_three_quarter_left", "ultimate_husky_scales_three_quarter_left",
-        "gobkit_shark_ribbons_three_quarter_left", "daydaze_elephant_petals_head_front",
+        "ultimate_husky_stars_three_quarter_left", "ultimate_husky_polka_dots_three_quarter_left",
+        "ultimate_husky_checks_three_quarter_left", "ultimate_husky_scales_three_quarter_left",
+        "gobkit_shark_stripes_three_quarter_left", "daydaze_elephant_petals_head_front",
     ], args.out / "decorative_coats.png")
     sheet(args.input, [
         "ultimate_husky_saddle_head_front", "ultimate_husky_saddle_head_front_close",

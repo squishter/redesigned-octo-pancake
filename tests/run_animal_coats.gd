@@ -40,10 +40,11 @@ func _run() -> void:
 		AnimalSurfaceCoat.make("gobkit_shark", "tabby", 1) == null, "fish rejects feline markings"
 	)
 	_check(
-		AnimalSurfaceCoat.make("ultimate_husky", "ribbons", 1, NAN) == null,
+		AnimalSurfaceCoat.make("ultimate_husky", "stripes", 1, NAN) == null,
 		"invalid scale rejected"
 	)
 	_occlusion()
+	_decorative_regularity()
 	var styles := {}
 	for id: String in AnimalPoseLibrary.model_ids():
 		var animal := AnimalPoseLibrary.spawn(root, id)
@@ -59,7 +60,7 @@ func _run() -> void:
 			_check(p.is_finite(), id + " finite rest coordinates")
 		for name_value: String in AnimalSurfaceCoat.available(id):
 			styles[name_value] = true
-		var style := "ribbons" if id.begins_with("gobkit") else AnimalSurfaceCoat.available(id)[1]
+		var style := "stripes" if id.begins_with("gobkit") else AnimalSurfaceCoat.available(id)[1]
 		_project(animal, style, "three_quarter_left")
 		if "head_front" in AnimalCameraPresets.available(animal):
 			_project(animal, "petals", "head_front")
@@ -76,8 +77,13 @@ func _run() -> void:
 		["ultimate_husky", "tuxedo"],
 		["vol2_cat", "points"],
 		["ultimate_husky", "stars"],
-		["ultimate_husky", "mosaic"],
-		["ultimate_husky", "lace"],
+		["ultimate_husky", "polka_dots"],
+		["ultimate_husky", "checks"],
+		["ultimate_husky", "gingham"],
+		["ultimate_husky", "harlequin"],
+		["ultimate_husky", "chevrons"],
+		["ultimate_husky", "waves"],
+		["ultimate_husky", "hearts"],
 		["ultimate_husky", "scales"],
 		["ultimate_horse", "pinto"],
 		["ultimate_horse", "socks"]
@@ -113,10 +119,12 @@ func _project(animal: AnimalPoseModel, style: String, view: String) -> void:
 	var data := animal.portrait_snapshot() if view.begins_with("head_") else animal.snapshot()
 	var camera := AnimalCameraPresets.frame(animal, view)
 	var coat := AnimalSurfaceCoat.make(animal.model_id, style, 42 + posmod(hash(style), 1000000))
+	coat.fit(animal.snapshot())
 	var result := AnimalSurfaceProjection.project(data, camera, coat, 256)
 	_check(not result.is_empty(), animal.model_id + " projects " + style)
 	if result.is_empty():
 		return
+	_check_flat_lighting(result, coat, animal.model_id + " " + style + " " + view)
 	var design: Dictionary = result.design
 	var mask := LineRaster.rasterize(design.polylines, design.closed, Vector2i(512, 512), 1.8)
 	var map := RegionMap.build(mask, 512, 512, 0)
@@ -231,6 +239,99 @@ func _pipeline() -> void:
 		kit.height,
 		" kit"
 	)
+
+
+## Constant lighting: every painted coat pixel is exactly its paint color, with
+## no normal-dependent shading or shadow that could read as an edge.
+func _check_flat_lighting(result: Dictionary, coat: AnimalSurfaceCoat, name_value: String) -> void:
+	if coat.style == "source":
+		return
+	var image: Image = result.image
+	var size := image.get_width()
+	var flat := true
+	for at in result.labels.size():
+		var label: int = result.labels[at]
+		if label < 1 or label > 3:
+			continue
+		var expected: Color = coat.palette[label]
+		var actual := image.get_pixel(at % size, at / size)
+		if (
+			absf(actual.r - expected.r) > 0.006
+			or absf(actual.g - expected.g) > 0.006
+			or absf(actual.b - expected.b) > 0.006
+		):
+			flat = false
+			break
+	_check(flat, name_value + " coat colors are unshaded")
+
+
+## Decorative coats are exact repeating lattices: no noise, no seed-dependent
+## shapes, and seamless wrapping around every limb.
+func _decorative_regularity() -> void:
+	var periods := {
+		"stripes": Vector2(1, 1),
+		"checks": Vector2(2, 2),
+		"gingham": Vector2(1, 1),
+		"harlequin": Vector2(1, 1),
+		"chevrons": Vector2(1, 1),
+		"waves": Vector2(1, 1),
+		"polka_dots": Vector2(2, 1),
+		"stars": Vector2(2, 1),
+		"petals": Vector2(2, 1),
+		"hearts": Vector2(2, 1),
+		"scales": Vector2(1.1, 3)
+	}
+	_check(
+		periods.size() == AnimalSurfaceCoat.DECORATIVE.size(),
+		"every decorative coat has a regularity check"
+	)
+	var animal := AnimalPoseLibrary.spawn(root, "ultimate_husky")
+	var whole := animal.snapshot()
+	animal.pose("sit" if "sit" in animal.available_poses() else "rest", 3, 1.0)
+	var posed := animal.snapshot()
+	animal.free()
+	for style: String in AnimalSurfaceCoat.DECORATIVE:
+		var coat := AnimalSurfaceCoat.make("ultimate_husky", style, 5)
+		var other := AnimalSurfaceCoat.make("ultimate_husky", style, 991)
+		var period: Vector2 = periods[style]
+		var repeating := true
+		var labels := {}
+		for i in 400:
+			var p := (
+				Vector2(fposmod(i * 0.6180339 + 0.0123, 3.3), fposmod(i * 0.4142135 + 0.0271, 3.0))
+				- Vector2(1.6, 1.5)
+			)
+			var label := coat._motif(p)
+			labels[label] = true
+			if (
+				label != coat._motif(p + Vector2(period.x, 0))
+				or label != coat._motif(p + Vector2(0, period.y))
+				or label != coat._motif(p - Vector2(period.x * 3, period.y * 2))
+				or label != other._motif(p)
+			):
+				repeating = false
+		_check(repeating, style + " is an exact, noise-free repeating motif")
+		_check(labels.size() >= 2, style + " has at least two paints")
+		# Around a part the lattice wraps a whole number of times.
+		coat.fit(whole)
+		var chart: Dictionary = coat._charts[0]
+		var probe: Vector3 = chart.center + chart.first * chart.radius + chart.axis * 0.137
+		var turned: Vector3 = (
+			chart.center
+			+ (
+				(chart.first * cos(TAU - 0.000001) + chart.second * sin(TAU - 0.000001))
+				* chart.radius
+			)
+			+ chart.axis * 0.137
+		)
+		_check(
+			absf(fposmod(coat._cell(probe, 0).y - coat._cell(turned, 0).y + 0.5, 1) - 0.5) < 0.001,
+			style + " wraps seamlessly around the torso"
+		)
+		# The layout only reads pose-independent coordinates.
+		var posed_coat := AnimalSurfaceCoat.make("ultimate_husky", style, 5)
+		posed_coat.fit(posed)
+		_check(posed_coat._charts == coat._charts, style + " layout is the same in every pose")
 
 
 func _occlusion() -> void:

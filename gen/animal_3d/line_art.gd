@@ -15,7 +15,9 @@ static func project(
 	var colors := PackedColorArray()
 	colors.resize(size * size)
 	colors.fill(coat.palette[0])
-	var light := Vector3(-0.3, 0.8, 0.5).normalized()
+	if not coat.is_fitted():
+		coat.fit(data)
+	coat.set_view(camera)
 	for at in labels.size():
 		var triangle: int = raster.triangle[at]
 		if triangle < 0:
@@ -44,16 +46,17 @@ static func project(
 			protection
 		)
 		labels[at] = label
-		var normal := _mix(data.normals, a, b, c, weights).normalized()
-		var color: Color = (
-			original.linear_to_srgb()
-			if coat.style == "source" or protection > 0.5
-			else coat.palette[label]
-		)
-		colors[at] = color * (0.58 + 0.42 * maxf(0, normal.dot(light)))
+		# Constant, direction-free lighting: no normal or light term, so no
+		# shading or shadow can ever read as an edge downstream.
+		colors[at] = original.linear_to_srgb()
 		colors[at].a = 1.0
 		raster.parts[at] = region
 	_clean(labels, size)
+	if coat.style != "source":
+		# Flat paint, after speck cleanup, so the image matches the line art.
+		for at in labels.size():
+			if labels[at] >= 1 and labels[at] <= 3:
+				colors[at] = coat.palette[labels[at]]
 	var design := _vectors(labels, raster.depth, raster.parts, size)
 	design.marks = _marks(labels, size)
 	design.family_names = (

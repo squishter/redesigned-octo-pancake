@@ -8,12 +8,32 @@ pose variants so it can run entirely on the app's background thread.
 
 ## Coats and puzzle generation
 
-There are 18 surface-coat styles. Natural choices are restricted by species:
+There are 23 surface-coat styles. Natural choices are restricted by species:
 source colors, canine saddles and patches, feline tabby/point/tuxedo/rosette
-markings, equine pinto/dapple/socks, bovine patches and zebra stripes. Decorative
-ribbons, petals, stars, scales, mosaic and lace are available across the roster.
-`AnimalSurfaceCoat.available(model_id, "natural" | "decorative" | "all")` reports
-the actual choices. The default mixed mode chooses natural coats 65% of the time.
+markings, equine pinto/dapple/socks, bovine patches and zebra stripes. Eleven
+decorative coats are available across the roster: stripes, polka dots, checks,
+gingham, harlequin diamonds, chevrons, waves, stars, flowers (`petals`), hearts
+and scales. `AnimalSurfaceCoat.available(model_id, "natural" | "decorative" |
+"all")` reports the actual choices. The default mixed mode chooses natural coats
+65% of the time.
+
+Decorative coats are exact repeating lattices with no noise, so their line art
+is a clean, regular pattern rather than blobs. `fit()` lays out a seamless
+chart per body part from neutral coordinates: a cylinder around the torso's
+long axis, each leg's and the tail's principal axis, and the head's forward
+axis (ears follow the head). The number of repeats around a part is rounded to
+a whole number, so motifs close without a seam. Skin near an axis, such as the
+chest front or the end of the snout, uses a flat cap chart instead of pinching
+into a starburst. Head portraits use a flat, front-facing grid centred on the
+face. Motif size follows the camera's orthographic size, so close crops get
+finer motifs. The seed varies colors and lattice offset, never the motif shape.
+Coat metadata is version 2; version-1 decorative names (ribbons, mosaic, lace)
+are no longer offered. A replay that names one falls back to a seeded choice.
+
+Projection is unlit. Every pixel shows its flat paint color, or its sampled
+source color for `source` coats and protected features. No light direction,
+normal shading or shadow exists to be mistaken for an edge. Lines come only
+from paint labels, silhouettes and depth occlusions.
 
 Every vertex carries immutable neutral-surface coordinates, anatomical flow,
 face coordinates, component IDs and feature masks through skinning and head
@@ -55,15 +75,17 @@ the plain data to a worker:
 var surface := animal.portrait_snapshot()  # Or snapshot() for the whole body.
 var camera_frame := AnimalCameraPresets.frame(animal, "head_front")
 var coat := AnimalSurfaceCoat.make(animal.model_id, "petals", 42)
+coat.fit(animal.snapshot())  # Whole body, so head crops match full views.
 var projection := AnimalSurfaceProjection.project(surface, camera_frame, coat, 384)
-var shaded_image: Image = projection.image
+var flat_image: Image = projection.image  # Unlit paint colors.
 var line_image := AnimalSurfaceProjection.line_image(projection.design)
 ```
 
 The result also includes pixel labels/depth. `design` follows the existing unit
 polylines/closed/families/marks contract. Surface data and field evaluation need
-no rendering server, GPU viewport or Blender. Preview shading uses sampled
-source colors rather than the assets' full PBR material stack.
+no rendering server, GPU viewport or Blender. The image is unlit and uses sampled
+source colors rather than the assets' full PBR material stack. If `fit()` was not
+called, `project()` fits the coat to the data it receives.
 
 ## Frozen pose assets
 
@@ -269,8 +291,10 @@ diagonal trot contacts and 17 gait phases with/without variation on every equine
 `snapshot()` uses reference CPU skinning, including up to eight weights, morph
 targets, and rigid bone attachments. Vertices and normals use this node's local
 Y-up space; UVs stay attached to the imported skin. Sampling is useful for bounds,
-tests and projection. Coat checks cover all 37 animals, all 18 styles, natural
+tests and projection. Coat checks cover all 37 animals, all 23 styles, natural
 eligibility, deformation-invariant coordinates/UVs, body/head projections, closed
-paint regions and family separation. An independent overlapping-plane fixture
+paint regions and family separation. They also check unlit flat paint and exact,
+seed-independent lattice periodicity for every decorative coat. Seamless wrapping
+and pose-independent layout are checked too. An independent overlapping-plane fixture
 checks hidden markings and absence of triangle edges. Worker generation, studio
 previews, JSON replay, collage slots, kits and packaged assets are also verified.
