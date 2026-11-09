@@ -36,8 +36,16 @@ extends RefCounted
 ##     enough to fit along it (CLUSTER_LINE_MIN), and such pictures may go
 ##     over the stone range rather than lose lines. Groups can still spread
 ##     over the picture, with bare areas and the background between them.
+##   fine: packed as dense (the same share of dense groups and line classes,
+##     stones and limits), tidied as cluster pictures are: tight packing
+##     (SlotPacker.tight: line patterns, no pave, no stones dotted into
+##     what patterns leave, solitaires only where their stone fills the
+##     area), no scatter or outline fills, no tiny fillers, no loose
+##     pattern parts and no gem types of only one or two stones but
+##     accents. Spacer rows stay, as in dense.
 ## A picture is made the same again only in its own layout: a puzzle
-## request without one (from before dense) stays classic.
+## request without one (from before dense) stays classic, and dense stays
+## as it was (newer requests use fine).
 ##
 ## Result format (saved as JSON through PatternIO):
 ## {
@@ -85,7 +93,9 @@ const LINE_PAD := 0.5
 ## Gem types (shape + color, any size) a collage aims for.
 const GEM_TYPES_MIN := 25
 const GEM_TYPES_MAX := 30
-const LAYOUTS := ["classic", "dense", "cluster"]
+const LAYOUTS := ["classic", "dense", "cluster", "fine"]
+## Layouts that tidy their stones (see "fine" and "cluster" above).
+const TIDY_LAYOUTS := ["cluster", "fine"]
 ## Dense layout: the share of groups of areas and of classes of gem lines
 ## made dense (picked per seed in this range), and its most stones.
 const DENSE_SHARE_MIN := 0.67
@@ -177,7 +187,7 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	var picture := _build(mask, w, h, options, unit)
 	if (options.has("unit") and options.has("spacers")) or cluster:
 		return picture
-	var max_slots: int = options.get("max_slots", DENSE_MAX_SLOTS if layout == "dense" else MAX_SLOTS)
+	var max_slots: int = options.get("max_slots", DENSE_MAX_SLOTS if layout in ["dense", "fine"] else MAX_SLOTS)
 	# Too many stones: leave out the element with the most stones (a class of
 	# gem lines, or a group of areas), all its symmetric copies at once, as a
 	# symmetric gap, rather than making every stone bigger.
@@ -326,10 +336,11 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if not layout in LAYOUTS:
 		layout = "classic"
 	var cluster := layout == "cluster"
+	var tidy := layout in TIDY_LAYOUTS
 	# Cluster pictures sit tight everywhere, as dense groups do.
 	var gap: float = options.get("gap", unit * SlotPacker.GAP * (SlotPacker.DENSE_GAP if cluster else 1.0))
 	var dense := 0.0
-	if layout == "dense":
+	if layout in ["dense", "fine"]:
 		var dense_rng := RandomNumberGenerator.new()
 		dense_rng.seed = hash([seed_value, "dense"])
 		dense = dense_rng.randf_range(DENSE_SHARE_MIN, DENSE_SHARE_MAX)
@@ -382,7 +393,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if setting == "gems":
 		plan_options["line_style"] = "none"
 	plan_options["dense"] = dense
-	if cluster:
+	if tidy:
 		plan_options["tight"] = true
 	var plan := DesignPlan.make(map, groups, plan_options, seed_value)
 	# Areas left out to stay under max_slots (by where they are, as region
@@ -406,8 +417,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		if dense_regions[r] == 1:
 			dense_groups[groups[r]] = true
 	pack_options["dense_groups"] = dense_groups
-	if cluster:
-		pack_options["allow_spacers"] = false
+	if tidy:
+		pack_options["allow_spacers"] = not cluster
 		pack_options["tight"] = true
 		pack_options["radial_size"] = false
 	var styles := DesignPlan.packer_styles(plan)
@@ -416,7 +427,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var slots := SlotPacker.pack(map, pack_options)
 	var packed := slots.size()
 	var loose_bare := {}
-	if cluster:
+	if tidy:
 		slots = _drop_tiny_fillers(slots)
 		# Leaving stones out can leave their neighbors loose: a few passes.
 		for _pass in LOOSE_PASSES:
@@ -426,6 +437,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			loose_bare.merge(kept["bare"])
 			if slots.size() == before:
 				break
+		# ...and so can leaving loose parts out strand a stone or two.
+		slots = _drop_tiny_fillers(slots)
 
 	var n := map.regions.size()
 	var theme: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
@@ -546,11 +559,11 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			else type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
 	var allowed: Dictionary = options.get("shapes", {})
 	GemVariety.restrict(slots, allowed)
-	if cluster:
+	if tidy:
 		_mark_accents(slots, n)
 	var gem_types := GemVariety.balance(slots, group_of,
 			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors,
-			MIN_TYPE_STONES if cluster else 0)
+			MIN_TYPE_STONES if tidy else 0)
 	for s in slots:
 		s.erase("keep_type")
 	# The centerpiece may have changed shape: stand it upright again.
@@ -560,6 +573,11 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			s.erase("centerpiece")
 	# Every stone of a gem type in the same proportions; only sizes vary.
 	GemVariety.even_aspects(slots)
+	# Evening a type's proportions shrinks some stones: any left as tiny
+	# loners go too.
+	if tidy:
+		slots = _drop_tiny_fillers(slots, n)
+		gem_types = GemVariety.kinds(slots).size()
 
 	var regions := []
 	for r in map.regions:
@@ -640,10 +658,13 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 ## Area stones without tiny fillers: a run of one or two stones of a pattern
 ## part (stones of one area and part touching, edge to edge, within the
 ## bigger one's radius) that are all under TINY_FILLER of the area's median
-## stone. Areas with only one or two stones keep them. Renumbers ids.
-static func _drop_tiny_fillers(slots: Array[Dictionary]) -> Array[Dictionary]:
+## stone. Areas with only one or two stones keep them, and regions from
+## `line_from` on (gem lines) are left as they are. Renumbers ids.
+static func _drop_tiny_fillers(slots: Array[Dictionary], line_from := 1 << 30) -> Array[Dictionary]:
 	var by_region := {}
 	for s in slots:
+		if s["region"] >= line_from:
+			continue
 		if not by_region.has(s["region"]):
 			by_region[s["region"]] = []
 		by_region[s["region"]].append(s)

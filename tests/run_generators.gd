@@ -36,6 +36,7 @@ func _init() -> void:
 	test_layouts()
 	test_cluster_layout()
 	test_line_patterns()
+	test_fine_layout()
 	test_symmetry()
 	test_gem_cuts()
 	test_board_light()
@@ -901,6 +902,40 @@ func test_cluster_layout() -> void:
 	var made := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow", "layout": "cluster"},
 			GemCatalog.default_unlocks())
 	check(made["layout"] == "cluster", "a cluster request wasn't cluster")
+
+
+## Fine pictures: dense packing, tidied as cluster ones are (no lonely gem
+## types, tiny fillers, scatter, outline or pave fills), and line patterns
+## turn up; dense pictures come out as they did.
+func test_fine_layout() -> void:
+	print("Fine layout")
+	var curves := 0
+	for i in 4:
+		var seed_value := 2030 + i
+		var opts := {"variant": MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()], "pattern_seed": i,
+				"frame": false}
+		var lines := PictureSources.mandala_lines(seed_value, opts)
+		opts["layout"] = "fine"
+		var fine := PictureSources.mandala_collage(seed_value, opts, lines)
+		check(fine["layout"] == "fine", "seed %d: layout fine not honored" % seed_value)
+		var n: int = fine["slots"].size()
+		check(n >= CollageGenerator.MIN_SLOTS and n <= CollageGenerator.DENSE_MAX_SLOTS,
+				"seed %d: %d stones in a fine picture" % [seed_value, n])
+		check(fine["gem_types"] <= CollageGenerator.GEM_TYPES_MAX, "seed %d: %d gem types" % [seed_value, fine["gem_types"]])
+		var lonely := _lonely_types(fine)
+		check(lonely.is_empty(), "seed %d: fine gem types of only 1-2 stones that aren't accents: %s" % [seed_value, lonely])
+		var tiny := _tiny_fillers(fine)
+		check(tiny == 0, "seed %d: %d tiny fillers in a fine picture" % [seed_value, tiny])
+		for r in fine["regions"]:
+			check(not r["fill"] in ["scatter", "outline"] and r["style"] != "pave",
+					"seed %d: a fine area is %s / %s" % [seed_value, r["fill"], r["style"]])
+			if r["style"] in SlotPacker.CURVES:
+				curves += 1
+		check(count_overlaps(fine["slots"], fine["width"] * 0.002) == 0, "seed %d: overlapping fine stones" % seed_value)
+		print("  seed %d %-9s %s: %4d stones, %2d gem types, %d loose left out" % [seed_value, opts["variant"],
+				fine["setting"], n, fine["gem_types"], fine["loose_dropped"]])
+		render_collage(fine).save_png(out_dir.path_join("layout_%d_fine.png" % seed_value))
+	check(curves > 0, "no fine area took a line pattern")
 
 
 ## The tight packer's line patterns fill a disc and a ring with tidy rows

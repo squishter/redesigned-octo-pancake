@@ -177,9 +177,9 @@ func _test_board() -> void:
 
 
 func _test_generated_slots() -> void:
-	print("Corrected meshes stay inside real generated slots in classic, dense and cluster collages")
+	print("Corrected meshes stay inside real generated slots in classic, dense, cluster and fine collages")
 	var checked := 0
-	for layout: String in ["classic", "dense", "cluster"]:
+	for layout: String in ["classic", "dense", "cluster", "fine"]:
 		var picture := PictureSources.mandala_collage(1003, {"variant": "heart", "layout": layout, "size": 384,
 				"setting": "gems", "line_gems": "emerald", "frame": false,
 				"shapes": {"kite": ["brilliant"], "emerald": ["step"]}})
