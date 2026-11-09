@@ -80,6 +80,9 @@ const DENSE_SPACERS := 0.5
 ## The region holding a mandala's center, when at most this deep (in
 ## units), holds a single stone: the picture's focus.
 const CENTERPIECE := 3.0
+## Tight packing: the most spread out (area over its deepest circle's) a
+## region may be and still take a solitaire.
+const TIGHT_SOLITAIRE_SPREAD := 2.5
 
 var map: RegionMap
 var rng := RandomNumberGenerator.new()
@@ -106,7 +109,11 @@ var allow_spacers := true
 ## loose; those groups take echo rows instead), no lattices graded smaller
 ## toward the rim, rows counted to the nearest number of stones (shrunk to
 ## fit) rather than spread out, and chains of stones respaced to the size
-## each stone really gets, so stones sit as close as the gap says.
+## each stone really gets, so stones sit as close as the gap says. Halos
+## keep their rows going in to a center stone of their own size, and only
+## compact areas take a solitaire. What a
+## pattern leaves open only takes stones of the pattern's own size (no
+## smaller ones dotted into the gaps), and chains and solitaires get none.
 var tight := false
 ## The gap between stones of groups that aren't dense.
 var _base_gap := 2.0
@@ -422,6 +429,13 @@ static func upright(shape: String) -> float:
 
 func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	var style: String = design["style"]
+	# Without small stones in its corners, a solitaire only suits an area its
+	# one stone nearly fills (a group's design comes from one of its areas,
+	# which may be much smaller).
+	if style == "solitaire" and tight:
+		var max_d: float = region["max_dist"]
+		if region["area"] / (PI * max_d * max_d) > TIGHT_SOLITAIRE_SPREAD:
+			style = "echo"
 	region["style"] = style
 	var u: float = unit * design.get("scale", 1.0)
 	var r_row: float = design["row_r"]
@@ -453,6 +467,10 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
 		"halo":
 			var rows: int = design["halo_rows"]
+			# Tight halos keep their rows going inward, as echo does, so the
+			# center stone stays a stone rather than filling a big region.
+			if tight:
+				rows = maxi(1, _graded_rows(region, r_row, 1.0, false).size() - 1)
 			var radii := []
 			var shapes := []
 			var tones := []
@@ -510,7 +528,8 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_tone = 1 if toning == "heart" else 0
 			_center_stone(region, INF, design)
 			_tone = 0
-			_fill_rest([u * 0.8, u * 0.6])
+			if not tight:
+				_fill_rest([u * 0.8, u * 0.6])
 
 
 ## The first passes of a tiered design: one large stone at the region's
@@ -788,7 +807,8 @@ func _spine(region: Dictionary, r_max: float, r_min: float) -> void:
 			else:
 				s += 1.0
 	# Wide spots the axis missed (a fat end, a corner) get one stone each.
-	_fill_rest([r_max * 0.5, unit * 0.6, unit * MIN_STONE])
+	if not tight:
+		_fill_rest([r_max * 0.5, unit * 0.6, unit * MIN_STONE])
 
 
 func _dist_at(p: Vector2) -> float:
@@ -803,6 +823,8 @@ func _dist_at(p: Vector2) -> float:
 ## sizes only, so leftovers match the pattern instead of turning to dust.
 func _fill_rest(sizes: Array) -> void:
 	_part += 1
+	if tight:
+		sizes = [sizes[0]]
 	var r_min: float = sizes[-1]
 	while true:
 		var peak := _argmax()

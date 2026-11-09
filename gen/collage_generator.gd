@@ -30,7 +30,11 @@ extends RefCounted
 ##     chains spaced to their stones (see SlotPacker.tight), and pattern
 ##     parts whose stones sit loose (farther from their neighbors than
 ##     LOOSE_GAP of their own radius) are left out, so the stones that
-##     remain sit in close groups. Groups can still spread
+##     remain sit in close groups. Nor tiny runs of one or two stones of a
+##     part (TINY_FILLER), nor gem types of fewer than MIN_TYPE_STONES
+##     stones but accents. Gem lines over fine line art take stones small
+##     enough to fit along it (CLUSTER_LINE_MIN), and such pictures may go
+##     over the stone range rather than lose lines. Groups can still spread
 ##     over the picture, with bare areas and the background between them.
 ## A picture is made the same again only in its own layout: a puzzle
 ## request without one (from before dense) stays classic.
@@ -102,9 +106,17 @@ const CLUSTER_UNIT := 2.0
 const CLUSTER_MAX_UNIT := 3.0
 const CLUSTER_METAL_MAX_UNIT := 4.0
 const CLUSTER_TRIES := 10
-## A gem-line picture whose lines alone would take more than this share of
-## the aim at the biggest stones takes the metal setting instead.
-const CLUSTER_LINE_SHARE := 0.75
+## No gem type keeps fewer stones than this (accents excepted: stones at
+## least ACCENT_SIZE times their area's typical stone, or an area's only one
+## or two, and accent stones along lines).
+const MIN_TYPE_STONES := 3
+## Cluster layout: the smallest line stone (in units) where the areas beside
+## the lines are shallow (otherwise 0.45).
+const CLUSTER_LINE_MIN := 0.2
+const ACCENT_SIZE := 1.5
+## Tiny fillers left out: a run of one or two stones of a pattern part (not
+## touching more of its part) under this share of their area's typical stone.
+const TINY_FILLER := 0.6
 const CLUSTER_TYPES_MIN := 10
 const CLUSTER_TYPES_MAX := 15
 const LOOSE_GAP := 1.0
@@ -210,12 +222,13 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 ## rescaled toward CLUSTER_AIM, up to CLUSTER_MAX_UNIT of SlotPacker.UNIT's
 ## with gem lines (fine line art keeps their stones small however big the
 ## unit gets, while its areas lose theirs) and CLUSTER_METAL_MAX_UNIT
-## without. A gem-line picture whose lines would take most of the stones
-## even at the biggest unit (CLUSTER_LINE_SHARE) takes the metal setting
-## instead, unless gem lines were asked for; with stones that big and still
-## too many, the busiest element (a class of gem lines, or a group of areas,
-## with its symmetric copies) is left out as a symmetric gap, as other
-## layouts do. Keeps the try closest to the aim if none lands in range.
+## without. With stones that big and still too many, a picture whose gem
+## lines take most of its stones keeps them all, with more stones than the
+## range (line art that fine would break up without them); otherwise the
+## busiest elements (a class of gem lines, or a group of areas, with their
+## symmetric copies) are left out as symmetric gaps, as other
+## layouts do. Keeps the try closest to the aim (by ratio) if none lands in
+## range.
 static func _fit_cluster(mask: PackedByteArray, w: int, h: int, options: Dictionary, unit: float,
 		max_slots: int) -> Dictionary:
 	var base := minf(w, h) * SlotPacker.UNIT
@@ -244,38 +257,55 @@ static func _fit_cluster(mask: PackedByteArray, w: int, h: int, options: Diction
 				on_lines += 1
 		var on_areas := n - on_lines
 		var top := base * (CLUSTER_MAX_UNIT if picture["setting"] == "gems" else CLUSTER_METAL_MAX_UNIT)
-		if (n > max_slots and picture["setting"] == "gems" and options.get("setting", "auto") != "gems"
-				and on_lines * unit / top > CLUSTER_LINE_SHARE * CLUSTER_AIM):
-			# Line art too fine for this few stones: even with the biggest
-			# stones its gem lines would take most of them. The lines become
-			# the metal setting and the stones go to the areas.
-			options = options.duplicate()
-			options["setting"] = "metal"
-			too_many = 0.0
-			too_few = INF
-		elif n > max_slots and unit >= top * 0.99:
-			var busiest := _busiest_element(picture)
-			if busiest.is_empty():
+		if n > max_slots and unit >= top * 0.99 and on_lines > on_areas:
+			# Gem lines take most of the stones even at the biggest unit: the
+			# line art is too fine for the aim, and leaving lines out would
+			# break it up. It keeps them all, with more stones.
+			break
+		if n > max_slots and unit >= top * 0.99:
+			# The busiest elements, as many as it takes to come down to the aim
+			# (at least one), in one rebuild.
+			var excess := n - int(CLUSTER_AIM)
+			var gone := 0
+			for e: Dictionary in _elements_by_size(picture):
+				if gone >= excess and gone > 0:
+					break
+				# Leaving out an element bigger than the excess twice over
+				# would overshoot; take a smaller one instead, unless none is.
+				if gone > 0 and gone + e["stones"] > excess * 2:
+					continue
+				var el: Dictionary = e["element"]
+				if el.has("lines"):
+					drop.append(el["lines"])
+				else:
+					bare.append_array(el["areas"])
+				gone += e["stones"]
+			if gone == 0:
 				break
-			if busiest.has("lines"):
-				drop.append(busiest["lines"])
-			else:
-				bare.append_array(busiest["areas"])
 			options = options.duplicate()
 			options["drop_lines"] = drop.duplicate()
 			options["bare_at"] = bare.duplicate()
 			too_many = 0.0
 			too_few = INF
 		elif too_many > 0.0 and too_few < INF:
+			# Units this close make the same picture: the count jumps here.
+			if absf(too_few / too_many - 1.0) < 0.02:
+				break
 			unit = sqrt(too_many * too_few)
 		else:
 			# The scale that brings on_lines / s + on_areas / s^2 to the aim.
 			var s := (on_lines + sqrt(on_lines * on_lines + 4.0 * CLUSTER_AIM * on_areas)) / (2.0 * CLUSTER_AIM)
 			unit = minf(unit * clampf(s, 0.5, 2.5), top)
 		picture = _build(mask, w, h, options, unit)
-		if absi(picture["slots"].size() - int(CLUSTER_AIM)) < absi(best["slots"].size() - int(CLUSTER_AIM)):
+		if _off_aim(picture) < _off_aim(best):
 			best = picture
 	return best
+
+
+## How far a picture's stone count is from CLUSTER_AIM, as a ratio (so 250
+## and 1000 stones are as far off).
+static func _off_aim(picture: Dictionary) -> float:
+	return absf(log(maxf(1.0, picture["slots"].size()) / CLUSTER_AIM))
 
 
 static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, unit: float) -> Dictionary:
@@ -327,7 +357,10 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			depths.append(r["max_dist"])
 		depths.sort()
 		var typical: float = depths[depths.size() / 2] if not depths.is_empty() else unit * 3.0
-		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
+		# Cluster pictures' stones are big, so fine line art keeps line stones
+		# that fit beside it (rather than ones shrunk into gaps along it).
+		line_r = clampf(typical * 0.3, unit * (CLUSTER_LINE_MIN if cluster else 0.45), unit * 0.7) \
+				* [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
 		var bold: int = options.get("bold_lines", rng.randi_range(2, 3))
 		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold, mask,
 				options.get("drop_lines", []), dense,
@@ -384,6 +417,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var packed := slots.size()
 	var loose_bare := {}
 	if cluster:
+		slots = _drop_tiny_fillers(slots)
 		# Leaving stones out can leave their neighbors loose: a few passes.
 		for _pass in LOOSE_PASSES:
 			var kept := _drop_loose(slots, line_slots, groups, ceili(packed * LOOSE_KEEP))
@@ -512,8 +546,13 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			else type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
 	var allowed: Dictionary = options.get("shapes", {})
 	GemVariety.restrict(slots, allowed)
+	if cluster:
+		_mark_accents(slots, n)
 	var gem_types := GemVariety.balance(slots, group_of,
-			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors)
+			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors,
+			MIN_TYPE_STONES if cluster else 0)
+	for s in slots:
+		s.erase("keep_type")
 	# The centerpiece may have changed shape: stand it upright again.
 	for s in slots:
 		if s.get("centerpiece", false):
@@ -596,6 +635,100 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"regions": regions,
 		"slots": slots,
 	}
+
+
+## Area stones without tiny fillers: a run of one or two stones of a pattern
+## part (stones of one area and part touching, edge to edge, within the
+## bigger one's radius) that are all under TINY_FILLER of the area's median
+## stone. Areas with only one or two stones keep them. Renumbers ids.
+static func _drop_tiny_fillers(slots: Array[Dictionary]) -> Array[Dictionary]:
+	var by_region := {}
+	for s in slots:
+		if not by_region.has(s["region"]):
+			by_region[s["region"]] = []
+		by_region[s["region"]].append(s)
+	var drop := {}
+	for region: int in by_region:
+		var list: Array = by_region[region]
+		if list.size() < 3:
+			continue
+		var radii := []
+		for s: Dictionary in list:
+			radii.append(float(s["width"]) / 2.0)
+		radii.sort()
+		var typical: float = radii[radii.size() / 2]
+		var by_part := {}
+		for s: Dictionary in list:
+			if not by_part.has(s["part"]):
+				by_part[s["part"]] = []
+			by_part[s["part"]].append(s)
+		for part: int in by_part:
+			var members: Array = by_part[part]
+			# Runs of touching stones, by flood fill.
+			var seen := {}
+			for i in members.size():
+				if seen.has(i):
+					continue
+				var run := [i]
+				seen[i] = true
+				var k := 0
+				while k < run.size() and run.size() <= 2:
+					var a: Dictionary = members[run[k]]
+					for j in members.size():
+						if seen.has(j):
+							continue
+						var b: Dictionary = members[j]
+						if _capsule_gap(a, b) <= maxf(a["width"], b["width"]) / 2.0:
+							seen[j] = true
+							run.append(j)
+					k += 1
+				if run.size() > 2:
+					continue
+				var tiny := true
+				for j: int in run:
+					if members[j]["width"] / 2.0 >= typical * TINY_FILLER:
+						tiny = false
+				if tiny:
+					for j: int in run:
+						drop[members[j]] = true
+	var out: Array[Dictionary] = []
+	for s in slots:
+		if drop.has(s):
+			continue
+		s["id"] = out.size()
+		out.append(s)
+	return out
+
+
+## Marks the stones that may keep a gem type of their own however few
+## ("keep_type"): an area's only one or two stones, area stones at least
+## ACCENT_SIZE times their area's median, and accent stones along lines.
+## `line_from`: the first region id of the line regions.
+static func _mark_accents(slots: Array, line_from: int) -> void:
+	var by_region := {}
+	for s: Dictionary in slots:
+		if not by_region.has(s["region"]):
+			by_region[s["region"]] = []
+		by_region[s["region"]].append(s)
+	for region: int in by_region:
+		var list: Array = by_region[region]
+		if region >= line_from:
+			for s: Dictionary in list:
+				if s.get("tone", 0) != 0 or s.get("seq", -1) >= 0:
+					s["keep_type"] = true
+			continue
+		if list.size() <= 2:
+			for s: Dictionary in list:
+				s["keep_type"] = true
+			continue
+		var radii := []
+		for s: Dictionary in list:
+			radii.append(float(s["width"]) / 2.0)
+		radii.sort()
+		var typical: float = radii[radii.size() / 2]
+		for s: Dictionary in list:
+			if s["width"] / 2.0 >= typical * ACCENT_SIZE:
+				s["keep_type"] = true
 
 
 ## Leaves out the area stones that sit loose: farther from their
@@ -701,14 +834,15 @@ static func _loose(slots: Array, all: Array) -> PackedByteArray:
 	return out
 
 
-## Share of a picture's stones (areas and lines) that sit loose (see _loose).
-## Used by tests and tuning.
+## Share of a picture's area stones that sit loose (see _loose; line stones
+## count as neighbors). Used by tests and tuning.
 static func loose_share(picture: Dictionary) -> float:
 	var slots: Array = picture["slots"]
+	var areas := slots.filter(func(s: Dictionary) -> bool: return picture["regions"][s["region"]]["kind"] == "area")
 	var n := 0
-	for v in _loose(slots, slots):
+	for v in _loose(areas, slots):
 		n += v
-	return float(n) / maxi(1, slots.size())
+	return float(n) / maxi(1, areas.size())
 
 
 ## Edge-to-edge distance between two stones, each taken as a capsule along
@@ -728,6 +862,12 @@ static func _capsule_gap(a: Dictionary, b: Dictionary) -> float:
 ## silhouette's, nor bold lines) as {"lines": class}, or a symmetry group of
 ## areas as {"areas": [their centroids]}; {} if none.
 static func _busiest_element(picture: Dictionary) -> Dictionary:
+	var list := _elements_by_size(picture)
+	return list[0]["element"] if not list.is_empty() else {}
+
+
+## The elements _busiest_element picks from, busiest first: [{element, stones}].
+static func _elements_by_size(picture: Dictionary) -> Array:
 	var lines := {}
 	var areas := {}
 	for s in picture["slots"]:
@@ -736,21 +876,18 @@ static func _busiest_element(picture: Dictionary) -> Dictionary:
 			areas[region["group"]] = areas.get(region["group"], 0) + 1
 		elif region.get("line", "") != "outer" and s["part"] < GemLines.NODE_PARTS and not (s["seq"] < 0 and s["tone"] == 1):
 			lines[s["part"]] = lines.get(s["part"], 0) + 1
-	var best := {}
-	var most := 0
+	var out := []
 	for part: int in lines:
-		if lines[part] > most:
-			most = lines[part]
-			best = {"lines": part}
+		out.append({"element": {"lines": part}, "stones": lines[part]})
 	for g: int in areas:
-		if areas[g] > most:
-			most = areas[g]
-			var at := []
-			for r in picture["regions"]:
-				if r["kind"] == "area" and r["group"] == g:
-					at.append(r["centroid"])
-			best = {"areas": at}
-	return best
+		var at := []
+		for r in picture["regions"]:
+			if r["kind"] == "area" and r["group"] == g:
+				at.append(r["centroid"])
+		out.append({"element": {"areas": at}, "stones": areas[g]})
+	# Busiest first; lines before areas on a tie, as before.
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["stones"] > b["stones"])
+	return out
 
 
 ## How many symmetry groups the areas left out (by centroid) belong to.

@@ -837,13 +837,15 @@ func test_layouts() -> void:
 
 
 ## Cluster pictures: about 500 stones in 10-15 gem types, no filler (spacer
-## rows, scatter or outline fills), and few loose stones (see
+## rows, scatter or outline fills, tiny runs of one or two stones), no gem
+## type of only one or two stones but accents, and few loose stones (see
 ## CollageGenerator.loose_share), though their stones are far bigger.
 func test_cluster_layout() -> void:
 	print("Cluster layout")
 	var in_count := 0
 	var in_types := 0
 	var loose_sum := 0.0
+	var line_heavy := 0
 	for i in 6:
 		var seed_value := 2020 + i
 		var opts := {"variant": MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()], "pattern_seed": i,
@@ -855,9 +857,15 @@ func test_cluster_layout() -> void:
 		var cluster := PictureSources.mandala_collage(seed_value, opts, lines)
 		check(cluster["layout"] == "cluster", "seed %d: layout cluster not honored" % seed_value)
 		var n: int = cluster["slots"].size()
-		if n >= CollageGenerator.CLUSTER_MIN_SLOTS and n <= CollageGenerator.CLUSTER_MAX_SLOTS:
+		# Fine line art keeps all its gem lines, with more stones: only
+		# pictures whose areas hold most stones must land in range.
+		var on_lines := _line_stones(cluster)
+		if on_lines > n - on_lines:
+			line_heavy += 1
+		elif n >= CollageGenerator.CLUSTER_MIN_SLOTS and n <= CollageGenerator.CLUSTER_MAX_SLOTS:
 			in_count += 1
-		check(n >= CollageGenerator.MIN_SLOTS and n <= 800, "seed %d: %d stones in a cluster picture" % [seed_value, n])
+		check(n >= CollageGenerator.MIN_SLOTS, "seed %d: %d stones in a cluster picture" % [seed_value, n])
+		check(on_lines > n - on_lines or n <= 800, "seed %d: %d stones in a cluster picture" % [seed_value, n])
 		var types: int = cluster["gem_types"]
 		check(types <= CollageGenerator.CLUSTER_TYPES_MAX, "seed %d: %d gem types in a cluster picture" % [seed_value, types])
 		check(types == cluster["gem_kinds"].size(), "seed %d: gem_types disagrees with gem_kinds" % seed_value)
@@ -866,23 +874,102 @@ func test_cluster_layout() -> void:
 		check(not cluster["spacers"], "seed %d: a cluster picture has spacer rows" % seed_value)
 		for r in cluster["regions"]:
 			check(not r["fill"] in ["scatter", "outline"], "seed %d: a cluster area is %s" % [seed_value, r["fill"]])
+		var lonely := _lonely_types(cluster)
+		check(lonely.is_empty(), "seed %d: gem types of only 1-2 stones that aren't accents: %s" % [seed_value, lonely])
+		var tiny := _tiny_fillers(cluster)
+		check(tiny == 0, "seed %d: %d tiny one- or two-stone fillers" % [seed_value, tiny])
 		var loose := CollageGenerator.loose_share(cluster)
 		var dense_loose := CollageGenerator.loose_share(dense)
-		loose_sum += loose
-		check(loose <= 0.4, "seed %d: %.0f%% of a cluster picture's stones sit loose" % [seed_value, loose * 100.0])
+		# Line art pictures' few area stones sit among line stones: only
+		# pictures whose areas hold most stones count.
+		if on_lines <= n - on_lines:
+			loose_sum += loose
+			check(loose <= 0.4, "seed %d: %.0f%% of a cluster picture's stones sit loose" % [seed_value, loose * 100.0])
 		var overlaps := count_overlaps(cluster["slots"], cluster["width"] * 0.002)
 		check(overlaps == 0, "seed %d: %d overlapping stones in the cluster layout" % [seed_value, overlaps])
-		print("  seed %d %-9s %s: %4d stones, %2d gem types, %d loose left out, loose %.0f%% (dense %.0f%%, %d stones)" % [
-				seed_value, opts["variant"], cluster["setting"], n, types, cluster["loose_dropped"], loose * 100.0,
+		print(("  seed %d %-9s %s: %4d stones (%d on lines), %2d gem types, %d loose left out, loose %.0f%% "
+				+ "(dense %.0f%%, %d stones)") % [
+				seed_value, opts["variant"], cluster["setting"], n, on_lines, types, cluster["loose_dropped"], loose * 100.0,
 				dense_loose * 100.0, dense["slots"].size()])
 		render_collage(cluster).save_png(out_dir.path_join("layout_%d_cluster.png" % seed_value))
-	check(in_count >= 5, "only %d of 6 cluster pictures have %d-%d stones" % [
-			in_count, CollageGenerator.CLUSTER_MIN_SLOTS, CollageGenerator.CLUSTER_MAX_SLOTS])
+	check(in_count >= 6 - line_heavy - 1, "only %d of %d cluster pictures (not line art) have %d-%d stones" % [
+			in_count, 6 - line_heavy, CollageGenerator.CLUSTER_MIN_SLOTS, CollageGenerator.CLUSTER_MAX_SLOTS])
 	check(in_types >= 4, "only %d of 6 cluster pictures reached %d gem types" % [in_types, CollageGenerator.CLUSTER_TYPES_MIN])
-	check(loose_sum / 6.0 <= 0.25, "%.0f%% of cluster pictures' stones sit loose" % [loose_sum / 6.0 * 100.0])
+	var counted := maxi(1, 6 - line_heavy)
+	check(loose_sum / counted <= 0.25, "%.0f%% of cluster pictures' stones sit loose" % [loose_sum / counted * 100.0])
 	var made := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow", "layout": "cluster"},
 			GemCatalog.default_unlocks())
 	check(made["layout"] == "cluster", "a cluster request wasn't cluster")
+
+
+## Gem types with fewer than CollageGenerator.MIN_TYPE_STONES stones that
+## aren't all accents (an area's only stones, a stone ACCENT_SIZE times its
+## area's median, accent stones along lines).
+static func _lonely_types(p: Dictionary) -> Array:
+	var by_region := _stones_by_region(p)
+	var types := {}
+	for s: Dictionary in p["slots"]:
+		var key := GemVariety.type_key(s)
+		if not types.has(key):
+			types[key] = []
+		types[key].append(s)
+	var out := []
+	for key: String in types:
+		var list: Array = types[key]
+		if list.size() >= CollageGenerator.MIN_TYPE_STONES:
+			continue
+		for s: Dictionary in list:
+			var region: Dictionary = p["regions"][s["region"]]
+			var mates: Array = by_region[s["region"]]
+			var accent := false
+			if region["kind"] == "line":
+				accent = s.get("tone", 0) != 0 or s.get("seq", -1) >= 0
+			else:
+				accent = mates.size() <= 2 or s["width"] >= _median_width(mates) * CollageGenerator.ACCENT_SIZE
+			if not accent:
+				out.append(key)
+				break
+	return out
+
+
+## Runs of one or two touching stones of a pattern part, all under
+## CollageGenerator.TINY_FILLER of their area's median stone.
+static func _tiny_fillers(p: Dictionary) -> int:
+	var count := 0
+	var by_region := _stones_by_region(p)
+	for region: int in by_region:
+		var list: Array = by_region[region]
+		if p["regions"][region]["kind"] != "area" or list.size() < 3:
+			continue
+		var typical := _median_width(list)
+		for s: Dictionary in list:
+			if s["width"] >= typical * CollageGenerator.TINY_FILLER:
+				continue
+			var touching := 0
+			for o: Dictionary in list:
+				if o != s and o["part"] == s["part"] and \
+						CollageGenerator._capsule_gap(s, o) <= maxf(s["width"], o["width"]) / 2.0:
+					touching += 1
+			if touching == 0:
+				count += 1
+	return count
+
+
+static func _stones_by_region(p: Dictionary) -> Dictionary:
+	var out := {}
+	for s: Dictionary in p["slots"]:
+		if not out.has(s["region"]):
+			out[s["region"]] = []
+		out[s["region"]].append(s)
+	return out
+
+
+static func _median_width(list: Array) -> float:
+	var widths := []
+	for s: Dictionary in list:
+		widths.append(float(s["width"]))
+	widths.sort()
+	return widths[widths.size() / 2]
 
 
 static func _line_stones(p: Dictionary) -> int:
