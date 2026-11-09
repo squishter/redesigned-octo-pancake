@@ -462,7 +462,7 @@ func test_neighbor_colors() -> void:
 	for y in w:
 		for x in w:
 			var on := x < 2 or y < 2 or x >= w - 2 or y >= w - 2
-			for k in [1, 2]:
+			for k: int in [1, 2]:
 				var at := 2 + k * 30 - line / 2
 				on = on or (x >= at and x < at + line) or (y >= at and y < at + line)
 			mask[y * w + x] = 255 if on else 0
