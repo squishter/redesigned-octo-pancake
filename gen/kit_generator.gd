@@ -18,6 +18,18 @@ const BOARD_SIZES := {
 ## glyphs like ★ ◆ can replace this list later.
 const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 
+## Round drills leave the paper showing in each cell's corners: a round drill
+## 98% of its cell across (GemBoard3D.KIT_DRILL) covers pi / 4 x 0.98^2 of it,
+## so about a quarter of the picture is paper. From a little way off the eye
+## mixes the two, so a kit's colors wash out toward the paper. Kits for round
+## drills pick each cell's gem by this mix (`seen_color`), not the gem's own
+## color. Square drills cover 96% and are matched as they are.
+const ROUND_COVER := PI / 4.0 * 0.98 * 0.98
+## The paper as it shows between drills, in linear light: paper_color in
+## gem_light.gdshaderinc, lit at about 0.9 (paper.gdshader's key light and
+## grain, a little less for the stones' shadows).
+const PAPER_LINEAR := Color(0.86 * 0.9, 0.84 * 0.9, 0.8 * 0.9)
+
 
 ## Builds a kit pattern dictionary (see KitPattern for the format).
 ##
@@ -55,24 +67,24 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	for y in board.y:
 		for x in board.x:
 			pixels[y * board.x + x] = img.get_pixel(x, y)
+	var drill: String = options.get("drill", "round")
 	if options.get("direct", false):
 		var palette := gems
 		if options.get("exact", false):
-			palette = own_colors(pixels, n_colors, options.get("seed", 1))
-		var direct := map_direct(pixels, board.x, board.y, palette, options.get("dither", 0.0))
-		return _build_pattern(direct["cells"], direct["entries"], board, options.get("drill", "round"))
+			palette = own_colors(pixels, n_colors, options.get("seed", 1), drill)
+		var direct := map_direct(pixels, board.x, board.y, palette, options.get("dither", 0.0), drill)
+		return _build_pattern(direct["cells"], direct["entries"], board, drill)
 	var q := ColorQuantizer.quantize(pixels, n_colors, options.get("seed", 1))
 	var centers: PackedVector3Array = q["centers"]
 	var labels: PackedInt32Array = q["labels"]
 
 	# Palette entries are the snapped gem colors; clusters that land on the
-	# same gem merge.
+	# same gem merge. Each cluster goes to the gem that looks most like it on
+	# the board (with the paper around round drills).
 	var entries := []  # {color: Color, gem_id}
 	var cluster_to_entry := PackedInt32Array()
 	cluster_to_entry.resize(centers.size())
-	var gem_lab := PackedVector3Array()
-	for g in gems:
-		gem_lab.append(LabColor.from_color(g["color"]))
+	var gem_lab := seen_labs(gems, drill)
 	var gem_to_entry := {}
 	for c in centers.size():
 		var gi := LabColor.nearest(centers[c], gem_lab)
@@ -90,7 +102,47 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 		for _pass in 2:
 			cells = clean_isolated(cells, board.x, board.y)
 
-	return _build_pattern(cells, entries, board, options.get("drill", "round"))
+	return _build_pattern(cells, entries, board, drill)
+
+
+## How much of a cell a drill of this kind covers.
+static func drill_cover(drill: String) -> float:
+	return ROUND_COVER if drill == "round" else 1.0
+
+
+## How a drill of color `gem` looks on the board from a little way off: mixed
+## (in linear light) with the paper around it. Square drills look as they are.
+static func seen_color(gem: Color, drill: String) -> Color:
+	var cover := drill_cover(drill)
+	if cover >= 1.0:
+		return gem
+	var lin := gem.srgb_to_linear()
+	return Color(
+			lerpf(PAPER_LINEAR.r, lin.r, cover),
+			lerpf(PAPER_LINEAR.g, lin.g, cover),
+			lerpf(PAPER_LINEAR.b, lin.b, cover)).linear_to_srgb()
+
+
+## The drill color that looks like `want` once mixed with the paper around
+## it (the inverse of seen_color), as near as a drill can get: colors paler
+## than the paper mix allows stay as pale as a drill can be.
+static func compensated_color(want: Color, drill: String) -> Color:
+	var cover := drill_cover(drill)
+	if cover >= 1.0:
+		return want
+	var lin := want.srgb_to_linear()
+	return Color(
+			clampf((lin.r - PAPER_LINEAR.r * (1.0 - cover)) / cover, 0.0, 1.0),
+			clampf((lin.g - PAPER_LINEAR.g * (1.0 - cover)) / cover, 0.0, 1.0),
+			clampf((lin.b - PAPER_LINEAR.b * (1.0 - cover)) / cover, 0.0, 1.0)).linear_to_srgb()
+
+
+## The gems' colors as they look on the board as drills of this kind, in Lab.
+static func seen_labs(gems: Array, drill: String) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for g in gems:
+		out.append(LabColor.from_color(seen_color(g["color"], drill)))
+	return out
 
 
 ## Most a cell's carried-over color may be off (Lab units), so a run of
@@ -98,13 +150,13 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 const MAX_CARRY := 28.0
 
 
-## Each cell to the gem nearest its color (Lab), with `dither` of the
-## leftover color passed on to the cells after it (Floyd-Steinberg, rows
-## back and forth). Returns {cells, entries}.
-static func map_direct(pixels: PackedColorArray, w: int, h: int, gems: Array, dither: float) -> Dictionary:
-	var gem_lab := PackedVector3Array()
-	for g in gems:
-		gem_lab.append(LabColor.from_color(g["color"]))
+## Each cell to the gem nearest its color (Lab) as seen on the board (round
+## drills mixed with the paper around them, see seen_color), with `dither`
+## of the leftover color passed on to the cells after it (Floyd-Steinberg,
+## rows back and forth). Returns {cells, entries}.
+static func map_direct(pixels: PackedColorArray, w: int, h: int, gems: Array, dither: float,
+		drill: String = "square") -> Dictionary:
+	var gem_lab := seen_labs(gems, drill)
 	var lab := PackedVector3Array()
 	lab.resize(pixels.size())
 	for i in pixels.size():
@@ -150,12 +202,14 @@ static func _carry(lab: PackedVector3Array, w: int, h: int, x: int, y: int, err:
 
 
 ## The picture's own `n` colors (k-means in Lab), as a palette of
-## {id: null, color}.
-static func own_colors(pixels: PackedColorArray, n: int, seed_value: int) -> Array:
+## {id: null, color}. For round drills each color is the drill that looks
+## like it with the paper around it (compensated_color): deeper and richer,
+## so the finished kit isn't washed out.
+static func own_colors(pixels: PackedColorArray, n: int, seed_value: int, drill: String = "square") -> Array:
 	var centers: PackedVector3Array = ColorQuantizer.quantize(pixels, n, seed_value)["centers"]
 	var out := []
 	for c in centers:
-		out.append({"id": null, "color": LabColor.to_color(c)})
+		out.append({"id": null, "color": compensated_color(LabColor.to_color(c), drill)})
 	return out
 
 

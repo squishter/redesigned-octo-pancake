@@ -1060,6 +1060,38 @@ func test_kits() -> void:
 	var owned_kit := KitGenerator.generate(src, {"size": "small", "colors": 16, "gems": owned})
 	for entry in owned_kit["palette"]:
 		check(entry["gem_color_id"] in owned_ids, "kit used %s, which she doesn't own" % entry["gem_color_id"])
+	# Round drills show paper in their corners, so they're matched by how
+	# they look mixed with it: a picture the color a gem looks as a round
+	# drill gets that gem, and the picture's own colors come back deeper.
+	var gems := Palettes.starter_gems()
+	for g: Dictionary in gems:
+		var seen := KitGenerator.seen_color(g["color"], "round")
+		var flat := Image.create(20, 20, false, Image.FORMAT_RGBA8)
+		flat.fill(seen)
+		var k := KitGenerator.generate(flat, {"size": Vector2i(10, 10), "gems": gems, "drill": "round",
+				"direct": true})
+		check(k["palette"].size() == 1 and k["palette"][0]["gem_color_id"] == g["id"],
+				"round kit of %s's seen color used %s" % [g["id"], k["palette"][0]["gem_color_id"]])
+	# A color round drills can match exactly, and one deeper than the paper
+	# lets any drill look (it should still come closer than the plain color).
+	for want: Color in [Color(0.55, 0.65, 0.8), Color(0.2, 0.45, 0.7)]:
+		var flat_want := Image.create(20, 20, false, Image.FORMAT_RGBA8)
+		flat_want.fill(want)
+		var own := KitGenerator.generate(flat_want, {"size": Vector2i(10, 10), "colors": 1, "drill": "round",
+				"direct": true, "exact": true})
+		var drill_color: Color = own["palette"][0]["color"]
+		var want_lab := LabColor.from_color(want)
+		var off := LabColor.from_color(KitGenerator.seen_color(drill_color, "round")).distance_to(want_lab)
+		var plain := LabColor.from_color(KitGenerator.seen_color(want, "round")).distance_to(want_lab)
+		print("  round own color %s: looks %.1f dE off (%.1f uncompensated)" % [want.to_html(false), off, plain])
+		check(off < plain, "round kit's own color %s isn't closer than the plain color" % want.to_html(false))
+		if want == Color(0.55, 0.65, 0.8):
+			check(off < 1.0, "round kit's own color looks %.1f dE off the picture" % off)
+		check(drill_color.get_luminance() < want.get_luminance(), "round kit's own color isn't deepened")
+		var square := KitGenerator.generate(flat_want, {"size": Vector2i(10, 10), "colors": 1, "drill": "square",
+				"direct": true, "exact": true})
+		var sq_off := LabColor.from_color(square["palette"][0]["color"]).distance_to(want_lab)
+		check(sq_off < 1.0, "square kit's own color changed by %.1f dE" % sq_off)
 
 
 func test_photo_line_art() -> void:

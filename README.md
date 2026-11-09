@@ -228,6 +228,13 @@ mode for trying out new pattern generation.
   Drills fill 98% of their cell, so neighbors almost touch, like a real kit
   (square drills' slots are sized by `GemShapes.drill_length`, since a square
   draws at 75% of its slot to fit round collage slots).
+  Round drills leave about a quarter of each cell, its corners, showing the
+  paper, which from a little way off mixes in and washes the picture out.
+  So round kits pick each cell's gem by how it looks mixed with the paper
+  around it (`KitGenerator.seen_color`), not by its own color, which turns
+  to deeper, richer gems where the picture needs them; photo kits in the
+  photo's own colors make each drill color the one that looks like the
+  photo's once mixed (`compensated_color`, as near as a drill can get).
   *Kit size* in the New puzzle panel (for photo kits too) sets the drills
   on the longer side: Small 50, Medium 90, Large 130 or X-large 250; the
   shorter side follows the picture's shape (an X-large kit can have 62,500
@@ -439,7 +446,7 @@ permission; both are on in the committed Android export preset
 | `heart.gd` | Hearts from three choices. **Shape:** 6 outline proportions (classic, plump, slim, sweetheart with a deep cleft, puffy, pointed), each varied slightly. **Collar:** a band just inside the outline, made by a true inward offset so it stays even: plain, rays, beads, scallops, petals, double or none. **Inside:** 1–3 combined patterns, from 4 center motifs (heart, double heart with spokes, flower, rosette) and 8 fills (stripes, chevrons, diamond lattice, rays, waves, dots, grid, echoes of the motif's outline). Two fills split the heart along a mirrored divider (straight, arc, wave or V); fills flow around the motif, so every region stays closed. Everything is mirror-symmetric. Pass `recent` (the previous hearts' choices) to skip recent ones and favor the least used. |
 | `butterfly.gd` | Butterflies from: 7 **wing shapes** (classic, swallowtail with tail paddles, rounded, glider, scalloped edges, moth, fairy with big hindwings), 5 **borders** along the wing edges (band, spotted, scalloped, cells, none), and 1–3 **wing patterns** per wing, chosen separately for forewing and hindwing: holes (eyespot, window) and, flowing around them, veins, rings, stripes, scattered spots or a row of dots. Plus 3 **bodies** (slender, plump, segmented) and 3 **antennae** (clubbed, curled, feathered). The forewing overlaps the hindwing and the body both, with hidden lines clipped so every region stays closed. Built on the right and mirrored. Pass `recent` to skip recent choices and favor the least used. |
 | `snowflake.gd` | Six-fold snowflakes from: 6 **centers** (hexagon, nested, star, rosette, spoked, flower), 7 **arm styles** (plain, branched, fern, plates, arrows, spear, crystal), 5 **tips** (point, plate, diamond, fork, ring), **content between the arms** (stellar plate, webs, spikes, petals, diamonds or dots; one or two kinds on all but about 8% of snowflakes) and 0–2 **details** (ribs, dots, inner outlines). Arms, branches, webs and plates merge into one clean silhouette; centers, plates, tips and petals keep their own outlines, so every region stays closed. Pass `recent` to skip recent choices and favor the least used. |
-| `kit_generator.gd` | Kit pipeline: crop to the board aspect, area-average downscale (40×50 / 70×90 / 100×130), k-means in Lab, snap to the gem colors she owns (only those), clean up isolated cells, then build a legend with a symbol per color. |
+| `kit_generator.gd` | Kit pipeline: crop to the board aspect, area-average downscale (40×50 / 70×90 / 100×130), k-means in Lab, snap to the gem colors she owns (only those; for round drills, by how each looks mixed with the paper showing in its cell's corners), clean up isolated cells, then build a legend with a symbol per color. |
 | `color_quantizer.gd`, `lab_color.gd` | Weighted k-means++ in Lab over a color histogram, plus sRGB ↔ Lab conversion. |
 | `line_raster.gd` | Polylines or line-art images → line masks (or, for swirls, a family label per pixel); dilation to close gaps; carving channels around line stones. |
 | `contours.gd` | Vector paths from rasters: iso-lines of a region's edge distance (marching squares) and centerlines of a line mask (thinning, spur pruning, split at junctions). |
