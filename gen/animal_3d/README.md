@@ -91,9 +91,12 @@ called, `project()` fits the coat to the data it receives.
 
 ## Frozen pose assets
 
-`assets/animals/posed/catalog.json` indexes compressed `.dat` arrays: static
-surface attributes are stored once per model, with posed vertices/normals and
-eligible camera frames per state. Two seeded mutator variants cover every one
+`assets/animals/posed/catalog.json` indexes compressed `.dat` arrays in
+`AnimalPoseData` format 2. Static surface attributes are stored once per model.
+Each state stores 16-bit posed positions and eligible camera frames. Positions are
+stored once per distinct point, because low-poly meshes split each corner per face.
+A remap table expands them to every vertex. Normals, atlas UVs and CoatFlow are
+omitted because the unlit projector does not read them. Two seeded mutator variants cover every one
 of the 274 model/preset combinations; locomotion and jump clips also include
 additional phases. Live arbitrary posing remains available through the API
 below. Updating a rig or adding poses requires rebaking the production library:
@@ -102,10 +105,15 @@ below. Updating a rig or adding poses requires rebaking the production library:
 godot --headless -s res://experiments/animal_3d/bake_pose_library.gd
 # After changing only coat coordinates/masks:
 godot --headless -s res://experiments/animal_3d/bake_pose_library.gd -- --attributes-only
+# After changing only the storage format (keeps every pose exactly):
+godot --headless -s res://experiments/animal_3d/bake_pose_library.gd -- --repack
 ```
 
-The frozen data is about 41 MiB. Android export presets include these arrays and
-the asset credits/licenses. The exported resource pack is tested by loading all
+The frozen data is about 7.8 MiB, down from 41 MiB in format 1. Quantization moves
+line-art edges by under a pixel. Android export presets include these arrays and
+the asset credits/licenses. They exclude the source models in
+`assets/animals/models/`, which are used only by live posing in the studio, tests
+and the bake script. The exported resource pack is tested by loading all
 37 datasets, checking their hashes, and generating line art without source scenes.
 Android device timing remains to be profiled; the runtime projection is 320 px
 before vector paths are rasterized at the app's requested puzzle resolution.
