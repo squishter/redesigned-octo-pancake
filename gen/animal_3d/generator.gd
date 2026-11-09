@@ -67,8 +67,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		var pool: Array = portraits if not portraits.is_empty() and rng.randf() < 0.24 else body
 		view = pool[rng.randi_range(0, pool.size() - 1)]
 	var data: Dictionary = stored.attributes.duplicate()
-	data.vertices = state.vertices
-	data.normals = state.normals
+	data.vertices = AnimalPoseData.vertices(stored, state)
 	var whole := data
 	if view.begins_with("head_"):
 		data = AnimalSkinSampler.subset(data, stored.head_indices)
