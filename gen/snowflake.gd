@@ -37,7 +37,8 @@ const CLASHES := [["plate", "webs"], ["plate", "petals"], ["spikes", "petals"], 
 ## Arms whose side branches already fill the space spikes and petals need.
 const BRANCHY := ["branched", "fern"]
 ## ribs: lines along every arm and branch; dots: small circles in plates and
-## diamonds; inner: inner outlines of plates, tips, petals and crystal arms.
+## diamonds; inner: inner outlines of plates, tips and petals (crystal arms
+## always show their facet outline).
 const DETAILS := ["ribs", "dots", "inner"]
 ## How many details a snowflake gets, picked evenly from this list.
 const DETAIL_COUNTS := [0, 1, 1, 2]
@@ -352,7 +353,10 @@ func _build_arm(arm: String, rc: float, w: float, core_end: float, pointed: bool
 		var shoulder := end - cw * (1.4 if pointed else 0.3)
 		part["merged"].append(PackedVector2Array([Vector2(a, cw * 0.5), Vector2(a + cw, cw), Vector2(shoulder, cw),
 				Vector2(end, 0.0), Vector2(shoulder, -cw), Vector2(a + cw, -cw), Vector2(a, -cw * 0.5)]))
-		part["inner"].append(PackedVector2Array([Vector2(a + cw * 1.2, 0.0), Vector2(a + cw * 1.8, cw * 0.45),
+		# The facet outline is what makes the arm faceted, so it is always
+		# drawn (not left to the optional inner-outline detail); it also
+		# splits the otherwise single region of a wide arm.
+		part["always_inner"].append(PackedVector2Array([Vector2(a + cw * 1.2, 0.0), Vector2(a + cw * 1.8, cw * 0.45),
 				Vector2(end - cw * 2.0, cw * 0.45), Vector2(end - cw * 1.6, 0.0), Vector2(end - cw * 2.0, -cw * 0.45),
 				Vector2(a + cw * 1.8, -cw * 0.45)]))
 	else:
