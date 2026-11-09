@@ -32,6 +32,8 @@ var _line_style: OptionButton
 var _setting: OptionButton
 var _line_gems: OptionButton
 var _layout: OptionButton
+## Which echo rows tidy layouts use (SlotPacker.ECHO_MODES).
+var _echo_mode: OptionButton
 var _seed: SpinBox
 var _pattern: SpinBox
 var _wobble: HSlider
@@ -178,6 +180,7 @@ func _ready() -> void:
 	_setting = _options(controls, "Setting", ["auto"] + CollageGenerator.SETTINGS)
 	_line_gems = _options(controls, "Line gems", ["auto"] + _unique(GemLines.STYLES))
 	# The game's layout first (see PuzzleMaker.LAYOUT).
+	_echo_mode = _options(controls, "Echo rows", SlotPacker.ECHO_MODES)
 	_layout = _options(controls, "Layout", [PuzzleMaker.LAYOUT] + CollageGenerator.LAYOUTS.filter(
 			func(l: String) -> bool: return l != PuzzleMaker.LAYOUT))
 	_seed = _spin(controls, "Seed", 1, 999999, 1)
@@ -399,6 +402,7 @@ func _generate() -> void:
 		"setting": _selected(_setting),
 		"line_gems": _selected(_line_gems),
 		"layout": _selected(_layout),
+		"echo_mode": _selected(_echo_mode),
 		"pattern_seed": int(_pattern.value),
 	}
 	_say("Generating…")
@@ -421,6 +425,7 @@ func _run_job(job: Dictionary) -> void:
 		"line_style": job["line_style"],
 		"setting": job["setting"],
 		"layout": job["layout"],
+		"echo_mode": job["echo_mode"],
 		"pattern_seed": job["pattern_seed"],
 	}
 	if job["line_gems"] != "auto":
