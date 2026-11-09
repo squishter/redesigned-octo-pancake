@@ -263,6 +263,102 @@ func line_owners() -> PackedInt32Array:
 	return owners
 
 
+## Which regions face each other across a line: per region, a Dictionary of
+## neighbor region id -> length of their shared border in px. Line pixels go
+## to the nearest region (walking through the lines, as line_owners), and two
+## regions are neighbors where their halves of a line meet, if the line is
+## no wider there than `reach` px. Regions meeting only at a corner, where
+## several lines cross, share just a few px of border, so neighbors need at
+## least `min_border` px; regions across a wider line, or with another
+## region between them, aren't neighbors.
+func adjacency(reach: float, min_border: int = 4) -> Array:
+	var w := width
+	var h := height
+	var n := w * h
+	var owners := labels.duplicate()
+	var steps := PackedInt32Array()
+	steps.resize(n)
+	var queue := PackedInt32Array()
+	queue.resize(n)
+	var tail := 0
+	for i in n:
+		if labels[i] != LINE:
+			continue
+		var y := i / w
+		var x := i - y * w
+		var o := LINE
+		if x > 0 and labels[i - 1] >= 0:
+			o = labels[i - 1]
+		elif x < w - 1 and labels[i + 1] >= 0:
+			o = labels[i + 1]
+		elif y > 0 and labels[i - w] >= 0:
+			o = labels[i - w]
+		elif y < h - 1 and labels[i + w] >= 0:
+			o = labels[i + w]
+		if o >= 0:
+			owners[i] = o
+			steps[i] = 1
+			queue[tail] = i
+			tail += 1
+	# Each side walks at most a little over halfway across (4-way steps run
+	# long on slants).
+	var max_steps := int(ceilf(reach * 0.75)) + 1
+	var head := 0
+	while head < tail:
+		var i := queue[head]
+		head += 1
+		var s := steps[i]
+		if s >= max_steps:
+			continue
+		var o := owners[i]
+		var y := i / w
+		var x := i - y * w
+		if x > 0 and owners[i - 1] == LINE:
+			owners[i - 1] = o
+			steps[i - 1] = s + 1
+			queue[tail] = i - 1
+			tail += 1
+		if x < w - 1 and owners[i + 1] == LINE:
+			owners[i + 1] = o
+			steps[i + 1] = s + 1
+			queue[tail] = i + 1
+			tail += 1
+		if y > 0 and owners[i - w] == LINE:
+			owners[i - w] = o
+			steps[i - w] = s + 1
+			queue[tail] = i - w
+			tail += 1
+		if y < h - 1 and owners[i + w] == LINE:
+			owners[i + w] = o
+			steps[i + w] = s + 1
+			queue[tail] = i + w
+			tail += 1
+	var border := []
+	for r in regions.size():
+		border.append({})
+	var limit := int(ceilf(reach * 1.5)) + 1
+	for i in n:
+		var a := owners[i]
+		if a < 0:
+			continue
+		var x := i % w
+		if x < w - 1:
+			var b := owners[i + 1]
+			if b >= 0 and b != a and steps[i] + steps[i + 1] <= limit:
+				border[a][b] = border[a].get(b, 0) + 1
+				border[b][a] = border[b].get(a, 0) + 1
+		if i + w < n:
+			var b := owners[i + w]
+			if b >= 0 and b != a and steps[i] + steps[i + w] <= limit:
+				border[a][b] = border[a].get(b, 0) + 1
+				border[b][a] = border[b].get(a, 0) + 1
+	for r in regions.size():
+		for b: int in border[r].keys():
+			if border[r][b] < min_border:
+				border[r].erase(b)
+	return border
+
+
 ## Line mask view of the labels (255 on lines, 0 elsewhere): tiny regions
 ## merged into the lines show up as part of the setting.
 func line_mask() -> PackedByteArray:

@@ -90,11 +90,94 @@ static func motif_groups(map: RegionMap, groups: PackedInt32Array, marks: Array)
 	return out
 
 
-## A theme color per region. Symmetric copies share a color, and each group
-## avoids the colors of the two groups before it so neighboring rings differ.
+## Colors at least this far apart (CIE76 delta E in Lab) read as different
+## next to each other; closer ones (ruby by garnet, say) blur together.
+const MIN_CONTRAST := 18.0
+## The chance that two neighboring groups may show the same accent or
+## feature color anyway (see may_match), so pictures aren't too strict.
+const SAME_COLOR_CHANCE := 0.05
+
+
+## Neighboring groups: per group, the other groups (sorted) holding a region
+## next to one of its regions (`adjacency` from RegionMap.adjacency).
+static func group_neighbors(adjacency: Array, groups: PackedInt32Array) -> Array:
+	var n_groups := 0
+	for g in groups:
+		n_groups = maxi(n_groups, g + 1)
+	var sets := []
+	for g in n_groups:
+		sets.append({})
+	for r in mini(adjacency.size(), groups.size()):
+		for other: int in adjacency[r]:
+			if other < groups.size() and groups[other] != groups[r]:
+				sets[groups[r]][groups[other]] = true
+	var out := []
+	for g in n_groups:
+		var list: Array = sets[g].keys()
+		list.sort()
+		out.append(list)
+	return out
+
+
+## Whether neighboring groups `a` and `b` may share an accent or feature
+## color: a seeded SAME_COLOR_CHANCE per pair, the same either way round.
+static func may_match(seed_value: int, a: int, b: int) -> bool:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, mini(a, b), maxi(a, b), "same color"])
+	return rng.randf() < SAME_COLOR_CHANCE
+
+
+## Whether two colors read as different side by side.
+static func contrasts(a: Color, b: Color) -> bool:
+	return LabColor.from_color(a).distance_to(LabColor.from_color(b)) >= MIN_CONTRAST
+
+
+## Index of a palette color for one group: a random one of those that
+## contrast with every color in `avoid` (a list of tiers, most important
+## first); when none does, the last tiers are dropped one by one. With none
+## left even for the first tier, the color farthest from it.
+static func _pick(palette: PackedColorArray, avoid: Array, rng: RandomNumberGenerator) -> int:
+	var labs := PackedVector3Array()
+	for c in palette:
+		labs.append(LabColor.from_color(c))
+	for keep in range(avoid.size(), 0, -1):
+		var choices := []
+		for i in palette.size():
+			var ok := true
+			for t in keep:
+				for c: Color in avoid[t]:
+					if labs[i].distance_to(LabColor.from_color(c)) < MIN_CONTRAST:
+						ok = false
+						break
+				if not ok:
+					break
+			if ok:
+				choices.append(i)
+		if not choices.is_empty():
+			return choices[rng.randi_range(0, choices.size() - 1)]
+	if avoid.is_empty() or (avoid[0] as Array).is_empty():
+		return rng.randi_range(0, palette.size() - 1)
+	var best := 0
+	var best_d := -1.0
+	for i in palette.size():
+		var d := INF
+		for c: Color in avoid[0]:
+			d = minf(d, labs[i].distance_to(LabColor.from_color(c)))
+		if d > best_d:
+			best_d = d
+			best = i
+	return best
+
+
+## A theme color per region. Symmetric copies share a color. Given
+## `neighbors` (group_neighbors), groups that touch get colors that read as
+## different (MIN_CONTRAST), the most hemmed-in groups choosing first; when
+## the palette runs short, a group takes the color farthest from its
+## neighbors'. Without it, each group avoids the colors of the two groups
+## before it, so neighboring rings differ.
 ## `groups` (default: symmetry_groups) says which regions share one.
 static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorArray, seed_value: int,
-		groups := PackedInt32Array()) -> PackedColorArray:
+		groups := PackedInt32Array(), neighbors: Array = []) -> PackedColorArray:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	if groups.is_empty():
@@ -103,14 +186,39 @@ static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorA
 	for g in groups:
 		n_groups = maxi(n_groups, g + 1)
 	var group_color := PackedInt32Array()
-	for g in n_groups:
-		var choices := []
-		for c in palette.size():
-			if (g < 1 or group_color[g - 1] != c) and (g < 2 or group_color[g - 2] != c):
-				choices.append(c)
-		if choices.is_empty():
-			choices = range(palette.size())
-		group_color.append(choices[rng.randi_range(0, choices.size() - 1)])
+	group_color.resize(n_groups)
+	if neighbors.size() >= n_groups and n_groups > 0:
+		group_color.fill(-1)
+		# DSatur: the group whose neighbors already show the most colors goes
+		# next, then the one with most neighbors, then the one nearest the center.
+		for _step in n_groups:
+			var pick := -1
+			var pick_sat := -1
+			for g in n_groups:
+				if group_color[g] >= 0:
+					continue
+				var seen := {}
+				for o: int in neighbors[g]:
+					if group_color[o] >= 0:
+						seen[group_color[o]] = true
+				var sat := seen.size()
+				if sat > pick_sat or (sat == pick_sat and neighbors[g].size() > neighbors[pick].size()):
+					pick = g
+					pick_sat = sat
+			var near := []
+			for o: int in neighbors[pick]:
+				if group_color[o] >= 0:
+					near.append(palette[group_color[o]])
+			group_color[pick] = _pick(palette, [near], rng)
+	else:
+		for g in n_groups:
+			var choices := []
+			for c in palette.size():
+				if (g < 1 or group_color[g - 1] != c) and (g < 2 or group_color[g - 2] != c):
+					choices.append(c)
+			if choices.is_empty():
+				choices = range(palette.size())
+			group_color[g] = choices[rng.randi_range(0, choices.size() - 1)]
 	var out := PackedColorArray()
 	out.resize(map.regions.size())
 	for r in map.regions.size():
@@ -119,22 +227,57 @@ static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorA
 
 
 ## A second color per region for its pattern's accent stones: a palette
-## color other than the region's own, shared by symmetric copies.
+## color that contrasts with the region's own colors (`colors`, plus `also`
+## when given, as for a third color that should differ from both the region's
+## color and its accent), shared by symmetric copies. Given `neighbors`
+## (group_neighbors), it also contrasts with the neighboring groups' colors
+## and with the accents already chosen next door, except for the odd pair
+## that may_match lets share one. When the palette runs short, the accents
+## next door give way first, then the neighbors' colors, then `also`.
 static func accent_colors(map: RegionMap, groups: PackedInt32Array, colors: PackedColorArray,
-		palette: PackedColorArray, seed_value: int) -> PackedColorArray:
+		palette: PackedColorArray, seed_value: int, neighbors: Array = [],
+		also := PackedColorArray()) -> PackedColorArray:
 	var out := PackedColorArray()
+	out.resize(map.regions.size())
 	var by_group := {}
+	# Each group's colors, and its neighbors' (all regions of a group share them).
+	var group_color := {}
+	var group_also := {}
+	for r in map.regions.size():
+		group_color[groups[r]] = colors[r]
+		if not also.is_empty():
+			group_also[groups[r]] = also[r]
 	for r in map.regions.size():
 		var g := groups[r]
 		if not by_group.has(g):
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash([seed_value, g, "accent"])
+			var own := [colors[r]]
+			var second := [group_also[g]] if group_also.has(g) else []
+			var next_door := []
+			var next_accents := []
+			if g < neighbors.size():
+				for o: int in neighbors[g]:
+					if may_match(seed_value, g, o):
+						continue
+					if group_color.has(o):
+						next_door.append(group_color[o])
+					if group_also.has(o):
+						next_door.append(group_also[o])
+					if by_group.has(o):
+						next_accents.append(by_group[o])
+			# Strictly unlike its own color, then unlike its other color, its
+			# neighbors' colors and the accents already chosen next door.
 			var choices := []
 			for c in palette:
 				if not c.is_equal_approx(colors[r]):
 					choices.append(c)
-			by_group[g] = choices[rng.randi_range(0, choices.size() - 1)] if not choices.is_empty() else colors[r]
-		out.append(by_group[g])
+			if choices.is_empty():
+				by_group[g] = colors[r]
+			else:
+				var pal := PackedColorArray(choices)
+				by_group[g] = pal[_pick(pal, [own, second, next_door, next_accents], rng)]
+		out[r] = by_group[g]
 	return out
 
 

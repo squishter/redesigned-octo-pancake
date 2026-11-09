@@ -39,11 +39,18 @@ const STAND_IN_LAST := ["pebble", "clover", "sunburst", "butterfly"]
 ##   null when colors aren't snapped to gems); empty to only swap shapes.
 ## allowed: shape -> Array of cuts it may take (empty: every shape and cut);
 ##   run restrict() with it first.
+## neighbors: per group id, the groups beside it (see RegionPaint.group_neighbors).
+##   A part only takes a new color that reads as different from every color
+##   its neighbors show (RegionPaint.contrasts), except next to the odd
+##   neighbor RegionPaint.may_match lets share one; a part whose color
+##   already blurs into a neighbor's tries a new color before a new shape.
 ## Sets every slot's "cut". Returns the number of gem types afterwards.
 static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, target: int, seed_value: int,
-		allowed: Dictionary = {}) -> int:
+		allowed: Dictionary = {}, neighbors: Array = []) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "variety"])
+	# Colors each group shows (gem key -> parts), to keep neighbors apart.
+	var ctx := {"neighbors": neighbors, "seed": seed_value, "group_colors": {}, "labs": {}, "may_match": {}}
 	var units := {}  # key -> {slots, shape, color, gem, combo}
 	var unit_keys := []
 	for s in slots:
@@ -51,7 +58,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				_gem_key(s["target_gem"], s["target_color"])]
 		if not units.has(key):
 			units[key] = {"slots": [], "shape": s["shape"], "color": s["target_color"], "gem": s["target_gem"],
-					"locked": s.get("seq", -1) >= 0,
+					"group": group_of[s["region"]], "locked": s.get("seq", -1) >= 0,
 					"cut": GemCuts.pick(s["shape"], _gem_key(s["target_gem"], s["target_color"]), seed_value,
 							_cuts(s["shape"], allowed))}
 			unit_keys.append(key)
@@ -66,7 +73,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 	var stones := {}  # combo -> number of stones with it
 	for key in unit_keys:
 		var u: Dictionary = units[key]
-		_count(holders, stones, u, 1)
+		_count(holders, stones, ctx, u, 1)
 
 	# Too few types: give a part a combination nobody has yet, taking parts
 	# whose current type other parts share, so nothing is lost.
@@ -82,41 +89,41 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 			# then a new cut of it, then a new color (colors are ordered best first).
 			var shape: String = u["shape"]
 			var gem_key := _gem_key(u["gem"], u["color"])
+			# A part that blurs into its neighbors gets a new color first instead.
+			var recolor_first := _clashes(ctx, u, u["gem"], u["color"])
+			if recolor_first and _recolor(ctx, holders, stones, u, colors):
+				changed = true
+				break
 			for alt in _family(shape, allowed):
 				var alt_cut := GemCuts.pick(alt, gem_key, seed_value, _cuts(alt, allowed))
 				if alt != shape and not holders.has(_combo_of(alt, alt_cut, u["gem"], u["color"])):
-					_count(holders, stones, u, -1)
+					_count(holders, stones, ctx, u, -1)
 					u["shape"] = alt
 					u["cut"] = alt_cut
-					_count(holders, stones, u, 1)
+					_count(holders, stones, ctx, u, 1)
 					changed = true
 					break
 			if changed:
 				break
 			for cut: String in _cuts(shape, allowed):
 				if not holders.has(_combo_of(shape, cut, u["gem"], u["color"])):
-					_count(holders, stones, u, -1)
+					_count(holders, stones, ctx, u, -1)
 					u["cut"] = cut
-					_count(holders, stones, u, 1)
+					_count(holders, stones, ctx, u, 1)
 					changed = true
 					break
 			if changed:
 				break
-			for c: Dictionary in colors:
-				if not holders.has(_combo_of(shape, u["cut"], c["gem"], c["color"])):
-					_count(holders, stones, u, -1)
-					u["color"] = c["color"]
-					u["gem"] = c["gem"]
-					_count(holders, stones, u, 1)
-					changed = true
-					break
-			if changed:
+			if not recolor_first and _recolor(ctx, holders, stones, u, colors):
+				changed = true
 				break
 		if not changed:
 			break
 
-	# Too many: fold the rarest type into a common one of the same family.
+	# Too many: fold the rarest type into a common one of the same family
+	# (a type nothing can fold into without blurring into a neighbor stays).
 	guard = 0
+	var stuck := {}
 	while holders.size() > target and guard < 500:
 		guard += 1
 		# Steps of a line sequence never fold, or the sequence would vanish.
@@ -126,13 +133,17 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				locked[_combo(units[key])] = true
 		var rare := ""
 		for combo in stones:
-			if locked.has(combo):
+			if locked.has(combo) or stuck.has(combo):
 				continue
 			if rare == "" or stones[combo] < stones[rare] or (stones[combo] == stones[rare] and combo < rare):
 				rare = combo
 		if rare == "":
 			break
 		var into: Variant = null
+		var rare_units := []
+		for key in unit_keys:
+			if _combo(units[key]) == rare:
+				rare_units.append(units[key])
 		for key in unit_keys:
 			var u: Dictionary = units[key]
 			if _combo(u) != rare:
@@ -148,6 +159,8 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				if colors.is_empty() and v["shape"] == u["shape"]:
 					continue
 				if not colors.is_empty() or _same_color(u, v):
+					if _folds_into_neighbor(ctx, rare_units, v):
+						continue
 					if best == "" or stones[cv] > stones[best]:
 						best = cv
 						best_u = v
@@ -155,16 +168,17 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				into = best_u
 			break
 		if into == null:
-			break
+			stuck[rare] = true
+			continue
 		for key in unit_keys:
 			var u: Dictionary = units[key]
 			if _combo(u) == rare:
-				_count(holders, stones, u, -1)
+				_count(holders, stones, ctx, u, -1)
 				u["shape"] = into["shape"]
 				u["cut"] = into["cut"]
 				u["color"] = into["color"]
 				u["gem"] = into["gem"]
-				_count(holders, stones, u, 1)
+				_count(holders, stones, ctx, u, 1)
 
 	for key in unit_keys:
 		var u: Dictionary = units[key]
@@ -342,10 +356,74 @@ static func _combo(u: Dictionary) -> String:
 	return _combo_of(u["shape"], u["cut"], u["gem"], u["color"])
 
 
-static func _count(holders: Dictionary, stones: Dictionary, u: Dictionary, delta: int) -> void:
+static func _count(holders: Dictionary, stones: Dictionary, ctx: Dictionary, u: Dictionary, delta: int) -> void:
 	var c := _combo(u)
 	holders[c] = holders.get(c, 0) + delta
 	stones[c] = stones.get(c, 0) + delta * u["slots"].size()
 	if holders[c] <= 0:
 		holders.erase(c)
 		stones.erase(c)
+	var by_group: Dictionary = ctx["group_colors"]
+	var g: int = u["group"]
+	if not by_group.has(g):
+		by_group[g] = {}
+	var shown: Dictionary = by_group[g]
+	var k := _gem_key(u["gem"], u["color"])
+	shown[k] = shown.get(k, 0) + delta
+	if shown[k] <= 0:
+		shown.erase(k)
+	elif not ctx["labs"].has(k):
+		ctx["labs"][k] = LabColor.from_color(u["color"])
+
+
+## Gives part `u` the first of `colors` (best first) that makes a type nobody
+## has yet and doesn't blur into its neighbors' colors. Returns whether it did.
+static func _recolor(ctx: Dictionary, holders: Dictionary, stones: Dictionary, u: Dictionary, colors: Array) -> bool:
+	for c: Dictionary in colors:
+		if holders.has(_combo_of(u["shape"], u["cut"], c["gem"], c["color"])):
+			continue
+		if _clashes(ctx, u, c["gem"], c["color"]):
+			continue
+		_count(holders, stones, ctx, u, -1)
+		u["color"] = c["color"]
+		u["gem"] = c["gem"]
+		_count(holders, stones, ctx, u, 1)
+		return true
+	return false
+
+
+## Whether part `u` in this color would blur into a color a neighboring group
+## shows (one RegionPaint.may_match doesn't excuse).
+static func _clashes(ctx: Dictionary, u: Dictionary, gem: Variant, color: Color) -> bool:
+	var neighbors: Array = ctx["neighbors"]
+	var g: int = u["group"]
+	if g < 0 or g >= neighbors.size():
+		return false
+	var key := _gem_key(gem, color)
+	var lab := LabColor.from_color(color)
+	var by_group: Dictionary = ctx["group_colors"]
+	for o: int in neighbors[g]:
+		if not by_group.has(o) or _may_match(ctx, g, o):
+			continue
+		for k: String in by_group[o]:
+			if k == key or (ctx["labs"][k] as Vector3).distance_to(lab) < RegionPaint.MIN_CONTRAST:
+				return true
+	return false
+
+
+## RegionPaint.may_match, remembered per pair.
+static func _may_match(ctx: Dictionary, a: int, b: int) -> bool:
+	var pair := Vector2i(mini(a, b), maxi(a, b))
+	var known: Dictionary = ctx["may_match"]
+	if not known.has(pair):
+		known[pair] = RegionPaint.may_match(ctx["seed"], a, b)
+	return known[pair]
+
+
+## Whether folding `parts` into part `v`'s type would give any of them a new
+## color that blurs into a neighbor's.
+static func _folds_into_neighbor(ctx: Dictionary, parts: Array, v: Dictionary) -> bool:
+	for u: Dictionary in parts:
+		if not _same_color(u, v) and _clashes(ctx, u, v["gem"], v["color"]):
+			return true
+	return false

@@ -264,15 +264,22 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var accents := PackedColorArray()
 	var features := PackedColorArray()
 	var from_image: bool = options.get("colors_image") is Image
+	var gems: Array = options.get("gems", Palettes.starter_gems())
+	# Which groups of areas touch, so neighbors get colors that read apart.
+	var neighbors := RegionPaint.group_neighbors(
+			map.adjacency(_neighbor_reach(line_slots, unit, gap), maxi(4, int(unit))), groups)
 	if from_image:
 		colors = RegionPaint.image_colors(map, options["colors_image"])
 		for c in colors:
 			accents.append(c.lightened(0.35) if c.get_luminance() < 0.6 else c.darkened(0.3))
 			features.append(c.darkened(0.45) if c.get_luminance() > 0.3 else c.lightened(0.6))
 	else:
-		colors = RegionPaint.theme_colors(map, symmetry, theme, seed_value, groups)
-		accents = RegionPaint.accent_colors(map, groups, colors, theme, seed_value)
-		features = RegionPaint.accent_colors(map, groups, accents, theme, seed_value + 1)
+		# Choose among the gems the theme snaps to, so two theme colors that
+		# land on one gem don't count as different.
+		var paint := _snapped_palette(theme, gems)
+		colors = RegionPaint.theme_colors(map, symmetry, paint, seed_value, groups, neighbors)
+		accents = RegionPaint.accent_colors(map, groups, colors, paint, seed_value, neighbors)
+		features = RegionPaint.accent_colors(map, groups, accents, paint, seed_value + 1, neighbors, colors)
 
 	var n_groups := 0
 	for g in groups:
@@ -305,7 +312,6 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 				features.append(seq_colors[1])
 			sl["region"] = n + k
 
-	var gems: Array = options.get("gems", Palettes.starter_gems())
 	var gem_ids := []
 	var accent_ids := []
 	var feature_ids := []
@@ -348,13 +354,26 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var group_of := PackedInt32Array()
 	for r in colors.size():
 		group_of.append(groups[r] if r < n else n_groups + r - n)
+	# A matched line wears its area group's accent and borders that group's
+	# neighbors on its other side, so it keeps apart from those.
+	for k in line_keys.size():
+		neighbors.append([])
+	for k in line_keys.size():
+		var key: Variant = line_keys[k]
+		if not (key is int):
+			continue
+		var g: int = key
+		for o: int in neighbors[g].duplicate():
+			if o < n_groups:
+				neighbors[n_groups + k].append(o)
+				neighbors[o].append(n_groups + k)
 	var type_rng := RandomNumberGenerator.new()
 	type_rng.seed = hash([seed_value, "gem types"])
 	var type_target: int = options.get("gem_types", type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
 	var allowed: Dictionary = options.get("shapes", {})
 	GemVariety.restrict(slots, allowed)
 	var gem_types := GemVariety.balance(slots, group_of,
-			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed)
+			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors)
 	# The centerpiece may have changed shape: stand it upright again.
 	for s in slots:
 		if s.get("centerpiece", false):
@@ -505,6 +524,31 @@ static func _distinct_colors(base: Color, choices: PackedColorArray, count: int,
 			taken.append(lab)
 	while out.size() < count:
 		out.append(base.lightened(0.5) if out.size() == 0 else base.darkened(0.5))
+	return out
+
+
+## How wide a line two areas may face each other across, in px: the widest
+## gem-line stone with its channel, or a few stones' width for metal lines.
+static func _neighbor_reach(line_slots: Array, unit: float, gap: float) -> float:
+	var widest := unit * 2.0
+	for sl: Dictionary in line_slots:
+		widest = maxf(widest, float(sl["width"]) + gap * (1.0 + 2.0 * LINE_PAD))
+	return widest + 3.0
+
+
+## The theme's colors snapped to `gems`, each gem once, in theme order (the
+## theme itself when there are no gems to snap to).
+static func _snapped_palette(theme: PackedColorArray, gems: Array) -> PackedColorArray:
+	if gems.is_empty():
+		return theme
+	var out := PackedColorArray()
+	var seen := {}
+	var snapped := RegionPaint.snap_to_gems(theme, gems)
+	for i in snapped.size():
+		var g: Dictionary = gems[snapped[i]]
+		if not seen.has(str(g["id"])):
+			seen[str(g["id"])] = true
+			out.append(g["color"])
 	return out
 
 

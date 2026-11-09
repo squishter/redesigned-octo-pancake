@@ -100,7 +100,10 @@ static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dict
 	var groups := RegionPaint.symmetry_groups(map, symmetry)
 	if lines.has("motifs"):
 		groups = RegionPaint.motif_groups(map, groups, lines["motifs"]["areas"])
-	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value, groups)
+	# Areas facing each other across a line get colors that read apart.
+	var reach := maxf(4.0, float(options.get("line_width", w / 170.0))) * 3.0
+	var neighbors := RegionPaint.group_neighbors(map.adjacency(reach, maxi(4, int(reach / 2.0))), groups)
+	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value, groups, neighbors)
 	var background: Color = options.get("background", BACKGROUND)
 	var plan := DesignPlan.make(map, groups, options, seed_value)
 	var fills: PackedStringArray = plan["fills"]

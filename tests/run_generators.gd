@@ -29,6 +29,7 @@ func _init() -> void:
 	test_swirls()
 	test_frames()
 	test_collages()
+	test_neighbor_colors()
 	test_design_plans()
 	test_pattern_seeds()
 	test_layouts()
@@ -446,6 +447,74 @@ func test_collages() -> void:
 			check(ratios[key].y <= ratios[key].x * 1.01, "seed %d: gem type %s has proportions %.2f to %.2f" % [
 					seed_value, key, ratios[key].x, ratios[key].y])
 		img.save_png(out_dir.path_join("collage_%d_%s.png" % [seed_value, variant]))
+
+
+## Areas that touch get colors that read apart: a 3x3 grid of cells finds
+## each cell's side neighbors (not the diagonal ones, which only meet at a
+## corner), base colors contrast across every side, accents and features
+## only rarely match next door, and collages keep that through GemVariety.
+func test_neighbor_colors() -> void:
+	print("Neighbor colors")
+	var w := 92
+	var line := 4
+	var mask := PackedByteArray()
+	mask.resize(w * w)
+	for y in w:
+		for x in w:
+			var on := x < 2 or y < 2 or x >= w - 2 or y >= w - 2
+			for k in [1, 2]:
+				var at := 2 + k * 30 - line / 2
+				on = on or (x >= at and x < at + line) or (y >= at and y < at + line)
+			mask[y * w + x] = 255 if on else 0
+	var map := RegionMap.build(mask, w, w, 10)
+	check(map.regions.size() == 9, "grid: %d cells, not 9" % map.regions.size())
+	var adj := map.adjacency(float(line) * 2.0)
+	var cell := func(r: int) -> Vector2i:
+		var c: Vector2 = map.regions[r]["centroid"]
+		return Vector2i(int(c.x) / 30, int(c.y) / 30)
+	var pairs := 0
+	for r in map.regions.size():
+		for o: int in adj[r]:
+			var d: Vector2i = (cell.call(r) as Vector2i) - (cell.call(o) as Vector2i)
+			check(absi(d.x) + absi(d.y) == 1, "grid: cells %s and %s counted as neighbors" % [cell.call(r), cell.call(o)])
+			pairs += 1
+	check(pairs == 24, "grid: %d neighbor pairs, not 24" % pairs)
+	var groups := RegionPaint.symmetry_groups(map, "none")
+	var neighbors := RegionPaint.group_neighbors(adj, groups)
+	for theme in ["sunset", "pastel", "ocean"]:
+		for seed_value in 20:
+			var palette := Palettes.theme_colors(theme)
+			var colors := RegionPaint.theme_colors(map, "none", palette, seed_value, groups, neighbors)
+			for r in map.regions.size():
+				for o: int in adj[r]:
+					check(RegionPaint.contrasts(colors[r], colors[o]),
+							"%s seed %d: touching cells share a color" % [theme, seed_value])
+	# Two-color pictures can't keep three-way neighbors apart; it still works.
+	var two := RegionPaint.theme_colors(map, "none", PackedColorArray([Color.RED, Color.BLUE]), 1, groups, neighbors)
+	check(two.size() == 9, "two-color grid has %d colors" % two.size())
+
+	var matches := 0
+	for i in 4000:
+		if RegionPaint.may_match(7, i, i + 1):
+			matches += 1
+	print("  neighbors may share an accent: %.1f%% of pairs" % (matches / 40.0))
+	check(matches > 120 and matches < 280, "%d of 4000 neighbor pairs may share a color" % matches)
+
+	# Accents: never the cell's own color, and rarely a neighbor's.
+	var sunset := Palettes.theme_colors("sunset")
+	var shared := 0
+	var total := 0
+	for seed_value in 40:
+		var colors := RegionPaint.theme_colors(map, "none", sunset, seed_value, groups, neighbors)
+		var accents := RegionPaint.accent_colors(map, groups, colors, sunset, seed_value, neighbors)
+		for r in map.regions.size():
+			check(not accents[r].is_equal_approx(colors[r]), "seed %d: an accent matches its own area" % seed_value)
+			for o: int in adj[r]:
+				total += 1
+				if not RegionPaint.contrasts(accents[r], colors[o]):
+					shared += 1
+	print("  accents like a neighbor's color: %d of %d" % [shared, total])
+	check(shared <= total * 0.15, "accents like a neighbor's color in %d of %d pairs" % [shared, total])
 
 
 ## Sparse fills and hidden lines: explicit settings are honored, sparse
