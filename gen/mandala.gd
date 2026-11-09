@@ -1,7 +1,7 @@
 class_name MandalaGenerator
 extends RefCounted
 ## Seeded line art: symmetric mandalas, flowers, snowflakes, hearts and
-## butterflies, and free-form swirls, animals and animal prints. The same
+## butterflies, and free-form swirls and animals. The same
 ## seed and options always give the same picture.
 ##
 ## Output is vector polylines in unit space (x and y in -1..1, y down), so it
@@ -10,11 +10,11 @@ extends RefCounted
 ##
 ## Each variant has its own generator: MandalaDesign, FlowerGenerator,
 ## SnowflakeGenerator, HeartGenerator, ButterflyGenerator, SwirlGenerator,
-## AnimalGenerator and AnimalPrintGenerator. This class picks one, frames
+## AnimalGenerator and AnimalMeshGenerator. This class picks one, frames
 ## most pictures with FrameDesign, and holds the small shape helpers they
 ## share.
 
-const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_mesh", "animal_print"]
+const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_mesh"]
 ## Swirls are framed less often than the rest (unless `frame` says), so
 ## their own outlines show.
 const SWIRL_FRAME_CHANCE := 0.25
@@ -32,8 +32,9 @@ const SWIRL_FRAME_CHANCE := 0.25
 ## (shape, border, body, antennae, fore, hind), "snowflake" (center, arm,
 ## tip, between, details), "swirl" (layout, shape, patch, strings, ribbon, motifs),
 ## "animal" (species, blend, plan, coat, pose, facing, scene, feet, ears, horns,
-## tail, mane, markings) or "animal_print" (coats, shape, split, angle).
-## Swirls, animals and animal prints aren't symmetric; instead they also return "families" (an id per
+## tail, mane, markings) or "animal_mesh" (species, model, plan, pose, camera,
+## coat, pose_record, source_sha256, pose_data_sha256, projection, backend).
+## Swirls and animals aren't symmetric; instead they also return "families" (an id per
 ## polyline; a frame's lines get one more) and "marks" ([{"at", "family"}],
 ## points inside motif areas), see SwirlGenerator.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
@@ -74,10 +75,6 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			symmetry = "none"
 			keys = ["species", "model", "plan", "pose", "camera", "coat", "pose_record",
 					"source_sha256", "pose_data_sha256", "projection", "backend"]
-		"animal_print":
-			design = AnimalPrintGenerator.generate(seed_value, options)
-			symmetry = "none"
-			keys = ["coats", "shape", "split", "angle"]
 		_:
 			variant = "mandala"
 			design = MandalaDesign.generate(seed_value, options)

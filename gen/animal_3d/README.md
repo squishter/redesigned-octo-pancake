@@ -61,7 +61,9 @@ var kit_image := PictureSources.mandala_image(42, {"theme": "sunset"}, lines)
 
 Optional controls: `model`, `pose`, `camera`, `coat`, `coat_seed`, `coat_scale`
 (0.5–1.8), `coat_mode` (`mixed`, `natural`, `decorative`), and `recent` model
-records. Unspecified choices are seeded. Mesh, pose and camera eligibility remain
+records. Unspecified choices are seeded. A seeded model is one of the ten
+caricature Gobkit "toy" meshes (`AnimalMeshGenerator.is_toy`) only one time in
+ten (`TOY_CHANCE`); the rest come from the 27 lifelike meshes. Mesh, pose and camera eligibility remain
 enforced. The saved `animal_mesh` metadata includes the source/model-data hashes,
 pose recipe and coat version/seed/scale. Passing that metadata back as options
 reproduces the same picture, including after a JSON round trip. Collages and

@@ -28,7 +28,6 @@ func _init() -> void:
 	test_snowflakes()
 	test_swirls()
 	test_animals()
-	test_animal_prints()
 	test_frames()
 	test_collages()
 	test_design_plans()
@@ -462,35 +461,6 @@ func check_animal(lines: Dictionary, what: String) -> void:
 	var w: int = lines["width"]
 	var map := RegionMap.build(lines["mask"], w, lines["height"], int(w * w * 0.0005))
 	check(map.regions.size() >= 4, "%s: only %d regions" % [what, map.regions.size()])
-
-
-## Animal prints: every print shows up over a run, splits carry two, and
-## each side's markings share a group.
-func test_animal_prints() -> void:
-	print("Animal prints")
-	var recent := []
-	var seen := {}
-	var splits := 0
-	for i in 18:
-		var seed_value := 7700 + i
-		var lines := PictureSources.mandala_lines(seed_value, {"variant": "animal_print", "recent": recent,
-				"frame": false})
-		var m: Dictionary = lines["mandala"]
-		var ap: Dictionary = m["animal_print"]
-		recent.append(ap)
-		for c in ap["coats"]:
-			seen[c] = true
-		if ap["split"]:
-			splits += 1
-			check(ap["coats"].size() == 2 and ap["coats"][0] != ap["coats"][1], "seed %d: split into %s" % [seed_value,
-					ap["coats"]])
-		check(m["families"].size() == m["polylines"].size(), "seed %d: lines without a family" % seed_value)
-		var w: int = lines["width"]
-		var map := RegionMap.build(lines["mask"], w, lines["height"], int(w * w * 0.0005))
-		check(map.regions.size() >= 3, "seed %d: only %d regions" % [seed_value, map.regions.size()])
-	for coat: String in CoatPatterns.PRINTS:
-		check(seen.has(coat), "print %s never showed up in 18 prints" % coat)
-	check(splits >= 2 and splits <= 14, "%d of 18 prints split" % splits)
 
 
 ## Frames: about three in four pictures are framed by default; 24 framed

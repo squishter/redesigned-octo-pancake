@@ -36,7 +36,9 @@ const KINDS := {
 	"power": {"key": "", "pack": "powers", "title": "Power-ups", "found": "Power-up!"},
 }
 ## Old id -> new id, per kind ("kind:old": "new"), applied to profiles on load.
-const RENAMED := {"line_finish:pearl": "chalk", "line_finish:glow": "rope", "line_finish:enamel": "beads"}
+## Retired puzzle types hand their unlock to the closest one still offered.
+const RENAMED := {"line_finish:pearl": "chalk", "line_finish:glow": "rope", "line_finish:enamel": "beads",
+		"puzzle:animal_print": "animal"}
 ## Charges a power-up pack gives: on-demand ones come in pairs.
 const NOW_CHARGES := 2
 const PUZZLE_CHARGES := 1

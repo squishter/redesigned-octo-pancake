@@ -212,6 +212,15 @@ func _pipeline() -> void:
 	)
 	_check(changed.mask != lines.mask, "coat seed changes marking boundaries")
 	_check(lines.mandala.animal_mesh.model == "ultimate_husky", "mesh provenance in source")
+	var toys := 0
+	var recent := []
+	for seed_value in 400:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var picked := AnimalMeshGenerator.pick_model(rng, recent)
+		toys += int(AnimalMeshGenerator.is_toy(picked))
+		recent.append({"model": picked})
+	_check(toys >= 20 and toys <= 65, "toy meshes are about 1 in 10 seeded animals (%d/400)" % toys)
 	var collage := PictureSources.mandala_collage(7721, opts, lines)
 	_check(not collage.slots.is_empty(), "patterned animal produces playable collage slots")
 	_check(collage.source.animal_mesh.coat.style == "spots", "coat provenance reaches saved puzzle")

@@ -6,7 +6,7 @@ extends RefCounted
 ## clipping lines to where a test holds, so a clipped line ends exactly on
 ## the line that bounds it and every region stays closed.
 ##
-## AnimalGenerator and AnimalPrintGenerator build their pictures this way:
+## AnimalGenerator builds its pictures this way:
 ## shapes and coat markings are fields, and their outlines are iso-lines.
 
 ## Clipped lines run on past where they leave by this much (unit space), so

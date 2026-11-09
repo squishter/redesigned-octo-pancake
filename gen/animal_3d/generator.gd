@@ -4,21 +4,38 @@ extends RefCounted
 ## app's ordinary polylines, motif families and closed paintable regions.
 
 const CATALOG = preload("res://assets/animals/posed/catalog.json")
+## Caricature "toy" meshes (Gobkit's big-eyed, blocky animals). A seeded pick
+## draws from them only this often, so most pictures show lifelike animals.
+const TOY_PREFIXES := ["gobkit_"]
+const TOY_CHANCE := 0.1
+
+
+static func is_toy(model_id: String) -> bool:
+	return TOY_PREFIXES.any(func(prefix: String) -> bool: return model_id.begins_with(prefix))
+
+
+## A seeded model, skipping the last 3 `recent` records ({"model": id}) and
+## choosing a toy mesh with TOY_CHANCE (when one is left to choose).
+static func pick_model(rng: RandomNumberGenerator, recent: Array = []) -> String:
+	var used := []
+	for row: Variant in recent.slice(maxi(0, recent.size() - 3)):
+		if row is Dictionary:
+			used.append(row.get("model", ""))
+	var choices: Array = CATALOG.data.models.keys().filter(func(key): return key not in used)
+	var toys := choices.filter(is_toy)
+	var lifelike := choices.filter(func(key): return not is_toy(key))
+	var pool := lifelike
+	if lifelike.is_empty() or (not toys.is_empty() and rng.randf() < TOY_CHANCE):
+		pool = toys
+	return pool[rng.randi_range(0, pool.size() - 1)]
 
 
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var models: Array = CATALOG.data.models.keys()
 	var id: String = options.get("model", "")
-	if id not in models:
-		var recent: Array = options.get("recent", [])
-		var used := []
-		for row: Variant in recent.slice(maxi(0, recent.size() - 3)):
-			if row is Dictionary:
-				used.append(row.get("model", ""))
-		var choices := models.filter(func(key): return key not in used)
-		id = choices[rng.randi_range(0, choices.size() - 1)]
+	if id not in CATALOG.data.models:
+		id = pick_model(rng, options.get("recent", []))
 	var info: Dictionary = CATALOG.data.models[id]
 	var file := FileAccess.open_compressed(info.file, FileAccess.READ, FileAccess.COMPRESSION_ZSTD)
 	if file == null:

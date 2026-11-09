@@ -495,9 +495,6 @@ func _process(_delta: float) -> void:
 				flower = ", %s%s in a %s coat, %s, facing %s, %s scene%s" % [an["species"],
 						" x " + an["blend"] if an["blend"] != "" else "", an["coat"], an["pose"], an["facing"], an["scene"],
 						", " + " + ".join(PackedStringArray(an["markings"])) if not an["markings"].is_empty() else ""]
-			if p["source"].has("animal_print"):
-				var ap: Dictionary = p["source"]["animal_print"]
-				flower = ", %s print on a %s" % [" | ".join(PackedStringArray(ap["coats"])), ap["shape"]]
 			if p["source"].has("animal_mesh"):
 				var an: Dictionary = p["source"]["animal_mesh"]
 				flower = ", %s, %s, %s coat" % [an["species"], an["pose"], an["coat"]["style"]]

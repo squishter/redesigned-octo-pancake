@@ -6,8 +6,7 @@ extends RefCounted
 ## them is symmetric.
 ##
 ## Coordinates are "coat space": a part of an animal unrolled (along the
-## part, and across it in body lengths; see AnimalGenerator), or the board
-## scaled (AnimalPrintGenerator). Striped coats also take a flow coordinate
+## part, and across it in body lengths; see AnimalGenerator). Striped coats also take a flow coordinate
 ## `phi` (distance along the part, so stripes cross it) and `v` (-1 on its
 ## top edge to 1 on its bottom, scaled by how much the part tapers its
 ## stripes toward the belly).
@@ -25,8 +24,6 @@ extends RefCounted
 ## rump, socks) are AnimalGenerator's.
 
 const COATS := ["tiger", "zebra", "cow", "pinto", "dalmatian", "cheetah", "leopard", "giraffe", "dapple"]
-## Coats that also work as an all-over print.
-const PRINTS := COATS
 const LATTICE := 64
 
 var coat := "solid"
