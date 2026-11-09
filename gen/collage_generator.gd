@@ -578,6 +578,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if tidy:
 		slots = _drop_tiny_fillers(slots, n)
 		gem_types = GemVariety.kinds(slots).size()
+		_clear_corners(slots)
 
 	var regions := []
 	for r in map.regions:
@@ -719,6 +720,80 @@ static func _drop_tiny_fillers(slots: Array[Dictionary], line_from := 1 << 30) -
 		s["id"] = out.size()
 		out.append(s)
 	return out
+
+
+## Shrinks stones whose outline reaches past the capsule packing gave them
+## (square corners: baguettes, emerald cuts, squares) until their outline
+## clears every neighbor's: on a tight curve the corners of a ring of long
+## stones would otherwise run into each other. Centers and proportions stay.
+static func _clear_corners(slots: Array) -> void:
+	var polys := {}
+	var boxy := []
+	var reach := 1.0
+	for i in slots.size():
+		var s: Dictionary = slots[i]
+		reach = maxf(reach, float(s["size"]))
+		if _reaches_past_capsule(s):
+			boxy.append(i)
+	if boxy.is_empty():
+		return
+	var grid := {}
+	for i in slots.size():
+		var key := Vector2i(floori(slots[i]["x"] / reach), floori(slots[i]["y"] / reach))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(i)
+	var poly := func(i: int) -> PackedVector2Array:
+		if not polys.has(i):
+			polys[i] = GemShapes.slot_polygon(slots[i], 16)
+		return polys[i]
+	for i: int in boxy:
+		var s: Dictionary = slots[i]
+		var key := Vector2i(floori(s["x"] / reach), floori(s["y"] / reach))
+		for _try in 8:
+			var hit := false
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					for j: int in grid.get(key + Vector2i(dx, dy), []):
+						if j == i or hit:
+							continue
+						var o: Dictionary = slots[j]
+						var d := Vector2(s["x"], s["y"]).distance_to(Vector2(o["x"], o["y"]))
+						if d > (float(s["size"]) + float(o["size"])) * 0.75:
+							continue
+						var area := 0.0
+						for piece: PackedVector2Array in Geometry2D.intersect_polygons(poly.call(i), poly.call(j)):
+							area += absf(_area(piece))
+						if area > 0.5:
+							hit = true
+			if not hit:
+				break
+			s["size"] = s["size"] * 0.9
+			s["width"] = s["width"] * 0.9
+			polys.erase(i)
+
+
+## Whether a stone's outline goes past the capsule (a segment grown by half
+## its width) that packing kept clear for it.
+static func _reaches_past_capsule(s: Dictionary) -> bool:
+	var r: float = s["width"] / 2.0
+	var h := maxf(0.0, s["size"] / 2.0 - r)
+	var c := Vector2(s["x"], s["y"])
+	var half := Vector2.from_angle(s["rotation"]) * h
+	for q in GemShapes.slot_polygon(s, 16):
+		var on := Geometry2D.get_closest_point_to_segment(q, c - half, c + half)
+		if q.distance_to(on) > r + 0.5:
+			return true
+	return false
+
+
+static func _area(poly: PackedVector2Array) -> float:
+	var a := 0.0
+	for k in poly.size():
+		var p := poly[k]
+		var q := poly[(k + 1) % poly.size()]
+		a += p.x * q.y - q.x * p.y
+	return a / 2.0
 
 
 ## Marks the stones that may keep a gem type of their own however few

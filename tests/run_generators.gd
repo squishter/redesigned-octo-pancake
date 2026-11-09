@@ -887,6 +887,8 @@ func test_cluster_layout() -> void:
 		if on_lines <= n - on_lines:
 			loose_sum += loose
 			check(loose <= 0.4, "seed %d: %.0f%% of a cluster picture's stones sit loose" % [seed_value, loose * 100.0])
+		var outline_hits := count_outline_overlaps(cluster["slots"])
+		check(outline_hits == 0, "seed %d: %d cluster stones overlap by their real outlines" % [seed_value, outline_hits])
 		var overlaps := count_overlaps(cluster["slots"], cluster["width"] * 0.002)
 		check(overlaps == 0, "seed %d: %d overlapping stones in the cluster layout" % [seed_value, overlaps])
 		print(("  seed %d %-9s %s: %4d stones (%d on lines), %2d gem types, %d loose left out, loose %.0f%% "
@@ -932,6 +934,8 @@ func test_fine_layout() -> void:
 			if r["style"] in SlotPacker.CURVES:
 				curves += 1
 		check(count_overlaps(fine["slots"], fine["width"] * 0.002) == 0, "seed %d: overlapping fine stones" % seed_value)
+		var touching := count_outline_overlaps(fine["slots"])
+		check(touching == 0, "seed %d: %d fine stones overlap by their real outlines" % [seed_value, touching])
 		print("  seed %d %-9s %s: %4d stones, %2d gem types, %d loose left out" % [seed_value, opts["variant"],
 				fine["setting"], n, fine["gem_types"], fine["loose_dropped"]])
 		render_collage(fine).save_png(out_dir.path_join("layout_%d_fine.png" % seed_value))
@@ -1907,6 +1911,38 @@ func render_kit(kit: Dictionary, cell: int = 8) -> Image:
 
 ## Pairs of slots in the same region whose capsules come closer than
 ## `tolerance` px of touching.
+## Pairs of stones whose drawn outlines (GemShapes.slot_polygon) overlap
+## by more than half a square px: square corners reach past the capsules
+## count_overlaps checks.
+func count_outline_overlaps(slots: Array) -> int:
+	var reach := 1.0
+	for s: Dictionary in slots:
+		reach = maxf(reach, float(s["size"]))
+	var grid := {}
+	for i in slots.size():
+		var key := Vector2i(floori(slots[i]["x"] / reach), floori(slots[i]["y"] / reach))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(i)
+	var polys := []
+	for s: Dictionary in slots:
+		polys.append(GemShapes.slot_polygon(s, 16))
+	var n := 0
+	for i in slots.size():
+		var key := Vector2i(floori(slots[i]["x"] / reach), floori(slots[i]["y"] / reach))
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				for j: int in grid.get(key + Vector2i(dx, dy), []):
+					if j <= i:
+						continue
+					var area := 0.0
+					for piece: PackedVector2Array in Geometry2D.intersect_polygons(polys[i], polys[j]):
+						area += absf(CollageGenerator._area(piece))
+					if area > 0.5:
+						n += 1
+	return n
+
+
 func count_overlaps(slots: Array, tolerance: float) -> int:
 	var cell := 32.0
 	var grid := {}
