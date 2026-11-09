@@ -976,6 +976,54 @@ func test_line_patterns() -> void:
 		check(tones.size() >= want, "%s: %d tones, not %d" % [style, tones.size(), want])
 		check(count_overlaps(slots, 0.5) == 0, "%s: overlapping stones" % style)
 		print("  %-7s %d stones, tones %s" % [style, slots.size(), tones.keys()])
+	# A disc with two small holes: tight echo rows follow the disc's outline
+	# alone (echo2), around neither hole and never inside one.
+	mask.fill(0)
+	var holes := [c + Vector2(-50, 10), c + Vector2(40, -30)]
+	for y in w:
+		for x in w:
+			var q := Vector2(x + 0.5, y + 0.5)
+			var on := absf(q.distance_to(c) - 140.0) < 1.5
+			for hc: Vector2 in holes:
+				on = on or absf(q.distance_to(hc) - 18.0) < 1.5
+			mask[y * w + x] = 255 if on else 0
+	map = RegionMap.build(mask, w, w, 10)
+	var disc := -1
+	for r in map.regions:
+		if (r["centroid"] as Vector2).distance_to(c) < 30.0 and r["area"] > 20000:
+			disc = r["id"]
+	var echo_slots := SlotPacker.pack(map, {"tight": true, "styles": {disc: "echo"}, "unit": unit, "seed": 3})
+	check(map.regions[disc]["style"] == "echo2", "a disc with holes took %s, not echo2" % map.regions[disc]["style"])
+	var in_disc := 0
+	for s in echo_slots:
+		if s["region"] != disc:
+			continue
+		in_disc += 1
+		for hc: Vector2 in holes:
+			check(Vector2(s["x"], s["y"]).distance_to(hc) > 18.0, "an echo2 stone sits inside a hole")
+	check(in_disc >= 200, "echo2 put only %d stones in the disc" % in_disc)
+	check(count_overlaps(echo_slots, 0.5) == 0, "echo2: overlapping stones")
+	# The rows ring the disc, not the holes: each row's stones keep one
+	# distance from the disc's edge (the last part is the leftover fill).
+	var depth := {}
+	var last := 0
+	for s in echo_slots:
+		if s["region"] != disc:
+			continue
+		last = maxi(last, s["part"])
+		if not depth.has(s["part"]):
+			depth[s["part"]] = []
+		depth[s["part"]].append(140.0 - Vector2(s["x"], s["y"]).distance_to(c))
+	var rows := 0
+	for part: int in depth:
+		var list: Array = depth[part]
+		if part == last or list.size() < 10:
+			continue
+		rows += 1
+		check(list.max() - list.min() <= unit * 1.5, "echo2: row %d strays %.1f px from one depth" % [
+				part, list.max() - list.min()])
+	check(rows >= 3, "echo2: only %d rows" % rows)
+	print("  echo2   %d stones in a disc with two holes" % in_disc)
 	# A square and a long strip, both asked for a solitaire.
 	mask.fill(0)
 	for y in w:

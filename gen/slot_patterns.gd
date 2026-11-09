@@ -182,3 +182,154 @@ static func waves(p: SlotPacker, region: Dictionary, r: float, shape: String, tu
 		k += 1
 	p._part = part0 + 1 + k
 	p._tone = 0
+
+
+## The region's pixels within its bbox grown by a pixel, with its holes (the
+## other regions it surrounds) filled in: {"rect", "inside" (the region's own
+## pixels, 1 each), "filled" (its outer outline filled), "holes": bool}.
+static func filled_outline(p: SlotPacker, region: Dictionary) -> Dictionary:
+	var rect: Rect2i = (region["bbox"] as Rect2i).grow(1)
+	var bw := rect.size.x
+	var bh := rect.size.y
+	var id: int = region["id"]
+	var inside := PackedByteArray()
+	inside.resize(bw * bh)
+	for y in bh:
+		for x in bw:
+			if p.map.label_at(rect.position.x + x, rect.position.y + y) == id:
+				inside[y * bw + x] = 1
+	# Everything outside the region that the bbox's border reaches is outside;
+	# the rest (other regions it surrounds) are holes.
+	var outside := PackedByteArray()
+	outside.resize(bw * bh)
+	var stack := PackedInt32Array()
+	for x in bw:
+		stack.append_array([x, (bh - 1) * bw + x])
+	for y in bh:
+		stack.append_array([y * bw, y * bw + bw - 1])
+	while not stack.is_empty():
+		var i := stack[stack.size() - 1]
+		stack.resize(stack.size() - 1)
+		if outside[i] == 1 or inside[i] == 1:
+			continue
+		outside[i] = 1
+		var x := i % bw
+		var y := i / bw
+		if x > 0:
+			stack.append(i - 1)
+		if x < bw - 1:
+			stack.append(i + 1)
+		if y > 0:
+			stack.append(i - bw)
+		if y < bh - 1:
+			stack.append(i + bw)
+	var filled := PackedByteArray()
+	filled.resize(bw * bh)
+	var holes := false
+	for i in bw * bh:
+		if outside[i] == 0:
+			filled[i] = 1
+			if inside[i] == 0:
+				holes = true
+	return {"rect": rect, "inside": inside, "filled": filled, "holes": holes}
+
+
+## Echo rows from the region's outer outline only (echo2): the rows follow
+## its edge distance with its holes filled in, so internal features don't
+## bend them; each row stops where a feature cuts it and goes on past it.
+## `radii`, `shapes`, `tones` as for SlotPacker._rows; `outline` from
+## filled_outline.
+static func outline_rows(p: SlotPacker, outline: Dictionary, radii: Array, shapes: Array, tones: Array) -> void:
+	if radii.is_empty():
+		return
+	var rect: Rect2i = outline["rect"]
+	var bw := rect.size.x
+	var bh := rect.size.y
+	var field: PackedFloat32Array = outline["field"] if outline.has("field") else filled_distance(outline)
+	var labels := PackedInt32Array()
+	labels.resize(bw * bh)
+	var filled: PackedByteArray = outline["filled"]
+	for i in bw * bh:
+		labels[i] = 0 if filled[i] == 1 else -1
+	var levels := PackedFloat32Array()
+	var d := p.gap
+	for rk: float in radii:
+		levels.append(d + rk)
+		d += 2.0 * rk + p.gap
+	var lines := Contours.iso_lines(field, labels, bw, bh, 0, Rect2i(0, 0, bw, bh), levels)
+	var shift := Vector2(rect.position)
+	for k in radii.size():
+		p._tone = tones[k]
+		p._part += 1
+		for path: Dictionary in lines[k]:
+			var pts: PackedVector2Array = path["points"]
+			for i in pts.size():
+				pts[i] += shift
+			var r: float = radii[k]
+			# A loop no feature cuts stays a loop.
+			var whole: bool = path["closed"]
+			if whole:
+				for q in _dense(pts, true):
+					if p._free_at(q) < r * 0.6 + p.gap:
+						whole = false
+						break
+			if whole:
+				p._along(pts, true, r, shapes[k])
+			else:
+				along_inside(p, _dense(pts, path["closed"]), r, shapes[k])
+	p._tone = 0
+
+
+## Distance (px) to the outer outline over the filled region (chamfer 3-4).
+static func filled_distance(outline: Dictionary) -> PackedFloat32Array:
+	var rect: Rect2i = outline["rect"]
+	var w := rect.size.x
+	var h := rect.size.y
+	var filled: PackedByteArray = outline["filled"]
+	const BIG := 1 << 28
+	var d := PackedInt32Array()
+	d.resize(w * h)
+	for i in w * h:
+		d[i] = BIG if filled[i] == 1 else 0
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			if d[i] == 0:
+				continue
+			var best := d[i]
+			best = mini(best, (d[i - 1] if x > 0 else 0) + 3)
+			best = mini(best, (d[i - w] if y > 0 else 0) + 3)
+			best = mini(best, (d[i - w - 1] if x > 0 and y > 0 else 0) + 4)
+			best = mini(best, (d[i - w + 1] if x < w - 1 and y > 0 else 0) + 4)
+			d[i] = best
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var i := y * w + x
+			if d[i] == 0:
+				continue
+			var best := d[i]
+			best = mini(best, (d[i + 1] if x < w - 1 else 0) + 3)
+			best = mini(best, (d[i + w] if y < h - 1 else 0) + 3)
+			best = mini(best, (d[i + w + 1] if x < w - 1 and y < h - 1 else 0) + 4)
+			best = mini(best, (d[i + w - 1] if x > 0 and y < h - 1 else 0) + 4)
+			d[i] = best
+	var out := PackedFloat32Array()
+	out.resize(w * h)
+	for i in w * h:
+		out[i] = d[i] / 3.0
+	return out
+
+
+## The path's points about a pixel apart (and back to the start if closed).
+static func _dense(pts: PackedVector2Array, closed: bool) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var n := pts.size()
+	for i in (n if closed else n - 1):
+		var a := pts[i]
+		var b := pts[(i + 1) % n]
+		var steps := maxi(1, ceili(a.distance_to(b)))
+		for s in steps:
+			out.append(a.lerp(b, float(s) / steps))
+	if not closed and n > 0:
+		out.append(pts[n - 1])
+	return out

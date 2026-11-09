@@ -41,13 +41,17 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ## zigzag: parallel zigzag rows across the region, in alternating colors
 ## taper: rows following the outline inward that shrink (or grow) row by
 ##   row, in alternating colors
+## echo2: echo rows that follow only the region's outer outline, as if its
+##   holes (the areas it surrounds) were filled: rows stop where a hole cuts
+##   them and go on past it rather than bending around it. Tight packing
+##   gives it to echo regions that have holes.
 ## Sparse fills, only used when asked for (see DesignPlan):
 ## scatter: an airy lattice of small stones
 ## accent: a single stone at the region's heart, as big as fits
 ## outline: only a row of small stones along the edge
 ## bare: no stones
 const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave",
-		"spiral", "swirl", "waves", "zigzag", "taper"]
+		"spiral", "swirl", "waves", "zigzag", "taper", "echo2"]
 ## Tight packing: the line patterns, how often a roomy group takes one
 ## instead of the row or lattice pattern it picked, and their weights.
 const CURVES := {"spiral": 1.0, "swirl": 1.0, "waves": 1.0, "zigzag": 0.6, "taper": 1.2}
@@ -476,6 +480,12 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	# a wide area its branches scatter stones about.
 	if tight and style == "spine" and region["max_dist"] > unit * TIGHT_SPINE_DEPTH:
 		style = "echo"
+	# Tight echo rows ignore the region's internal features (echo2).
+	var outline := {}
+	if tight and style == "echo":
+		outline = SlotPatterns.filled_outline(self, region)
+		if outline["holes"]:
+			style = "echo2"
 	region["style"] = style
 	var u: float = unit * design.get("scale", 1.0)
 	if tight and style in ["solitaire", "accent"]:
@@ -507,6 +517,22 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 				shapes.append("round" if spacer else design["row_shape"])
 				tones.append(1 if spacer else _row_tone(toning, k / 2 if design["spacers"] else k))
 			_rows(region, radii, shapes, tones)
+			_tone = 1 if toning == "heart" else 0
+			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
+		"echo2":
+			var field := SlotPatterns.filled_distance(outline)
+			outline["field"] = field
+			var depth := 0.0
+			for v in field:
+				depth = maxf(depth, v)
+			var radii := _graded_rows(region, r_row, design["grade"], design["spacers"], depth)
+			var shapes := []
+			var tones := []
+			for k in radii.size():
+				var spacer: bool = design["spacers"] and k % 2 == 1
+				shapes.append("round" if spacer else design["row_shape"])
+				tones.append(1 if spacer else _row_tone(toning, k / 2 if design["spacers"] else k))
+			SlotPatterns.outline_rows(self, outline, radii, shapes, tones)
 			_tone = 1 if toning == "heart" else 0
 			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
 		"halo":
@@ -661,8 +687,8 @@ func _row_tone(toning: String, k: int) -> int:
 ## `grade` times the one outside it (kept between 0.45 and 1.6 units), every
 ## other row a thin spacer row when `spaced`. The last row may sit a little past the
 ## middle; its stones shrink to fit.
-func _graded_rows(region: Dictionary, r: float, grade: float, spaced: bool) -> Array:
-	var depth: float = region["max_dist"]
+func _graded_rows(region: Dictionary, r: float, grade: float, spaced: bool, deepest := -1.0) -> Array:
+	var depth: float = region["max_dist"] if deepest < 0.0 else deepest
 	var d := gap
 	var out := []
 	var base := r
