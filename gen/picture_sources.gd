@@ -19,7 +19,7 @@ const BACKGROUND := Color("#f4eee6")
 ## Swirls (layout, shape, recent; see SwirlGenerator) aren't symmetric but
 ## come with families of lines and areas; those are returned as "motifs":
 ## {"lines": a family per pixel (-1 off the lines), "areas": [{"at": px,
-## "family"}]}, for CollageGenerator.
+## "family"}], "names": the families' names}, for CollageGenerator.
 ## Returns {"mask", "width", "height", "mandala"} (and "motifs").
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
@@ -37,6 +37,7 @@ static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictiona
 			"lines": LineRaster.rasterize_labels(mandala["polylines"], mandala["closed"], mandala["families"], px,
 					line_width + 2.0),
 			"areas": areas,
+			"names": PackedStringArray(mandala.get("family_names", PackedStringArray())),
 		}
 	return out
 

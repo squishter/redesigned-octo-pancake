@@ -43,9 +43,12 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ##   row, in alternating colors
 ## echo2: echo rows that follow only the region's outer outline, as if its
 ##   holes (the areas it surrounds) were filled: rows stop where a hole cuts
-##   them and go on past it rather than bending around it. Tight packing
-##   gives it to about half the groups that pick echo (ECHO2_CHANCE); in a
-##   region without holes it lays the same rows as echo.
+##   them and go on past it rather than bending around it. Neighbors that
+##   are features of the region (SlotPatterns.is_feature: bounded by marking
+##   lines like a coat's spots, or small blobs) count as holes too, even
+##   where they touch its edge. Tight packing gives it to about half the
+##   groups that pick echo (echo2_chance); in a region without holes it
+##   lays the same rows as echo.
 ## Sparse fills, only used when asked for (see DesignPlan):
 ## scatter: an airy lattice of small stones
 ## accent: a single stone at the region's heart, as big as fits
@@ -142,6 +145,16 @@ var allow_spacers := true
 ## smaller ones dotted into the gaps), and chains and solitaires get none.
 ## Roomy groups often take line patterns (CURVES) instead of rows.
 var tight := false
+## Line families per pixel (-1 off them) and the ids that draw markings
+## (SlotPatterns.MARKING_FAMILIES), from the picture's motifs when it has
+## named families: echo2 fills in the areas they bound.
+var line_families := PackedInt32Array()
+var marking_ids := {}
+## Tight packing: how often a group that picks echo takes echo2 instead.
+var echo2_chance := ECHO2_CHANCE
+## echo2 fills in its region's features that touch its edge too (see
+## SlotPatterns.is_feature), not only the areas it surrounds.
+var echo2_features := true
 ## The gap between stones of groups that aren't dense.
 var _base_gap := 2.0
 ## The picture is symmetric (radial or mirror): regions that map onto
@@ -190,6 +203,10 @@ var _part := 0
 ##   allow_spacers (bool, default true): false keeps groups from picking spacer
 ##     rows themselves (`spacers` still forces them),
 ##   tight (bool, default false): see `tight`,
+##   echo2_chance (float, default ECHO2_CHANCE): see `echo2_chance`,
+##   echo2_features (bool, default true): see `echo2_features`,
+##   motifs ({"lines": a family per pixel, "names": family names}): see
+##     `line_families`,
 ##   styles (Dictionary region id -> style, to force a style or sparse fill),
 ##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
 ##     regions that map onto themselves get patterns as symmetric,
@@ -254,6 +271,15 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	dense_groups = options.get("dense_groups", {})
 	allow_spacers = options.get("allow_spacers", true)
 	tight = options.get("tight", false)
+	echo2_chance = options.get("echo2_chance", ECHO2_CHANCE)
+	echo2_features = options.get("echo2_features", true)
+	var motifs: Dictionary = options.get("motifs", {})
+	var names: PackedStringArray = motifs.get("names", PackedStringArray())
+	if not names.is_empty() and motifs.get("lines", PackedInt32Array()).size() == region_map.width * region_map.height:
+		line_families = motifs["lines"]
+		for k in names.size():
+			if names[k] in SlotPatterns.MARKING_FAMILIES:
+				marking_ids[k] = true
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
@@ -304,9 +330,6 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 			c_rng.seed = hash([seed_value, group, "curves"])
 			if c_rng.randf() < CURVE_CHANCE:
 				style = _pick(CURVES, c_rng)
-		# ...and half its echo rows for echo2, from another stream.
-		if tight and style == "echo" and float(hash([seed_value, group, "echo2"]) & 0xffff) / 65536.0 < ECHO2_CHANCE:
-			style = "echo2"
 	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)] * (DENSE_SIZE if dense else 1.0)
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
@@ -346,6 +369,9 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		# wind, and whether tapered rows shrink inward or grow.
 		"spin": 1.0 if hash([seed_value, group, "spin"]) & 1 == 0 else -1.0,
 		"taper_grow": hash([seed_value, group, "taper"]) & 3 == 0,
+		# Tight packing: whether this group's echo rows, picked or fallen
+		# back to, are echo2 (echo2_chance of groups, from a stream of its own).
+		"echo2": tight and float(hash([seed_value, group, "echo2"]) & 0xffff) / 65536.0 < echo2_chance,
 	}
 
 
@@ -487,6 +513,8 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	if tight and style == "spine" and region["max_dist"] > unit * TIGHT_SPINE_DEPTH:
 		style = "echo"
 	# echo2's rows ignore the region's internal features.
+	if style == "echo" and design.get("echo2", false):
+		style = "echo2"
 	var outline := {}
 	if style == "echo2":
 		outline = SlotPatterns.filled_outline(self, region)

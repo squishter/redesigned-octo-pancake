@@ -980,16 +980,17 @@ func test_line_patterns() -> void:
 		check(tones.size() >= want, "%s: %d tones, not %d" % [style, tones.size(), want])
 		check(count_overlaps(slots, 0.5) == 0, "%s: overlapping stones" % style)
 		print("  %-7s %d stones, tones %s" % [style, slots.size(), tones.keys()])
-	# A disc with two small holes: echo2 rows follow the disc's outline
-	# alone, around neither hole and never inside one.
+	# A disc with two small holes and a spot on its edge: echo2 rows follow
+	# the disc's outline alone, around neither hole nor the spot (a feature,
+	# though it touches the edge), and never inside one.
 	mask.fill(0)
-	var holes := [c + Vector2(-50, 10), c + Vector2(40, -30)]
+	var holes := [c + Vector2(-50, 10), c + Vector2(40, -30), c + Vector2(0, 128)]
 	for y in w:
 		for x in w:
 			var q := Vector2(x + 0.5, y + 0.5)
 			var on := absf(q.distance_to(c) - 140.0) < 1.5
 			for hc: Vector2 in holes:
-				on = on or absf(q.distance_to(hc) - 18.0) < 1.5
+				on = on or (absf(q.distance_to(hc) - 18.0) < 1.5 and q.distance_to(c) < 140.0)
 			mask[y * w + x] = 255 if on else 0
 	map = RegionMap.build(mask, w, w, 10)
 	var disc := -1
@@ -997,6 +998,8 @@ func test_line_patterns() -> void:
 		if (r["centroid"] as Vector2).distance_to(c) < 30.0 and r["area"] > 20000:
 			disc = r["id"]
 	var echo_slots := SlotPacker.pack(map, {"tight": true, "styles": {disc: "echo2"}, "unit": unit, "seed": 3})
+	var edge_spot := map.label_at(int(holes[2].x), int(holes[2].y))
+	check(edge_spot >= 0 and edge_spot != disc, "the edge spot isn't a region of its own")
 	check(map.regions[disc]["style"] == "echo2", "a disc with holes took %s, not echo2" % map.regions[disc]["style"])
 	var in_disc := 0
 	for s in echo_slots:
@@ -1027,7 +1030,7 @@ func test_line_patterns() -> void:
 		check(list.max() - list.min() <= unit * 1.5, "echo2: row %d strays %.1f px from one depth" % [
 				part, list.max() - list.min()])
 	check(rows >= 3, "echo2: only %d rows" % rows)
-	print("  echo2   %d stones in a disc with two holes" % in_disc)
+	print("  echo2   %d stones in a disc with two holes and an edge spot" % in_disc)
 	# A square and a long strip, both asked for a solitaire.
 	mask.fill(0)
 	for y in w:
@@ -1046,7 +1049,7 @@ func test_line_patterns() -> void:
 		if box.size.x < 100 and box.size.y < 100 and absi(box.size.x - box.size.y) < 4:
 			check(r["style"] == "solitaire", "a square area took %s, not a solitaire" % r["style"])
 		elif box.size.x > 3 * box.size.y:
-			check(r["style"] == "echo", "a long strip took %s, not rows" % r["style"])
+			check(r["style"] in ["echo", "echo2"], "a long strip took %s, not rows" % r["style"])
 
 
 ## Gem types with fewer than CollageGenerator.MIN_TYPE_STONES stones that

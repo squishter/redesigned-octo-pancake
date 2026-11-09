@@ -184,22 +184,71 @@ static func waves(p: SlotPacker, region: Dictionary, r: float, shape: String, tu
 	p._tone = 0
 
 
-## The region's pixels within its bbox grown by a pixel, with its holes (the
-## other regions it surrounds) filled in: {"rect", "inside" (the region's own
-## pixels, 1 each), "filled" (its outer outline filled), "holes": bool}.
+## Line families that draw markings on a surface (coat patterns, a face's
+## details) rather than the shape of things: the areas they bound are
+## features of the area around them (see is_feature).
+const MARKING_FAMILIES := ["coat", "markings", "pale coat", "dark features", "ivory features", "warm features",
+		"belly", "blanket", "blaze", "hair", "hooves", "muzzle", "nose", "points", "saddle", "socks", "spots", "tip"]
+## A neighbor without marking lines is a feature if it's at most this share
+## of the area's size and at most this spread out (area over its deepest
+## circle's: blob-like, not a long band).
+const FEATURE_SHARE := 0.1
+const FEATURE_SPREAD := 4.0
+## Of the line pixels around a neighbor (with a family), this share must be
+## marking lines for it to be a marking feature.
+const MARKING_SHARE := 0.6
+
+
+## The region's outline for echo2, with its features filled in: {"rect",
+## "inside" (the region's own pixels), "filled" (its outer outline filled),
+## "holes": bool (anything filled that isn't the region)}. Features are the
+## areas it surrounds, and neighbors that are features of it even where
+## they touch its edge (is_feature): those, and the lines between them and
+## the region, are closed over, so a coat spot on the silhouette doesn't
+## dent the rows.
 static func filled_outline(p: SlotPacker, region: Dictionary) -> Dictionary:
-	var rect: Rect2i = (region["bbox"] as Rect2i).grow(1)
+	var map := p.map
+	var bridge := ceili(p.unit * 1.2 + 3.0)
+	var rect: Rect2i = (region["bbox"] as Rect2i).grow(bridge + 2).intersection(Rect2i(0, 0, map.width, map.height))
 	var bw := rect.size.x
 	var bh := rect.size.y
 	var id: int = region["id"]
 	var inside := PackedByteArray()
 	inside.resize(bw * bh)
+	var seen := {}
 	for y in bh:
 		for x in bw:
-			if p.map.label_at(rect.position.x + x, rect.position.y + y) == id:
+			var l := map.label_at(rect.position.x + x, rect.position.y + y)
+			if l == id:
 				inside[y * bw + x] = 1
-	# Everything outside the region that the bbox's border reaches is outside;
-	# the rest (other regions it surrounds) are holes.
+			elif l >= 0:
+				seen[l] = true
+	var features := {}
+	for n: int in seen:
+		var other: Dictionary = map.regions[n]
+		if p.echo2_features and rect.encloses(other["bbox"]) and is_feature(p, region, other):
+			features[n] = true
+	# The region and its features, closed over the lines between them (a
+	# dilation then an erosion by `bridge`).
+	var solid := PackedByteArray()
+	solid.resize(bw * bh)
+	for y in bh:
+		for x in bw:
+			var i := y * bw + x
+			if inside[i] == 1 or features.has(map.label_at(rect.position.x + x, rect.position.y + y)):
+				solid[i] = 1
+	if not features.is_empty():
+		var reach := _chamfer(solid, bw, bh, true)
+		var grown := PackedByteArray()
+		grown.resize(bw * bh)
+		for i in bw * bh:
+			grown[i] = 1 if reach[i] <= bridge * 3 else 0
+		var back := _chamfer(grown, bw, bh, false)
+		for i in bw * bh:
+			if grown[i] == 1 and back[i] > bridge * 3:
+				solid[i] = 1
+	# Everything else the rect's border reaches is outside; what it doesn't
+	# reach is enclosed (holes).
 	var outside := PackedByteArray()
 	outside.resize(bw * bh)
 	var stack := PackedInt32Array()
@@ -210,7 +259,7 @@ static func filled_outline(p: SlotPacker, region: Dictionary) -> Dictionary:
 	while not stack.is_empty():
 		var i := stack[stack.size() - 1]
 		stack.resize(stack.size() - 1)
-		if outside[i] == 1 or inside[i] == 1:
+		if outside[i] == 1 or solid[i] == 1:
 			continue
 		outside[i] = 1
 		var x := i % bw
@@ -231,7 +280,85 @@ static func filled_outline(p: SlotPacker, region: Dictionary) -> Dictionary:
 			filled[i] = 1
 			if inside[i] == 0:
 				holes = true
-	return {"rect": rect, "inside": inside, "filled": filled, "holes": holes}
+	return {"rect": rect, "inside": inside, "filled": filled, "holes": holes, "features": features.size()}
+
+
+## Whether neighboring region `other` is a feature of `region` (filled in
+## by echo2 rather than outlined): drawn mostly by marking lines (when the
+## picture has line families, MARKING_FAMILIES), or else small and
+## blob-like next to it (FEATURE_SHARE, FEATURE_SPREAD).
+static func is_feature(p: SlotPacker, region: Dictionary, other: Dictionary) -> bool:
+	var area: float = region["area"]
+	var n_area: float = other["area"]
+	if not p.marking_ids.is_empty():
+		var marking := 0
+		var counted := 0
+		var box: Rect2i = (other["bbox"] as Rect2i).grow(3).intersection(Rect2i(0, 0, p.map.width, p.map.height))
+		var oid: int = other["id"]
+		for y in range(box.position.y, box.end.y):
+			for x in range(box.position.x, box.end.x):
+				var i := y * p.map.width + x
+				var fam: int = p.line_families[i]
+				if fam < 0 or p.map.labels[i] >= 0:
+					continue
+				# Only line pixels right beside this neighbor.
+				var near := false
+				for o: Vector2i in [Vector2i(3, 0), Vector2i(-3, 0), Vector2i(0, 3), Vector2i(0, -3)]:
+					if p.map.label_at(x + o.x, y + o.y) == oid:
+						near = true
+						break
+				if not near:
+					continue
+				counted += 1
+				if p.marking_ids.has(fam):
+					marking += 1
+		if counted >= 8 and marking >= counted * MARKING_SHARE and n_area <= area * 0.6:
+			return true
+	var depth: float = other["max_dist"]
+	var spread := n_area / (PI * maxf(1.0, depth * depth))
+	return n_area <= area * FEATURE_SHARE and spread <= FEATURE_SPREAD
+
+
+## Chamfer (3-4) distance, in thirds of a px, from every pixel to the
+## nearest pixel whose `mask` value is `to` (1 or 0).
+static func _chamfer(mask: PackedByteArray, w: int, h: int, to_set: bool) -> PackedInt32Array:
+	const BIG := 1 << 28
+	var target := 1 if to_set else 0
+	var d := PackedInt32Array()
+	d.resize(w * h)
+	for i in w * h:
+		d[i] = 0 if mask[i] == target else BIG
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			if d[i] == 0:
+				continue
+			var best := d[i]
+			if x > 0:
+				best = mini(best, d[i - 1] + 3)
+			if y > 0:
+				best = mini(best, d[i - w] + 3)
+				if x > 0:
+					best = mini(best, d[i - w - 1] + 4)
+				if x < w - 1:
+					best = mini(best, d[i - w + 1] + 4)
+			d[i] = best
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var i := y * w + x
+			if d[i] == 0:
+				continue
+			var best := d[i]
+			if x < w - 1:
+				best = mini(best, d[i + 1] + 3)
+			if y < h - 1:
+				best = mini(best, d[i + w] + 3)
+				if x < w - 1:
+					best = mini(best, d[i + w + 1] + 4)
+				if x > 0:
+					best = mini(best, d[i + w - 1] + 4)
+			d[i] = best
+	return d
 
 
 ## Echo rows from the region's outer outline only (echo2): the rows follow

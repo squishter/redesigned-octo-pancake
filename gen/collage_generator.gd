@@ -96,6 +96,9 @@ const GEM_TYPES_MAX := 30
 const LAYOUTS := ["classic", "dense", "cluster", "fine"]
 ## Layouts that tidy their stones (see "fine" and "cluster" above).
 const TIDY_LAYOUTS := ["cluster", "fine"]
+## Tidy layouts: how often echo groups take echo2 in posed animals (see
+## SlotPacker.ECHO2_CHANCE for the rest).
+const POSED_ECHO2_CHANCE := 0.75
 ## Dense layout: the share of groups of areas and of classes of gem lines
 ## made dense (picked per seed in this range), and its most stones.
 const DENSE_SHARE_MIN := 0.67
@@ -421,6 +424,9 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		pack_options["allow_spacers"] = not cluster
 		pack_options["tight"] = true
 		pack_options["radial_size"] = false
+		# Posed animals' coats read best with rows that follow the animal.
+		if not pack_options.has("echo2_chance") and options.get("source", {}).has("animal_mesh"):
+			pack_options["echo2_chance"] = POSED_ECHO2_CHANCE
 	var styles := DesignPlan.packer_styles(plan)
 	styles.merge(options.get("styles", {}), true)
 	pack_options["styles"] = styles
