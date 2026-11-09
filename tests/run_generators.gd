@@ -35,6 +35,7 @@ func _init() -> void:
 	test_pattern_seeds()
 	test_layouts()
 	test_cluster_layout()
+	test_line_patterns()
 	test_symmetry()
 	test_gem_cuts()
 	test_board_light()
@@ -900,6 +901,61 @@ func test_cluster_layout() -> void:
 	var made := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow", "layout": "cluster"},
 			GemCatalog.default_unlocks())
 	check(made["layout"] == "cluster", "a cluster request wasn't cluster")
+
+
+## The tight packer's line patterns fill a disc and a ring with tidy rows
+## (spirals and swirls with one tone per arm), and a solitaire stays only in
+## an area its stone covers: a square keeps it, a long strip takes rows.
+func test_line_patterns() -> void:
+	print("Line patterns")
+	var w := 320
+	var c := Vector2(w, w) / 2.0
+	var mask := PackedByteArray()
+	mask.resize(w * w)
+	for y in w:
+		for x in w:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(c)
+			var on := x < 2 or y < 2 or x >= w - 2 or y >= w - 2 or absf(d - 110.0) < 1.5
+			mask[y * w + x] = 255 if on else 0
+	var map := RegionMap.build(mask, w, w, 10)
+	var unit := 6.0
+	for style: String in SlotPacker.CURVES:
+		var styles := {}
+		for r in map.regions:
+			styles[r["id"]] = style
+		var slots := SlotPacker.pack(map, {"tight": true, "styles": styles, "unit": unit, "seed": 3})
+		var per_region := {}
+		var tones := {}
+		for s in slots:
+			per_region[s["region"]] = per_region.get(s["region"], 0) + 1
+			tones[s["tone"]] = true
+		for r in map.regions:
+			check(per_region.get(r["id"], 0) >= 30, "%s: only %d stones in region %d" % [
+					style, per_region.get(r["id"], 0), r["id"]])
+			check(r["style"] == style, "%s: region %d packed as %s" % [style, r["id"], r["style"]])
+		var want := 3 if style == "swirl" else 2
+		check(tones.size() >= want, "%s: %d tones, not %d" % [style, tones.size(), want])
+		check(count_overlaps(slots, 0.5) == 0, "%s: overlapping stones" % style)
+		print("  %-7s %d stones, tones %s" % [style, slots.size(), tones.keys()])
+	# A square and a long strip, both asked for a solitaire.
+	mask.fill(0)
+	for y in w:
+		for x in w:
+			var on := x < 2 or y < 2 or x >= w - 2 or y >= w - 2
+			on = on or ((x == 40 or x == 100) and y >= 40 and y <= 100) or ((y == 40 or y == 100) and x >= 40 and x <= 100)
+			on = on or ((x == 140 or x == 300) and y >= 40 and y <= 70) or ((y == 40 or y == 70) and x >= 140 and x <= 300)
+			mask[y * w + x] = 255 if on else 0
+	map = RegionMap.build(mask, w, w, 10)
+	var styles := {}
+	for r in map.regions:
+		styles[r["id"]] = "solitaire"
+	SlotPacker.pack(map, {"tight": true, "styles": styles, "unit": unit, "seed": 3})
+	for r in map.regions:
+		var box: Rect2i = r["bbox"]
+		if box.size.x < 100 and box.size.y < 100 and absi(box.size.x - box.size.y) < 4:
+			check(r["style"] == "solitaire", "a square area took %s, not a solitaire" % r["style"])
+		elif box.size.x > 3 * box.size.y:
+			check(r["style"] == "echo", "a long strip took %s, not rows" % r["style"])
 
 
 ## Gem types with fewer than CollageGenerator.MIN_TYPE_STONES stones that

@@ -1,6 +1,6 @@
 class_name SlotPatterns
 extends RefCounted
-## Two of SlotPacker's patterns, kept apart to keep that file short: they
+## Some of SlotPacker's patterns, kept apart to keep that file short: they
 ## work on the packer's current region and free field.
 
 
@@ -98,4 +98,87 @@ static func sunburst(p: SlotPacker, region: Dictionary, r_row: float, toning: St
 				p._place("round", q, 0.0, rf, 0.0)
 		rad = at + rr + p.gap
 		ring += 1
+	p._tone = 0
+
+
+## Stones of radius r along `curve` (points about a pixel or two apart),
+## only along the stretches inside the region where a stone could sit.
+static func along_inside(p: SlotPacker, curve: PackedVector2Array, r: float, shape: String) -> void:
+	var run := PackedVector2Array()
+	for q in curve:
+		if p._free_at(q) >= r * 0.6 + p.gap:
+			run.append(q)
+		else:
+			if run.size() > 1:
+				p._along(run, false, r, shape)
+			run = PackedVector2Array()
+	if run.size() > 1:
+		p._along(run, false, r, shape)
+
+
+## A center stone, then `arms` interleaved spiral rows of stones winding out
+## from it, rows a stone and a gap apart, `spin` (1 or -1) the way they
+## wind. Each arm is a part in its own tone (0, 1, 2...), so the arms read
+## apart.
+static func spiral(p: SlotPacker, region: Dictionary, r: float, shape: String, arms: int, spin: float) -> void:
+	var peak := p._peak()
+	if peak < 0:
+		return
+	var c := p._center(peak)
+	var rc := minf(p.free[peak] - p.gap, r * 1.3)
+	if rc < p.unit * 0.3:
+		return
+	p._part += 1
+	p._place("round", c, 0.0, rc, 0.0)
+	var reach: float = Vector2(region["bbox"].size).length()
+	var pitch := arms * (2.0 * r + p.gap)
+	var rho0 := rc + p.gap + r
+	var a0: float = region["axis"]
+	for j in arms:
+		p._part += 1
+		p._tone = j % 3
+		var pts := PackedVector2Array()
+		var theta := 0.0
+		while pts.size() < 200000:
+			var rho := rho0 + pitch * theta / TAU
+			if rho > reach:
+				break
+			pts.append(c + Vector2.from_angle(a0 + TAU * j / arms + spin * theta) * rho)
+			theta += 1.5 / rho
+		along_inside(p, pts, r, shape)
+	p._tone = 0
+
+
+## Parallel wavy rows (sine waves, or zigzags) across the region along its
+## axis turned by `turn`, spaced so neighboring rows keep a gap where they
+## run steepest. Rows the same distance from the middle row are one part;
+## with `banded`, rows alternate tones.
+static func waves(p: SlotPacker, region: Dictionary, r: float, shape: String, turn: float, banded: bool,
+		zigzag: bool) -> void:
+	var c: Vector2 = region["centroid"]
+	var dir := Vector2.from_angle(region["axis"] + turn)
+	var nrm := dir.orthogonal()
+	var reach := Vector2(region["bbox"].size).length() / 2.0 + 2.0
+	var wavelength := r * (8.0 if zigzag else 10.0)
+	var amp := r * (1.3 if zigzag else 1.2)
+	var slope := (4.0 * amp / wavelength) if zigzag else (TAU * amp / wavelength)
+	var pitch := (2.0 * r + p.gap) * sqrt(1.0 + slope * slope)
+	var part0 := p._part
+	var k := 0
+	while k * pitch <= reach + amp and k < 200:
+		var ring := k
+		p._part = part0 + 1 + ring
+		p._tone = (ring % 2) if banded else 0
+		for side: float in ([0.0] if k == 0 else [1.0, -1.0]):
+			var off := pitch * k * side
+			var pts := PackedVector2Array()
+			var t := -reach
+			while t <= reach:
+				var x := t / wavelength
+				var y := amp * ((2.0 * absf(2.0 * fposmod(x, 1.0) - 1.0) - 1.0) if zigzag else sin(TAU * x))
+				pts.append(c + dir * t + nrm * (off + y))
+				t += 1.0
+			along_inside(p, pts, r, shape)
+		k += 1
+	p._part = part0 + 1 + k
 	p._tone = 0

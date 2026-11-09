@@ -33,12 +33,32 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ## stripes: straight parallel rows across the region, in alternating tones
 ## sunburst: a center stone with spokes of stones growing outward
 ## pave: the old free-form packing of mixed sizes, kept for some variety
+## Line patterns, only in tight packing (see `tight`; CURVES):
+## spiral: a center stone and two interleaved rows winding out from it, in
+##   alternating colors (the region's color and its accent)
+## swirl: the same with three rows, in three colors (and the feature color)
+## waves: parallel wavy rows across the region, in alternating colors
+## zigzag: parallel zigzag rows across the region, in alternating colors
+## taper: rows following the outline inward that shrink (or grow) row by
+##   row, in alternating colors
 ## Sparse fills, only used when asked for (see DesignPlan):
 ## scatter: an airy lattice of small stones
 ## accent: a single stone at the region's heart, as big as fits
 ## outline: only a row of small stones along the edge
 ## bare: no stones
-const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave"]
+const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave",
+		"spiral", "swirl", "waves", "zigzag", "taper"]
+## Tight packing: the line patterns, how often a roomy group takes one
+## instead of the row or lattice pattern it picked, and their weights.
+const CURVES := {"spiral": 1.0, "swirl": 1.0, "waves": 1.0, "zigzag": 0.6, "taper": 1.2}
+const CURVE_CHANCE := 0.55
+## Tight packing: a solitaire (or a lone accent stone) stays only if its
+## stone covers this share of its area: a near circle or square, or a
+## rectangle or oval with a long stone. Otherwise the area takes rows.
+const TIGHT_SOLITAIRE_COVER := 0.65
+## Tight packing: the deepest (in units) an area may be and still take a
+## chain along its centerline (spine); deeper ones take rows.
+const TIGHT_SPINE_DEPTH := 2.2
 const STYLES := PATTERNS + ["scatter", "accent", "outline", "bare"]
 ## Stone shapes for outline rows; elongated ones lie along the row.
 const ROW_SHAPES := ["round", "round", "round", "round", "hexagon", "square", "marquise", "oval", "cushion", "octagon",
@@ -80,9 +100,6 @@ const DENSE_SPACERS := 0.5
 ## The region holding a mandala's center, when at most this deep (in
 ## units), holds a single stone: the picture's focus.
 const CENTERPIECE := 3.0
-## Tight packing: the most spread out (area over its deepest circle's) a
-## region may be and still take a solitaire.
-const TIGHT_SOLITAIRE_SPREAD := 2.5
 
 var map: RegionMap
 var rng := RandomNumberGenerator.new()
@@ -110,10 +127,12 @@ var allow_spacers := true
 ## toward the rim, rows counted to the nearest number of stones (shrunk to
 ## fit) rather than spread out, and chains of stones respaced to the size
 ## each stone really gets, so stones sit as close as the gap says. Halos
-## keep their rows going in to a center stone of their own size, and only
-## compact areas take a solitaire. What a
+## keep their rows going in to a center stone of their own size, and a
+## solitaire stays only where its stone fills the area
+## (TIGHT_SOLITAIRE_COVER). What a
 ## pattern leaves open only takes stones of the pattern's own size (no
 ## smaller ones dotted into the gaps), and chains and solitaires get none.
+## Roomy groups often take line patterns (CURVES) instead of rows.
 var tight := false
 ## The gap between stones of groups that aren't dense.
 var _base_gap := 2.0
@@ -270,6 +289,13 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 			style = _pick(weights, g_rng)
 		if style == "pave" and tight:
 			style = "echo"
+		# Tight packing trades some rows and lattices for line patterns, from
+		# a stream of their own.
+		if tight and max_d >= u * 2.4 and style in ["echo", "halo", "honeycomb", "stripes", "rosette", "sunburst"]:
+			var c_rng := RandomNumberGenerator.new()
+			c_rng.seed = hash([seed_value, group, "curves"])
+			if c_rng.randf() < CURVE_CHANCE:
+				style = _pick(CURVES, c_rng)
 	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)] * (DENSE_SIZE if dense else 1.0)
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
@@ -305,6 +331,10 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		# Long center stones: marquise and oval, or the straight-sided lozenge and kite.
 		"center_long": ["marquise", "oval"] if g_rng.randf() < 0.7 else ["lozenge", "kite"],
 		"petal_shape": PETAL_SHAPES[g_rng.randi_range(0, PETAL_SHAPES.size() - 1)],
+		# Line patterns' choices, from their own stream: which way spirals
+		# wind, and whether tapered rows shrink inward or grow.
+		"spin": 1.0 if hash([seed_value, group, "spin"]) & 1 == 0 else -1.0,
+		"taper_grow": hash([seed_value, group, "taper"]) & 3 == 0,
 	}
 
 
@@ -429,15 +459,26 @@ static func upright(shape: String) -> float:
 
 func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	var style: String = design["style"]
-	# Without small stones in its corners, a solitaire only suits an area its
-	# one stone nearly fills (a group's design comes from one of its areas,
-	# which may be much smaller).
-	if style == "solitaire" and tight:
-		var max_d: float = region["max_dist"]
-		if region["area"] / (PI * max_d * max_d) > TIGHT_SOLITAIRE_SPREAD:
-			style = "echo"
+	# Tight packing: one stone alone only where it fills its area (checked
+	# per area: a group's design comes from one of its areas, which may be
+	# another shape), else rows.
+	if tight and style in ["solitaire", "accent"]:
+		var first := slots.size()
+		_center_stone(region, INF, design)
+		if _covers(region, first):
+			region["style"] = style
+			return
+		slots.resize(first)
+		_reset_free(region)
+		style = "echo"
+	# A chain along the centerline only suits a band about one stone wide: in
+	# a wide area its branches scatter stones about.
+	if tight and style == "spine" and region["max_dist"] > unit * TIGHT_SPINE_DEPTH:
+		style = "echo"
 	region["style"] = style
 	var u: float = unit * design.get("scale", 1.0)
+	if tight and style in ["solitaire", "accent"]:
+		return
 	var r_row: float = design["row_r"]
 	var toning: String = design["toning"]
 
@@ -521,9 +562,30 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"pave":
 			_fill_rest([u * 1.2, u * 0.85, u * 0.6, u * 0.45])
+		"taper":
+			var grow: bool = design["taper_grow"]
+			var radii := _graded_rows(region, u * (0.55 if grow else 1.5), 1.3 if grow else 0.75, false)
+			var shapes := []
+			var tones := []
+			for k in radii.size():
+				shapes.append(design["row_shape"])
+				tones.append(k % 2)
+			_rows(region, radii, shapes, tones)
+			_tone = 0
+			_fill_rest([radii[-1] if not radii.is_empty() else r_row])
+		"spiral", "swirl":
+			SlotPatterns.spiral(self, region, r_row, design["row_shape"], 2 if style == "spiral" else 3, design["spin"])
+			_fill_rest([r_row * 0.8])
+		"waves", "zigzag":
+			SlotPatterns.waves(self, region, r_row, design["row_shape"], design["lattice_turn"] * 1.5, true,
+					style == "zigzag")
+			_fill_rest([r_row * 0.8])
 		"spine":
 			_tone = 1 if toning == "heart" else 0
-			_spine(region, u * 2.0, u * MIN_STONE)
+			# Tight chains keep near one size: as big as most of the band
+			# allows rather than swelling into every bulge.
+			var r_max: float = minf(u * 2.0, region["max_dist"] * 0.7) if tight else u * 2.0
+			_spine(region, r_max, u * MIN_STONE)
 		"solitaire":
 			_tone = 1 if toning == "heart" else 0
 			_center_stone(region, INF, design)
@@ -701,6 +763,17 @@ func _center_stone(region: Dictionary, cap: float, design: Dictionary) -> void:
 	if el > 1.5 and _try_capsule(long[0] if el > 2.2 else long[1], c, region["axis"], r * 0.95):
 		return
 	_place(design["center_shape"], c, region["axis"], r, 0.0)
+
+
+## Whether the stones from `first` on (one center stone) cover at least
+## TIGHT_SOLITAIRE_COVER of the region, each taken as its capsule.
+func _covers(region: Dictionary, first: int) -> bool:
+	var covered := 0.0
+	for s in slots.slice(first):
+		var r: float = s["width"] / 2.0
+		var h: float = maxf(0.0, s["size"] / 2.0 - r)
+		covered += PI * r * r + 4.0 * r * h
+	return covered >= TIGHT_SOLITAIRE_COVER * float(region["area"])
 
 
 ## A center stone ringed by outward petals (teardrops, kites or marquises).
