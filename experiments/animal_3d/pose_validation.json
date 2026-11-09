@@ -1,0 +1,642 @@
+{
+  "reviewed": "2026-11-08",
+  "runtime": "Godot 4.7.2",
+  "pose_version": 2,
+  "models": 37,
+  "preset_cases": 274,
+  "runtime_results": {
+    "failures": 0,
+    "models": [
+      {
+        "max_contact_error": 0.0010141811799258,
+        "max_leg_delta": 17.9543082428955,
+        "model": "farm_cow",
+        "presets": 5,
+        "varying_presets": 5
+      },
+      {
+        "max_contact_error": 0.000989409629255533,
+        "max_leg_delta": 17.7328991232131,
+        "model": "farm_horse",
+        "presets": 6,
+        "varying_presets": 6
+      },
+      {
+        "max_contact_error": 0.00129891105461866,
+        "max_leg_delta": 16.5398477827722,
+        "model": "farm_llama",
+        "presets": 5,
+        "varying_presets": 5
+      },
+      {
+        "max_contact_error": 0.00116984406486154,
+        "max_leg_delta": 17.6505031361607,
+        "model": "farm_pig",
+        "presets": 5,
+        "varying_presets": 5
+      },
+      {
+        "max_contact_error": 0.00101232342422009,
+        "max_leg_delta": 17.2541899473071,
+        "model": "farm_pug",
+        "presets": 10,
+        "varying_presets": 10
+      },
+      {
+        "max_contact_error": 0.00126326712779701,
+        "max_leg_delta": 11.9894434227945,
+        "model": "farm_sheep",
+        "presets": 5,
+        "varying_presets": 5
+      },
+      {
+        "max_contact_error": 0.000990708358585835,
+        "max_leg_delta": 17.8041157981415,
+        "model": "farm_zebra",
+        "presets": 6,
+        "varying_presets": 6
+      },
+      {
+        "max_contact_error": 1.17568177415706e-07,
+        "max_leg_delta": 18.3679462065788,
+        "model": "ultimate_alpaca",
+        "presets": 10,
+        "varying_presets": 10
+      },
+      {
+        "max_contact_error": 1.8685960867515e-07,
+        "max_leg_delta": 19.5570684806997,
+        "model": "ultimate_bull",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 1.8685960867515e-07,
+        "max_leg_delta": 19.5575363486578,
+        "model": "ultimate_cow",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 1.19674041343387e-07,
+        "max_leg_delta": 18.9151177836304,
+        "model": "ultimate_deer",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 1.08482090865891e-07,
+        "max_leg_delta": 19.2975451979013,
+        "model": "ultimate_donkey",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 1.49197759924391e-07,
+        "max_leg_delta": 19.7262095777586,
+        "model": "ultimate_fox",
+        "presets": 14,
+        "varying_presets": 14
+      },
+      {
+        "max_contact_error": 1.07711791486054e-07,
+        "max_leg_delta": 15.3848542563866,
+        "model": "ultimate_horse",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 9.37264061917631e-08,
+        "max_leg_delta": 15.3849054828053,
+        "model": "ultimate_horse_white",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 1.57170163106457e-07,
+        "max_leg_delta": 17.7896357971011,
+        "model": "ultimate_husky",
+        "presets": 14,
+        "varying_presets": 14
+      },
+      {
+        "max_contact_error": 1.34523730821456e-07,
+        "max_leg_delta": 17.9481252141494,
+        "model": "ultimate_shibainu",
+        "presets": 14,
+        "varying_presets": 14
+      },
+      {
+        "max_contact_error": 1.16620036294535e-07,
+        "max_leg_delta": 19.8510705584283,
+        "model": "ultimate_stag",
+        "presets": 11,
+        "varying_presets": 11
+      },
+      {
+        "max_contact_error": 1.67596667211001e-07,
+        "max_leg_delta": 16.3207780028805,
+        "model": "ultimate_wolf",
+        "presets": 14,
+        "varying_presets": 14
+      },
+      {
+        "max_contact_error": 1.30148791299689e-07,
+        "max_leg_delta": 15.3719503214971,
+        "model": "vol2_cat",
+        "presets": 7,
+        "varying_presets": 7
+      },
+      {
+        "max_contact_error": 0.000122265264508314,
+        "max_leg_delta": 16.4333719638009,
+        "model": "vol2_dog",
+        "presets": 7,
+        "varying_presets": 7
+      },
+      {
+        "max_contact_error": 7.0878485303183e-08,
+        "max_leg_delta": 14.9660816979947,
+        "model": "daydaze_elephant",
+        "presets": 6,
+        "varying_presets": 6
+      },
+      {
+        "max_contact_error": 1.84317187290617e-07,
+        "max_leg_delta": 18.4210628802067,
+        "model": "daydaze_labrador",
+        "presets": 7,
+        "varying_presets": 7
+      },
+      {
+        "max_contact_error": 1.59100864038919e-07,
+        "max_leg_delta": 18.7283274777562,
+        "model": "daydaze_lion",
+        "presets": 5,
+        "varying_presets": 5
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_anglerfish",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_bat",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_corgi",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_duck",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_hippo",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_jellyfish",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_platypus",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_red",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_rhino",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 0.0,
+        "max_leg_delta": 0.0,
+        "model": "gobkit_shark",
+        "presets": 3,
+        "varying_presets": 3
+      },
+      {
+        "max_contact_error": 1.01348323369166e-05,
+        "max_leg_delta": 17.9991450197021,
+        "model": "shepherd_shepherd",
+        "presets": 13,
+        "varying_presets": 13
+      },
+      {
+        "max_contact_error": 6.24472420440725e-08,
+        "max_leg_delta": 14.5122446559514,
+        "model": "toon_cat_toon_cat_free",
+        "presets": 6,
+        "varying_presets": 6
+      },
+      {
+        "max_contact_error": 2.96365527674425e-07,
+        "max_leg_delta": 12.722501159429,
+        "model": "tuxedo_cat_tuxedo_cat",
+        "presets": 8,
+        "varying_presets": 8
+      }
+    ]
+  },
+  "pose_camera_results": {
+    "camera_cases": 2559,
+    "distinct_poses": [
+      "rest",
+      "idle",
+      "jump",
+      "run",
+      "walk",
+      "trot",
+      "sit",
+      "lie_down",
+      "play_bow",
+      "stretch",
+      "look_back",
+      "kick",
+      "graze",
+      "alert",
+      "head_low",
+      "landing",
+      "headbutt",
+      "gallop",
+      "eat",
+      "crouch",
+      "swim",
+      "fly",
+      "drift",
+      "source"
+    ],
+    "failures": 0,
+    "gait_cases": 272,
+    "models": [
+      {
+        "model": "farm_cow",
+        "presets": 5
+      },
+      {
+        "model": "farm_horse",
+        "presets": 6
+      },
+      {
+        "model": "farm_llama",
+        "presets": 5
+      },
+      {
+        "model": "farm_pig",
+        "presets": 5
+      },
+      {
+        "model": "farm_pug",
+        "presets": 10
+      },
+      {
+        "model": "farm_sheep",
+        "presets": 5
+      },
+      {
+        "model": "farm_zebra",
+        "presets": 6
+      },
+      {
+        "model": "ultimate_alpaca",
+        "presets": 10
+      },
+      {
+        "model": "ultimate_bull",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_cow",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_deer",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_donkey",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_fox",
+        "presets": 14
+      },
+      {
+        "model": "ultimate_horse",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_horse_white",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_husky",
+        "presets": 14
+      },
+      {
+        "model": "ultimate_shibainu",
+        "presets": 14
+      },
+      {
+        "model": "ultimate_stag",
+        "presets": 11
+      },
+      {
+        "model": "ultimate_wolf",
+        "presets": 14
+      },
+      {
+        "model": "vol2_cat",
+        "presets": 7
+      },
+      {
+        "model": "vol2_dog",
+        "presets": 7
+      },
+      {
+        "model": "daydaze_elephant",
+        "presets": 6
+      },
+      {
+        "model": "daydaze_labrador",
+        "presets": 7
+      },
+      {
+        "model": "daydaze_lion",
+        "presets": 5
+      },
+      {
+        "model": "gobkit_anglerfish",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_bat",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_corgi",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_duck",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_hippo",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_jellyfish",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_platypus",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_red",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_rhino",
+        "presets": 3
+      },
+      {
+        "model": "gobkit_shark",
+        "presets": 3
+      },
+      {
+        "model": "shepherd_shepherd",
+        "presets": 13
+      },
+      {
+        "model": "toon_cat_toon_cat_free",
+        "presets": 6
+      },
+      {
+        "model": "tuxedo_cat_tuxedo_cat",
+        "presets": 8
+      }
+    ],
+    "pose_cases": 274
+  },
+  "independent_bind_results": [
+    {
+      "model": "daydaze_elephant",
+      "maximum_normalized_distance": 5.8013239407412746e-05
+    },
+    {
+      "model": "daydaze_labrador",
+      "maximum_normalized_distance": 7.833856094667078e-05
+    },
+    {
+      "model": "daydaze_lion",
+      "maximum_normalized_distance": 8.212291159054686e-05
+    },
+    {
+      "model": "farm_cow",
+      "maximum_normalized_distance": 5.3179727055379226e-05
+    },
+    {
+      "model": "farm_horse",
+      "maximum_normalized_distance": 3.0326129988646445e-05
+    },
+    {
+      "model": "farm_llama",
+      "maximum_normalized_distance": 2.7533757355896132e-05
+    },
+    {
+      "model": "farm_pig",
+      "maximum_normalized_distance": 5.4680551594105845e-05
+    },
+    {
+      "model": "farm_pug",
+      "maximum_normalized_distance": 3.63055360171889e-05
+    },
+    {
+      "model": "farm_sheep",
+      "maximum_normalized_distance": 3.4579436154009714e-05
+    },
+    {
+      "model": "farm_zebra",
+      "maximum_normalized_distance": 3.4694247209025654e-05
+    },
+    {
+      "model": "gobkit_anglerfish",
+      "maximum_normalized_distance": 1.5950825774137147e-07
+    },
+    {
+      "model": "gobkit_bat",
+      "maximum_normalized_distance": 1.3324133840417768e-07
+    },
+    {
+      "model": "gobkit_corgi",
+      "maximum_normalized_distance": 1.6492578442324356e-07
+    },
+    {
+      "model": "gobkit_duck",
+      "maximum_normalized_distance": 1.9667782092291923e-07
+    },
+    {
+      "model": "gobkit_hippo",
+      "maximum_normalized_distance": 1.5274831686223424e-07
+    },
+    {
+      "model": "gobkit_jellyfish",
+      "maximum_normalized_distance": 1.263309737802992e-07
+    },
+    {
+      "model": "gobkit_platypus",
+      "maximum_normalized_distance": 3.387366824275931e-07
+    },
+    {
+      "model": "gobkit_red",
+      "maximum_normalized_distance": 1.3514200604263392e-07
+    },
+    {
+      "model": "gobkit_rhino",
+      "maximum_normalized_distance": 1.5664566435109797e-07
+    },
+    {
+      "model": "gobkit_shark",
+      "maximum_normalized_distance": 2.0697013323135632e-07
+    },
+    {
+      "model": "shepherd_shepherd",
+      "maximum_normalized_distance": 5.1313429988660646e-05
+    },
+    {
+      "model": "toon_cat_toon_cat_free",
+      "maximum_normalized_distance": 3.947027098529843e-05
+    },
+    {
+      "model": "tuxedo_cat_tuxedo_cat",
+      "maximum_normalized_distance": 4.7795273158336966e-05
+    },
+    {
+      "model": "ultimate_alpaca",
+      "maximum_normalized_distance": 4.418912133261218e-05
+    },
+    {
+      "model": "ultimate_bull",
+      "maximum_normalized_distance": 3.758543938259198e-05
+    },
+    {
+      "model": "ultimate_cow",
+      "maximum_normalized_distance": 3.751088868338859e-05
+    },
+    {
+      "model": "ultimate_deer",
+      "maximum_normalized_distance": 4.762615058572016e-05
+    },
+    {
+      "model": "ultimate_donkey",
+      "maximum_normalized_distance": 4.72847576415887e-05
+    },
+    {
+      "model": "ultimate_fox",
+      "maximum_normalized_distance": 3.887224440268972e-05
+    },
+    {
+      "model": "ultimate_horse",
+      "maximum_normalized_distance": 5.166211017236795e-05
+    },
+    {
+      "model": "ultimate_horse_white",
+      "maximum_normalized_distance": 5.166211017236795e-05
+    },
+    {
+      "model": "ultimate_husky",
+      "maximum_normalized_distance": 5.173805945630309e-05
+    },
+    {
+      "model": "ultimate_shibainu",
+      "maximum_normalized_distance": 5.0263820163758336e-05
+    },
+    {
+      "model": "ultimate_stag",
+      "maximum_normalized_distance": 2.964724938329036e-05
+    },
+    {
+      "model": "ultimate_wolf",
+      "maximum_normalized_distance": 3.893268001841561e-05
+    },
+    {
+      "model": "vol2_cat",
+      "maximum_normalized_distance": 2.315998115277089e-05
+    },
+    {
+      "model": "vol2_dog",
+      "maximum_normalized_distance": 2.4228589024415522e-05
+    }
+  ],
+  "source_sha256": {
+    "farm_cow": "93317f8fd27623363dc590137485ac3f3d4f8a73e22407cc24d4d871a666adf5",
+    "farm_horse": "5755af6fc782f27d892399bd740008dfe3dedebb1b6fecfb291a23630dfbb59d",
+    "farm_llama": "97586ce661df79bedb243bce28764ee60bb4fb677b52c78fb46269dd87a118fa",
+    "farm_pig": "4bb9acd7c35e40af8f0758db372d8f218e017b4683567165db2ca060a829b799",
+    "farm_pug": "1763b461ef34daaaff44b1fd2ebc6015a795ae0d3725db6e4651928341a4fa3d",
+    "farm_sheep": "26b4cfee2b36681b3b04dc75c347813bfcef86832246bfbc5f3b385d4996b521",
+    "farm_zebra": "2aeaa23e4fefede778f754c953bc7009650dbf6b6c617055ae771d303516dab8",
+    "ultimate_alpaca": "1a0e7fb9c851f59e1e0e7354ab73b89822c27185ba487bcf0cccbcf2061205a3",
+    "ultimate_bull": "18d46a7b11046ca859591e2a1263ffa1f4572c596a87032f94190971daed3e4f",
+    "ultimate_cow": "6b283031c9a215aa6238543c798bf99b3e182d51bb24689eeafdea3e80f33de4",
+    "ultimate_deer": "cc87686bd67dfc381cedf6688bd315661d393c29bc82a2db9bb892d0f64fb773",
+    "ultimate_donkey": "6e9c715a4bedc3db40152beaa8850d1473c823f81fec4982b713aa3c00851a54",
+    "ultimate_fox": "cd979f3ceff5b2fc8953adea65a4d110cceae52af52cfe4cfd0ae7413caf0f1d",
+    "ultimate_horse": "6ff57851818cbf8d4920ca69a1cd40176999605f5f2f625eab181750bedd2c6d",
+    "ultimate_horse_white": "d04fbf4c81921e08b6cea9bd882a354247708877cf674d78f275be6615453cfc",
+    "ultimate_husky": "ac0c5f4ffb12435324d79b79742e69d2754c2f097e8cfab803ac981af2b3d6d4",
+    "ultimate_shibainu": "b70fc1c59a4cce9d9184bed0fabc8e80f5c075bb5c81ff747d19ac89a7833b22",
+    "ultimate_stag": "fceffc460e9424fcadd14d5a452dfd286100e2cfbd7175685188c721a99cc2f2",
+    "ultimate_wolf": "5fa3a4c79373952ab2ff4ad68be96672ec6baff2c49fb3b77ed929c4eff1774b",
+    "vol2_cat": "9f256aabc8ecd4e349ef2208accef13fc35f93cfd7645802ca750997c09a4913",
+    "vol2_dog": "71e42052104929a92ed31f99cc83fa238edae6931101249061344970f6ac8e27",
+    "daydaze_elephant": "d51b66c9d715bf3330f2ed9964469007d22bc079f28e1e4b6ecb4dcfc11597bd",
+    "daydaze_labrador": "aef45c117671eccfc6882f0b20930a3e6ee41d75d1a99d783aee1128742236cc",
+    "daydaze_lion": "f2196e8997f64e291e67e0ee8b6c2577d1241bf9db5ea32799a0c55745d9da75",
+    "gobkit_anglerfish": "8d07bd212527ec2e0ba2d42367dcf65ae91eb35538fb3b57a2bfd8e1d8ac60fa",
+    "gobkit_bat": "1a4317609094c64d3f751adb9150df628aaf7902f7440174afcb642c30e0e072",
+    "gobkit_corgi": "95cd2c4d53d70ee9dd2e1329dcb6de7d4a725301d504a4f2f00ecb34dc1a0851",
+    "gobkit_duck": "6550a5807bc83edbadec0759155b3d9242b6ce6b980213a3872b49db80dfd579",
+    "gobkit_hippo": "6a911f141482994f890911429e0863353a10fb567822e553b91a273e0fb1d5bd",
+    "gobkit_jellyfish": "b0625fa8a726c594afc47a317b997d98da97b163fe551b15e32262854c99ea46",
+    "gobkit_platypus": "9d5e67a5147dabe04c5e3f677b10aa8042ed4efe337378bccc3b7dd6338d99b6",
+    "gobkit_red": "412df0483b64f3339dfa8405c75c194effb90b72bb279bd233bfb4653d70c7a8",
+    "gobkit_rhino": "65cea4e6533e50d00efdde03de3e792f7337736d97b8f8c8f8b12c4bc0ee5017",
+    "gobkit_shark": "0fc450c99f0fd9f2e5d774ef58cd42b8d8d927bed138444254204b366595dc42",
+    "shepherd_shepherd": "ca9925e5aeb95242dd77a7474f6b54db93ad5de4beb45de290024cf6447ccd65",
+    "toon_cat_toon_cat_free": "f76291f5d37d60fc58e8006a1111a5960958545fc4d9592988682ad3a9aaef81",
+    "tuxedo_cat_tuxedo_cat": "7c6e8721df9cbd104355c303c70344d002285d0a2979867599d0ae794da35604"
+  }
+}

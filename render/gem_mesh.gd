@@ -24,7 +24,9 @@ extends RefCounted
 ## (get_outline_mesh), their facets from a picture (get_facets).
 
 ## Girdle points per shape, before rounding: a multiple of its corners.
-const GIRDLE := {"star": 40, "pentagon": 40, "triangle": 48, "trillion": 48, "hexagon": 48, "clover": 48,
+## Clover's deep pinches need more, or a rose cut's inner ring folds over
+## them and tiny stones (LOW_SHARE of these) clip its leaves.
+const GIRDLE := {"star": 40, "pentagon": 40, "triangle": 48, "trillion": 48, "hexagon": 48, "clover": 64,
 		"sunburst": 96, "butterfly": 64}
 const GIRDLE_DEFAULT := 32
 ## Girdle points come in multiples of this between corners, so rings that
