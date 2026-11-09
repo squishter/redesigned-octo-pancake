@@ -129,7 +129,8 @@ var allow_spacers := true
 ## each stone really gets, so stones sit as close as the gap says. Halos
 ## keep their rows going in to a center stone of their own size, and a
 ## solitaire stays only where its stone fills the area
-## (TIGHT_SOLITAIRE_COVER). What a
+## (TIGHT_SOLITAIRE_COVER), no tier stones break up a pattern, and a
+## rosette's petals ring its center whole or not at all. What a
 ## pattern leaves open only takes stones of the pattern's own size (no
 ## smaller ones dotted into the gaps), and chains and solitaires get none.
 ## Roomy groups often take line patterns (CURVES) instead of rows.
@@ -482,7 +483,9 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	var r_row: float = design["row_r"]
 	var toning: String = design["toning"]
 
-	if tiers and style != "bare":
+	# Tight packing has no tier stones: a few big stones first would break
+	# the rows and lattices the pattern lays around them.
+	if tiers and style != "bare" and not tight:
 		_tier_stones(region, design)
 
 	match style:
@@ -530,8 +533,17 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([r_row * 0.8, r_row * 0.6])
 		"rosette":
 			_tone = 1 if toning in ["heart", "rows"] else 0
+			var first := slots.size()
 			var rc := _rosette(region, r_row, design["petal_shape"])
 			_tone = 0
+			if rc < 0.0:
+				# No whole ring of petals fits: rows fill the area instead.
+				slots.resize(first)
+				_reset_free(region)
+				var rows := design.duplicate()
+				rows["style"] = "echo"
+				_pack_pattern(region, rows)
+				return
 			# Outline rows stop short of the rosette.
 			var depth: float = region["max_dist"] - rc
 			var n := clampi(floori(depth / (2.0 * r_row + gap)), 0, 3)
@@ -544,7 +556,12 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 				shapes.append("round" if spacer else design["row_shape"])
 				tones.append(1 if spacer else _row_tone("edge" if toning == "edge" else "solid", k))
 			_rows(region, radii, shapes, tones)
-			_fill_rest([r_row, r_row * 0.7, r_row * 0.5])
+			# Tight rosettes leave the gaps between petals and rows open
+			# rather than dotting stones into them.
+			if tight:
+				_part += 1
+			else:
+				_fill_rest([r_row, r_row * 0.7, r_row * 0.5])
 		"honeycomb":
 			if design["edge_row"] or design["spacers"]:
 				_rows(region, [r_row * 0.6], ["round"], [1 if toning != "solid" else 0])
@@ -777,7 +794,8 @@ func _covers(region: Dictionary, first: int) -> bool:
 
 
 ## A center stone ringed by outward petals (teardrops, kites or marquises).
-## Returns the ring's outer radius.
+## Returns the ring's outer radius; -1 if tight packing found no whole ring
+## of petals that fits (the center stone is placed all the same).
 func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
 	var peak := _peak()
 	if peak < 0:
@@ -794,6 +812,25 @@ func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
 	var spokes := _spokes(region, maxi(5, int(TAU * ring / (2.0 * rt + gap * 2.0))))
 	var k: int = spokes[0]
 	var offset: float = spokes[1]
+	if tight:
+		# The whole ring of petals or none: smaller petals if they don't all
+		# fit, and rows instead if even those don't.
+		for scale: float in [1.0, 0.85, 0.7]:
+			var pr := rt * scale
+			var h: float = pr * (float(ASPECT.get(petal, 1.0)) - 1.0)
+			var at: float = rc + gap + pr + h
+			var all_fit := true
+			for j in k:
+				var a := offset + TAU * j / k
+				if not _fits(c + Vector2.from_angle(a) * at, Vector2.from_angle(a), h, pr):
+					all_fit = false
+					break
+			if all_fit:
+				for j in k:
+					var a := offset + TAU * j / k
+					_place(petal, c + Vector2.from_angle(a) * at, a, pr, h)
+				return at + pr + h + gap
+		return -1.0
 	for j in k:
 		var a := offset + TAU * j / k
 		var p := c + Vector2.from_angle(a) * ring
