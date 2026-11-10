@@ -18,17 +18,27 @@ const BOARD_SIZES := {
 ## glyphs like ★ ◆ can replace this list later.
 const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 
-## Round drills leave the paper showing in each cell's corners: a round drill
-## 98% of its cell across (GemBoard3D.KIT_DRILL) covers pi / 4 x 0.98^2 of it,
-## so about a quarter of the picture is paper. From a little way off the eye
-## mixes the two, so a kit's colors wash out toward the paper. Kits for round
-## drills pick each cell's gem by this mix (`seen_color`), not the gem's own
-## color. Square drills cover 96% and are matched as they are.
-const ROUND_COVER := PI / 4.0 * 0.98 * 0.98
-## The paper as it shows between drills, in linear light: paper_color in
-## gem_light.gdshaderinc, lit at about 0.9 (paper.gdshader's key light and
-## grain, a little less for the stones' shadows).
-const PAPER_LINEAR := Color(0.86 * 0.9, 0.84 * 0.9, 0.8 * 0.9)
+## A drill doesn't look like its gem's own color on the board: the shader
+## lights its facets, and the paper and the stones' shadows show between
+## drills (a quarter of the cell around a round drill). From a little way off
+## the eye mixes them, so kits match pictures against how each gem looks as
+## a drill (`seen_color`), measured on the board (KitSeenColors, made by
+## tools/calibrate_kit_colors.gd).
+##
+## Colors that aren't measured gems (a photo's own colors) are predicted in
+## two steps: a straight-line fit (in linear light) from the plain gems'
+## own colors to their seen colors, then what the fit still misses at the
+## SEEN_NEIGHBORS measured gems nearest the color, weighted by nearness
+## (about 1.4 Lab units off for round drills, 3 for square, measured by
+## leaving each gem out).
+const SEEN_NEIGHBORS := 6
+## Steps of compensated_color's search.
+const COMPENSATE_STEPS := 12
+
+## Per drill kind: {fit: the straight-line fit (3 rows of 4), flat: the
+## plain gems' own colors (Lab), miss: their seen colors less the fit's
+## (Lab)}. Built on first use.
+static var _seen_model := {}
 
 
 ## Builds a kit pattern dictionary (see KitPattern for the format).
@@ -49,6 +59,10 @@ const PAPER_LINEAR := Color(0.86 * 0.9, 0.84 * 0.9, 0.8 * 0.9)
 ##           carries on to its neighbors (Floyd-Steinberg in Lab, back and
 ##           forth), so two gems side by side read as the color between
 ##           them                                                      (default 0)
+##   fit_light: map the picture's lightness, black to white, onto the range
+##              the drills can look on the board (fit_light), so dark parts
+##              keep their detail instead of all becoming the darkest drill
+##                                                                  (default true)
 static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var size_opt: Variant = options.get("size", "small")
 	var board: Vector2i = size_opt if size_opt is Vector2i else BOARD_SIZES.get(size_opt, BOARD_SIZES["small"])
@@ -68,6 +82,13 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 		for x in board.x:
 			pixels[y * board.x + x] = img.get_pixel(x, y)
 	var drill: String = options.get("drill", "round")
+	if options.get("fit_light", true):
+		# The drills she'd use: her gems, or for the picture's own colors any
+		# color a drill can be (the measured gems span it).
+		var drills := gems
+		if options.get("direct", false) and options.get("exact", false):
+			drills = measured_gems()
+		pixels = fit_light(pixels, light_range(seen_labs(drills, drill)))
 	if options.get("direct", false):
 		var palette := gems
 		if options.get("exact", false):
@@ -80,7 +101,7 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 
 	# Palette entries are the snapped gem colors; clusters that land on the
 	# same gem merge. Each cluster goes to the gem that looks most like it on
-	# the board (with the paper around round drills).
+	# the board.
 	var entries := []  # {color: Color, gem_id}
 	var cluster_to_entry := PackedInt32Array()
 	cluster_to_entry.resize(centers.size())
@@ -105,43 +126,190 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	return _build_pattern(cells, entries, board, drill)
 
 
-## How much of a cell a drill of this kind covers.
-static func drill_cover(drill: String) -> float:
-	return ROUND_COVER if drill == "round" else 1.0
+## The measured seen colors for this drill kind (KitSeenColors), by gem id.
+static func seen_table(drill: String) -> Dictionary:
+	return KitSeenColors.ROUND if drill == "round" else KitSeenColors.SQUARE
 
 
-## How a drill of color `gem` looks on the board from a little way off: mixed
-## (in linear light) with the paper around it. Square drills look as they are.
-static func seen_color(gem: Color, drill: String) -> Color:
-	var cover := drill_cover(drill)
-	if cover >= 1.0:
-		return gem
-	var lin := gem.srgb_to_linear()
-	return Color(
-			lerpf(PAPER_LINEAR.r, lin.r, cover),
-			lerpf(PAPER_LINEAR.g, lin.g, cover),
-			lerpf(PAPER_LINEAR.b, lin.b, cover)).linear_to_srgb()
+## How a drill of color `gem` (gem id `id`, when it's one) looks on the board
+## from a little way off: its measured color when it's a measured gem, else
+## predicted from the measured gems nearest it.
+static func seen_color(gem: Color, drill: String, id: Variant = null) -> Color:
+	var table := seen_table(drill)
+	if id != null and table.has(id):
+		return table[id]
+	return LabColor.to_color(_predict_seen(LabColor.from_color(gem), drill))
 
 
-## The drill color that looks like `want` once mixed with the paper around
-## it (the inverse of seen_color), as near as a drill can get: colors paler
-## than the paper mix allows stay as pale as a drill can be.
+## The seen color (Lab) of a drill of Lab color `lab`: the fit's, corrected
+## by what the fit misses at its nearest measured gems.
+static func _predict_seen(lab: Vector3, drill: String) -> Vector3:
+	var model := _model(drill)
+	var flat: PackedVector3Array = model["flat"]
+	var miss: PackedVector3Array = model["miss"]
+	var near := []  # [distance, index], the nearest SEEN_NEIGHBORS
+	for i in flat.size():
+		var d := lab.distance_to(flat[i])
+		if near.size() < SEEN_NEIGHBORS or d < near[-1][0]:
+			near.append([d, i])
+			near.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+			if near.size() > SEEN_NEIGHBORS:
+				near.pop_back()
+	var sum := Vector3.ZERO
+	var weights := 0.0
+	for n: Array in near:
+		var w := 1.0 / (float(n[0]) + 1.0)
+		sum += miss[n[1]] * w
+		weights += w
+	return LabColor.from_color(_apply_fit(model["fit"], LabColor.to_color(lab))) + sum / weights
+
+
+static func _model(drill: String) -> Dictionary:
+	var kind := "round" if drill == "round" else "square"
+	if not _seen_model.has(kind):
+		var table := seen_table(kind)
+		var ids := []
+		for id: String in KitSeenColors.PLAIN:
+			if table.has(id):
+				ids.append(id)
+		var fit := _fit_linear(ids.map(func(id: String) -> Color: return KitSeenColors.PLAIN[id]),
+				ids.map(func(id: String) -> Color: return table[id]))
+		var flat := PackedVector3Array()
+		var miss := PackedVector3Array()
+		for id: String in ids:
+			var own: Color = KitSeenColors.PLAIN[id]
+			flat.append(LabColor.from_color(own))
+			miss.append(LabColor.from_color(table[id]) - LabColor.from_color(_apply_fit(fit, own)))
+		_seen_model[kind] = {"fit": fit, "flat": flat, "miss": miss}
+	return _seen_model[kind]
+
+
+## Least squares, in linear light: each output channel from (r, g, b, 1).
+## Returns 3 rows of 4.
+static func _fit_linear(from: Array, to: Array) -> Array:
+	var ata := []
+	var atb := []
+	for i in 4:
+		ata.append([0.0, 0.0, 0.0, 0.0])
+	for c in 3:
+		atb.append([0.0, 0.0, 0.0, 0.0])
+	for k in from.size():
+		var x := _linear4(from[k])
+		var y := _linear4(to[k])
+		for i in 4:
+			for j in 4:
+				ata[i][j] += x[i] * x[j]
+			for c in 3:
+				atb[c][i] += x[i] * y[c]
+	var rows := []
+	for c in 3:
+		rows.append(_solve4(ata, atb[c]))
+	return rows
+
+
+static func _linear4(c: Color) -> Array:
+	var l := c.srgb_to_linear()
+	return [l.r, l.g, l.b, 1.0]
+
+
+static func _apply_fit(fit: Array, c: Color) -> Color:
+	var x := _linear4(c)
+	var out := [0.0, 0.0, 0.0]
+	for ch in 3:
+		for i in 4:
+			out[ch] += fit[ch][i] * x[i]
+	return Color(clampf(out[0], 0.0, 1.0), clampf(out[1], 0.0, 1.0), clampf(out[2], 0.0, 1.0)).linear_to_srgb()
+
+
+## Solves a 4x4 system (Gaussian elimination with pivoting).
+static func _solve4(a_in: Array, b_in: Array) -> Array:
+	var a := a_in.duplicate(true)
+	var b := b_in.duplicate()
+	for i in 4:
+		var p := i
+		for r in range(i + 1, 4):
+			if absf(a[r][i]) > absf(a[p][i]):
+				p = r
+		var row: Array = a[i]
+		a[i] = a[p]
+		a[p] = row
+		var v: float = b[i]
+		b[i] = b[p]
+		b[p] = v
+		for r in range(i + 1, 4):
+			var f: float = a[r][i] / a[i][i]
+			for c in range(i, 4):
+				a[r][c] -= f * a[i][c]
+			b[r] -= f * b[i]
+	var x := [0.0, 0.0, 0.0, 0.0]
+	for i in range(3, -1, -1):
+		var s: float = b[i]
+		for c in range(i + 1, 4):
+			s -= a[i][c] * x[c]
+		x[i] = s / a[i][i]
+	return x
+
+
+## The drill color that looks like `want` on the board (the inverse of
+## seen_color), as near as a drill can get: a search that moves the drill's
+## color by what its look still misses. Board drills can't look as pale or
+## as dark as some colors, so those come as near as the gamut allows.
 static func compensated_color(want: Color, drill: String) -> Color:
-	var cover := drill_cover(drill)
-	if cover >= 1.0:
-		return want
-	var lin := want.srgb_to_linear()
-	return Color(
-			clampf((lin.r - PAPER_LINEAR.r * (1.0 - cover)) / cover, 0.0, 1.0),
-			clampf((lin.g - PAPER_LINEAR.g * (1.0 - cover)) / cover, 0.0, 1.0),
-			clampf((lin.b - PAPER_LINEAR.b * (1.0 - cover)) / cover, 0.0, 1.0)).linear_to_srgb()
+	var target := LabColor.from_color(want)
+	var lab := target
+	var best := want
+	var best_d := INF
+	for _step in COMPENSATE_STEPS:
+		var c := LabColor.to_color(lab)
+		lab = LabColor.from_color(c)  # back inside the colors a drill can be
+		var miss := target - _predict_seen(lab, drill)
+		if miss.length() < best_d:
+			best_d = miss.length()
+			best = c
+		lab += miss
+	return best
+
+
+## Drills look far less dark and less bright on the board than their own
+## colors (a black round drill, with the paper and its glints, looks a mid
+## gray), so a picture can't keep its true lightness: where it is darker
+## than any drill looks, every cell would get the darkest drill and its
+## detail would be lost. Instead its lightness (Lab L, black to white) is
+## mapped evenly onto `range` (light_range), keeping its colors' hues and
+## strength, so the picture's lights and darks stay in order.
+static func fit_light(pixels: PackedColorArray, range: Vector2) -> PackedColorArray:
+	var out := PackedColorArray()
+	out.resize(pixels.size())
+	var scale := (range.y - range.x) / 100.0
+	for i in pixels.size():
+		var lab := LabColor.from_color(pixels[i])
+		out[i] = LabColor.to_color(Vector3(range.x + lab.x * scale, lab.y, lab.z))
+	return out
+
+
+## The darkest and lightest (Lab L) of these seen colors.
+static func light_range(seen: PackedVector3Array) -> Vector2:
+	var lo := INF
+	var hi := -INF
+	for c in seen:
+		lo = minf(lo, c.x)
+		hi = maxf(hi, c.x)
+	return Vector2(lo, hi)
+
+
+## The measured plain gems as {id, color}: the colors drills can be.
+static func measured_gems() -> Array:
+	var out := []
+	for id: String in KitSeenColors.PLAIN:
+		out.append({"id": id, "color": KitSeenColors.PLAIN[id]})
+	return out
 
 
 ## The gems' colors as they look on the board as drills of this kind, in Lab.
 static func seen_labs(gems: Array, drill: String) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	for g in gems:
-		out.append(LabColor.from_color(seen_color(g["color"], drill)))
+		out.append(LabColor.from_color(seen_color(g["color"], drill, g.get("id"))))
 	return out
 
 
@@ -150,12 +318,12 @@ static func seen_labs(gems: Array, drill: String) -> PackedVector3Array:
 const MAX_CARRY := 28.0
 
 
-## Each cell to the gem nearest its color (Lab) as seen on the board (round
-## drills mixed with the paper around them, see seen_color), with `dither`
+## Each cell to the gem nearest its color (Lab) as seen on the board (see
+## seen_color), with `dither`
 ## of the leftover color passed on to the cells after it (Floyd-Steinberg,
 ## rows back and forth). Returns {cells, entries}.
 static func map_direct(pixels: PackedColorArray, w: int, h: int, gems: Array, dither: float,
-		drill: String = "square") -> Dictionary:
+		drill: String = "round") -> Dictionary:
 	var gem_lab := seen_labs(gems, drill)
 	var lab := PackedVector3Array()
 	lab.resize(pixels.size())
@@ -202,10 +370,9 @@ static func _carry(lab: PackedVector3Array, w: int, h: int, x: int, y: int, err:
 
 
 ## The picture's own `n` colors (k-means in Lab), as a palette of
-## {id: null, color}. For round drills each color is the drill that looks
-## like it with the paper around it (compensated_color): deeper and richer,
-## so the finished kit isn't washed out.
-static func own_colors(pixels: PackedColorArray, n: int, seed_value: int, drill: String = "square") -> Array:
+## {id: null, color}. Each color is the drill that looks like it on the
+## board (compensated_color), so the finished kit looks like the picture.
+static func own_colors(pixels: PackedColorArray, n: int, seed_value: int, drill: String = "round") -> Array:
 	var centers: PackedVector3Array = ColorQuantizer.quantize(pixels, n, seed_value)["centers"]
 	var out := []
 	for c in centers:
