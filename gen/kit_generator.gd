@@ -18,6 +18,11 @@ const BOARD_SIZES := {
 ## glyphs like ★ ◆ can replace this list later.
 const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 
+## Drills on the board look a little paler than their gems' own colors (the
+## paper shows between them), so pictures are made this much more colorful
+## (Lab chroma) before they are matched to gems.
+const SATURATION := 1.12
+
 
 ## Builds a kit pattern dictionary (see KitPattern for the format).
 ##
@@ -37,6 +42,8 @@ const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 ##           carries on to its neighbors (Floyd-Steinberg in Lab, back and
 ##           forth), so two gems side by side read as the color between
 ##           them                                                      (default 0)
+##   saturation: how much more colorful (Lab chroma) the picture is made
+##               before matching                          (default SATURATION)
 static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var size_opt: Variant = options.get("size", "small")
 	var board: Vector2i = size_opt if size_opt is Vector2i else BOARD_SIZES.get(size_opt, BOARD_SIZES["small"])
@@ -55,6 +62,7 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	for y in board.y:
 		for x in board.x:
 			pixels[y * board.x + x] = img.get_pixel(x, y)
+	pixels = saturate(pixels, options.get("saturation", SATURATION))
 	if options.get("direct", false):
 		var palette := gems
 		if options.get("exact", false):
@@ -91,6 +99,18 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 			cells = clean_isolated(cells, board.x, board.y)
 
 	return _build_pattern(cells, entries, board, options.get("drill", "round"))
+
+
+## The colors with their Lab chroma scaled by `amount` (1 leaves them).
+static func saturate(pixels: PackedColorArray, amount: float) -> PackedColorArray:
+	if is_equal_approx(amount, 1.0):
+		return pixels
+	var out := PackedColorArray()
+	out.resize(pixels.size())
+	for i in pixels.size():
+		var lab := LabColor.from_color(pixels[i])
+		out[i] = LabColor.to_color(Vector3(lab.x, lab.y * amount, lab.z * amount))
+	return out
 
 
 ## Most a cell's carried-over color may be off (Lab units), so a run of

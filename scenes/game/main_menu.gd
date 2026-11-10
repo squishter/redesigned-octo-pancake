@@ -22,6 +22,8 @@ signal collection_requested
 signal reload_requested
 
 const GameTheme := preload("res://scenes/game/game_theme.gd")
+## Where the last new puzzle's settings are kept (profile settings).
+const LAST_NEW := "last_new_puzzle"
 const UI := preload("res://scenes/game/ui_widgets.gd")
 const SettingsDialog := preload("res://scenes/game/settings_dialog.gd")
 const DailyGift := preload("res://scenes/game/daily_gift.gd")
@@ -63,6 +65,8 @@ var _take_photo_button: Button
 var _new_title: Label
 var _subject: OptionButton
 var _kit_size: OptionButton
+## Collages' size (PuzzleMaker.COLLAGE_SIZES): medium or large.
+var _collage_size: OptionButton
 var _kit_colors: OptionButton
 var _photo_dialog: FileDialog
 var _camera: CameraCapture
@@ -181,6 +185,11 @@ func _ready() -> void:
 	form.add_child(UI.label("02  ·  MAKE IT YOURS", 27, GameTheme.MINT))
 	_source = _options(form, "Picture")
 	_source.item_selected.connect(func(_i: int) -> void: _refresh_new())
+	_collage_size = _options(form, "Puzzle size")
+	for size: String in PuzzleMaker.COLLAGE_SIZES:
+		_collage_size.add_item(PuzzleMaker.COLLAGE_SIZE_NAMES[size])
+		_collage_size.set_item_metadata(_collage_size.item_count - 1, size)
+	_collage_size.select(0)
 	var story_row := VBoxContainer.new()
 	story_row.add_theme_constant_override("separation", 12)
 	form.add_child(story_row)
@@ -338,10 +347,20 @@ func _open_new(recolor: Dictionary) -> void:
 	_direct_recolor = false
 	_saved_recolor = {}
 	_recolor = recolor
-	_fill_themes()
+	# A new puzzle starts from the settings of the last one she made.
+	var last: Dictionary = profile["settings"].get(LAST_NEW, {}) if recolor.is_empty() else {}
+	_fill_themes(str(last.get("theme", "")))
 	if not recolor.is_empty():
 		_kind.select(1 if GemCatalog.PUZZLES.get(recolor["type"], {}).get("kit", false) else 0)
+	elif not last.is_empty():
+		_kind.select(1 if last.get("kind", "") == "kit" else 0)
+		_select_meta(_collage_size, last.get("size"))
+		_select_meta(_kit_size, last.get("kit_size"))
+		_select_meta(_subject, last.get("subject"))
+		_select_meta(_kit_colors, last.get("kit_colors"))
 	_fill_sources()
+	if recolor.is_empty() and not last.is_empty():
+		_select_meta(_source, last.get("source"))
 	if not recolor.is_empty():
 		var picture: String = (GemCatalog.kit_picture(recolor) if _is_kit() else recolor["type"])
 		for i in _source.item_count:
@@ -352,6 +371,34 @@ func _open_new(recolor: Dictionary) -> void:
 	_new_title.text = "Recolor this picture" if not recolor.is_empty() else "A new puzzle"
 	_refresh_new()
 	_new_panel.open()
+
+
+## Selects the item of `options` whose metadata is `value`, if there is one.
+func _select_meta(options: OptionButton, value: Variant) -> void:
+	for i in options.item_count:
+		if value != null and options.get_item_metadata(i) == value:
+			options.select(i)
+
+
+## Remembers this new puzzle's settings (kind, picture, size, color story,
+## photo choices) as the next one's defaults.
+func _remember_new() -> void:
+	profile["settings"][LAST_NEW] = {
+		"kind": "kit" if _is_kit() else "collage",
+		"source": _source.get_item_metadata(maxi(_source.selected, 0)),
+		"size": _collage_size.get_item_metadata(maxi(_collage_size.selected, 0)),
+		"kit_size": _kit_size.get_item_metadata(maxi(_kit_size.selected, 0)),
+		"subject": _subject.get_item_metadata(maxi(_subject.selected, 0)),
+		"kit_colors": _kit_colors.get_item_metadata(maxi(_kit_colors.selected, 0)),
+		"theme": _selected_theme(),
+	}
+	SaveStore.save_profile(profile)
+
+
+## The color story to make with: the chosen one, or (Random) one drawn now.
+func _resolved_theme() -> String:
+	var id := _selected_theme()
+	return _story_picker.random_story() if id == ColorStoryPicker.RANDOM else id
 
 
 ## The color stories she can pick: her own first, then the unlocked ones
@@ -395,7 +442,7 @@ func _on_story_chosen(_theme_id: String) -> void:
 	if not _direct_recolor:
 		return
 	_direct_recolor = false
-	var theme_id := _selected_theme()
+	var theme_id := _resolved_theme()
 	_request = PuzzleMaker.new_request(_recolor["type"], theme_id)
 	for key: String in ["seed", "pattern_seed", "kit_size", "layout", "picture"]:
 		if _recolor.has(key):
@@ -452,6 +499,7 @@ func _refresh_new() -> void:
 	_show_row(_subject, photo and not kit)
 	_show_row(_kit_colors, photo and kit)
 	_show_row(_kit_size, kit and not recoloring)
+	_show_row(_collage_size, not kit and not recoloring)
 	_start.visible = not photo
 	_choose_photo.visible = photo
 	_take_photo_button.visible = photo
@@ -477,6 +525,13 @@ func _update_theme_selection() -> void:
 		_theme.icon = GameTheme.icon("palette")
 		_theme.tooltip_text = "Create a story with your gem colors."
 		_start.disabled = true
+		return
+	if id == ColorStoryPicker.RANDOM:
+		_theme.text = "Random  ›"
+		_theme.icon = GameTheme.icon("palette")
+		_theme.tooltip_text = "A color story picked for you when the puzzle is made."
+		_start.disabled = false
+		_new_panel.contain_focus.call_deferred()
 		return
 	var title: String = (CustomThemes.find(profile, id).get("name", "")
 		if CustomThemes.is_custom(id) else GemCatalog.theme_name(id))
@@ -505,9 +560,12 @@ func _start_making() -> void:
 	if _task_id >= 0 or _source.selected < 0 or _selected_theme() == "" or _is_photo():
 		return
 	var type_id: String = _source.get_item_metadata(_source.selected)
-	var theme_id := _selected_theme()
+	if _recolor.is_empty():
+		_remember_new()
+	var theme_id := _resolved_theme()
 	# A kit's source is the collage picture it's made from.
-	_request = PuzzleMaker.new_request("kit" if _is_kit() else type_id, theme_id)
+	_request = PuzzleMaker.new_request("kit" if _is_kit() else type_id, theme_id,
+			"" if _is_kit() else str(_collage_size.get_item_metadata(maxi(_collage_size.selected, 0))))
 	if _is_kit():
 		_request["picture"] = type_id
 	if CustomThemes.is_custom(theme_id):
@@ -563,7 +621,9 @@ func _start_photo(photo: Image, kind: String) -> void:
 	if longest > PuzzleMaker.PHOTO_MAX:
 		var k := float(PuzzleMaker.PHOTO_MAX) / longest
 		photo.resize(maxi(1, int(photo.get_width() * k)), maxi(1, int(photo.get_height() * k)), Image.INTERPOLATE_LANCZOS)
-	_request = PuzzleMaker.new_request(kind, "")
+	_remember_new()
+	_request = PuzzleMaker.new_request(kind, "",
+			"" if _is_kit() else str(_collage_size.get_item_metadata(maxi(_collage_size.selected, 0))))
 	_request["photo"] = photo
 	_request["subject"] = _subject.get_item_metadata(maxi(_subject.selected, 0))
 	_request["kit_colors"] = _kit_colors.get_item_metadata(maxi(_kit_colors.selected, 0))

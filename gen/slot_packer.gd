@@ -33,12 +33,42 @@ const ASPECT := {"oval": 1.35, "teardrop": 1.5, "marquise": 2.0, "baguette": 2.4
 ## stripes: straight parallel rows across the region, in alternating tones
 ## sunburst: a center stone with spokes of stones growing outward
 ## pave: the old free-form packing of mixed sizes, kept for some variety
+## Line patterns, only in tight packing (see `tight`; CURVES):
+## spiral: a center stone and two interleaved rows winding out from it, in
+##   alternating colors (the region's color and its accent)
+## swirl: the same with three rows, in three colors (and the feature color)
+## waves: parallel wavy rows across the region, in alternating colors
+## zigzag: parallel zigzag rows across the region, in alternating colors
+## taper: rows following the outline inward that shrink (or grow) row by
+##   row, in alternating colors
+## echo2: echo rows that follow only the region's outer outline, as if its
+##   holes (the areas it surrounds) were filled: rows stop where a hole cuts
+##   them and go on past it rather than bending around it. Neighbors that
+##   are features of the region (SlotPatterns.is_feature: bounded by marking
+##   lines like a coat's spots, or small blobs) count as holes too, even
+##   where they touch its edge. Tight packing gives it to about half the
+##   groups that pick echo (echo2_chance); in a region without holes it
+##   lays the same rows as echo.
 ## Sparse fills, only used when asked for (see DesignPlan):
 ## scatter: an airy lattice of small stones
 ## accent: a single stone at the region's heart, as big as fits
 ## outline: only a row of small stones along the edge
 ## bare: no stones
-const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave"]
+const PATTERNS := ["echo", "halo", "rosette", "honeycomb", "spine", "solitaire", "stripes", "sunburst", "pave",
+		"spiral", "swirl", "waves", "zigzag", "taper", "echo2"]
+## Tight packing: how often a group that picks echo takes echo2 instead.
+const ECHO2_CHANCE := 0.5
+## Tight packing: the line patterns, how often a roomy group takes one
+## instead of the row or lattice pattern it picked, and their weights.
+const CURVES := {"spiral": 1.0, "swirl": 1.0, "waves": 1.0, "zigzag": 0.6, "taper": 1.2}
+const CURVE_CHANCE := 0.55
+## Tight packing: a solitaire (or a lone accent stone) stays only if its
+## stone covers this share of its area: a near circle or square, or a
+## rectangle or oval with a long stone. Otherwise the area takes rows.
+const TIGHT_SOLITAIRE_COVER := 0.65
+## Tight packing: the deepest (in units) an area may be and still take a
+## chain along its centerline (spine); deeper ones take rows.
+const TIGHT_SPINE_DEPTH := 2.2
 const STYLES := PATTERNS + ["scatter", "accent", "outline", "bare"]
 ## Stone shapes for outline rows; elongated ones lie along the row.
 const ROW_SHAPES := ["round", "round", "round", "round", "hexagon", "square", "marquise", "oval", "cushion", "octagon",
@@ -100,6 +130,31 @@ var spacers := false
 ## Symmetry groups packed dense: smaller stones, closer together, more often
 ## with spacer rows (see DENSE_GAP).
 var dense_groups := {}
+## Groups may get spacer rows (off in the cluster layout, where they're filler).
+var allow_spacers := true
+## Tight packing (the cluster layout): no pave (its free-form stones sit
+## loose; those groups take echo rows instead), no lattices graded smaller
+## toward the rim, rows counted to the nearest number of stones (shrunk to
+## fit) rather than spread out, and chains of stones respaced to the size
+## each stone really gets, so stones sit as close as the gap says. Halos
+## keep their rows going in to a center stone of their own size, and a
+## solitaire stays only where its stone fills the area
+## (TIGHT_SOLITAIRE_COVER), no tier stones break up a pattern, and a
+## rosette's petals ring its center whole or not at all. What a
+## pattern leaves open only takes stones of the pattern's own size (no
+## smaller ones dotted into the gaps), and chains and solitaires get none.
+## Roomy groups often take line patterns (CURVES) instead of rows.
+var tight := false
+## Line families per pixel (-1 off them) and the ids that draw markings
+## (SlotPatterns.MARKING_FAMILIES), from the picture's motifs when it has
+## named families: echo2 fills in the areas they bound.
+var line_families := PackedInt32Array()
+var marking_ids := {}
+## Tight packing: how often a group that picks echo takes echo2 instead.
+var echo2_chance := ECHO2_CHANCE
+## echo2 fills in its region's features that touch its edge too (see
+## SlotPatterns.is_feature), not only the areas it surrounds.
+var echo2_features := true
 ## The gap between stones of groups that aren't dense.
 var _base_gap := 2.0
 ## The picture is symmetric (radial or mirror): regions that map onto
@@ -145,6 +200,13 @@ var _part := 0
 ##   spacers (bool): every row pattern gets thin rows of small stones between
 ##     its main rows (otherwise only some groups, picked per seed),
 ##   dense_groups (Dictionary group -> true): groups packed dense (see DENSE_GAP),
+##   allow_spacers (bool, default true): false keeps groups from picking spacer
+##     rows themselves (`spacers` still forces them),
+##   tight (bool, default false): see `tight`,
+##   echo2_chance (float, default ECHO2_CHANCE): see `echo2_chance`,
+##   echo2_features (bool, default true): see `echo2_features`,
+##   motifs ({"lines": a family per pixel, "names": family names}): see
+##     `line_families`,
 ##   styles (Dictionary region id -> style, to force a style or sparse fill),
 ##   symmetry ("radial" | "mirror" | "none"): the picture's; unless "none",
 ##     regions that map onto themselves get patterns as symmetric,
@@ -207,6 +269,17 @@ func _setup(region_map: RegionMap, options: Dictionary) -> void:
 	gap = options.get("gap", unit * GAP)
 	_base_gap = gap
 	dense_groups = options.get("dense_groups", {})
+	allow_spacers = options.get("allow_spacers", true)
+	tight = options.get("tight", false)
+	echo2_chance = options.get("echo2_chance", ECHO2_CHANCE)
+	echo2_features = options.get("echo2_features", true)
+	var motifs: Dictionary = options.get("motifs", {})
+	var names: PackedStringArray = motifs.get("names", PackedStringArray())
+	if not names.is_empty() and motifs.get("lines", PackedInt32Array()).size() == region_map.width * region_map.height:
+		line_families = motifs["lines"]
+		for k in names.size():
+			if names[k] in SlotPatterns.MARKING_FAMILIES:
+				marking_ids[k] = true
 	radial_size = options.get("radial_size", false)
 	tiers = options.get("tiers", false)
 	spacers = options.get("spacers", false)
@@ -248,6 +321,15 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 				weights["rosette"] = 0.12
 				weights["sunburst"] = 0.15
 			style = _pick(weights, g_rng)
+		if style == "pave" and tight:
+			style = "echo"
+		# Tight packing trades some rows and lattices for line patterns, from
+		# a stream of their own.
+		if tight and max_d >= u * 2.4 and style in ["echo", "halo", "honeycomb", "stripes", "rosette", "sunburst"]:
+			var c_rng := RandomNumberGenerator.new()
+			c_rng.seed = hash([seed_value, group, "curves"])
+			if c_rng.randf() < CURVE_CHANCE:
+				style = _pick(CURVES, c_rng)
 	var row_r: float = u * [0.65, 0.85, 1.0, 1.2, 1.4][g_rng.randi_range(0, 4)] * (DENSE_SIZE if dense else 1.0)
 	# Shallow regions take smaller rows so at least two fit across.
 	row_r = minf(row_r, maxf(u * 0.5, (max_d - gap * 2.0) / 2.0))
@@ -260,7 +342,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		"row_r": row_r,
 		"row_shape": shape,
 		# Every other row smaller, like alternating bead sizes.
-		"spacers": spacers or g_rng.randf() < (DENSE_SPACERS if dense else 0.25),
+		"spacers": spacers or (g_rng.randf() < (DENSE_SPACERS if dense else 0.25) and allow_spacers),
 		# Stones of the fills that go by the unit (pave, spine, solitaire's
 		# corners) shrink with the rows.
 		"scale": DENSE_SIZE if dense else 1.0,
@@ -272,7 +354,7 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		# below 1 the stones shrink toward the middle, above 1 they grow.
 		"grade": [1.0, 0.85, 0.8, 1.15, 1.25][g_rng.randi_range(0, 4)],
 		# Honeycomb stones shrink toward the edge, like a halftone.
-		"gradient": g_rng.randf() < 0.35,
+		"gradient": g_rng.randf() < 0.35 and not tight,
 		"scatter_space": u * g_rng.randf_range(1.2, 2.0),
 		# Tiers: big stones (radius) and how many medium ones go in first.
 		"large": u * g_rng.randf_range(2.2, 3.2) if tiers and max_d > u * 2.6 and g_rng.randf() < 0.5 else 0.0,
@@ -283,6 +365,13 @@ func _design(region: Dictionary, forced_style: String, group: int) -> Dictionary
 		# Long center stones: marquise and oval, or the straight-sided lozenge and kite.
 		"center_long": ["marquise", "oval"] if g_rng.randf() < 0.7 else ["lozenge", "kite"],
 		"petal_shape": PETAL_SHAPES[g_rng.randi_range(0, PETAL_SHAPES.size() - 1)],
+		# Line patterns' choices, from their own stream: which way spirals
+		# wind, and whether tapered rows shrink inward or grow.
+		"spin": 1.0 if hash([seed_value, group, "spin"]) & 1 == 0 else -1.0,
+		"taper_grow": hash([seed_value, group, "taper"]) & 3 == 0,
+		# Tight packing: whether this group's echo rows, picked or fallen
+		# back to, are echo2 (echo2_chance of groups, from a stream of its own).
+		"echo2": tight and float(hash([seed_value, group, "echo2"]) & 0xffff) / 65536.0 < echo2_chance,
 	}
 
 
@@ -407,12 +496,38 @@ static func upright(shape: String) -> float:
 
 func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 	var style: String = design["style"]
+	# Tight packing: one stone alone only where it fills its area (checked
+	# per area: a group's design comes from one of its areas, which may be
+	# another shape), else rows.
+	if tight and style in ["solitaire", "accent"]:
+		var first := slots.size()
+		_center_stone(region, INF, design)
+		if _covers(region, first):
+			region["style"] = style
+			return
+		slots.resize(first)
+		_reset_free(region)
+		style = "echo"
+	# A chain along the centerline only suits a band about one stone wide: in
+	# a wide area its branches scatter stones about.
+	if tight and style == "spine" and region["max_dist"] > unit * TIGHT_SPINE_DEPTH:
+		style = "echo"
+	# echo2's rows ignore the region's internal features.
+	if style == "echo" and design.get("echo2", false):
+		style = "echo2"
+	var outline := {}
+	if style == "echo2":
+		outline = SlotPatterns.filled_outline(self, region)
 	region["style"] = style
 	var u: float = unit * design.get("scale", 1.0)
+	if tight and style in ["solitaire", "accent"]:
+		return
 	var r_row: float = design["row_r"]
 	var toning: String = design["toning"]
 
-	if tiers and style != "bare":
+	# Tight packing has no tier stones: a few big stones first would break
+	# the rows and lattices the pattern lays around them.
+	if tiers and style != "bare" and not tight:
 		_tier_stones(region, design)
 
 	match style:
@@ -436,8 +551,28 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_rows(region, radii, shapes, tones)
 			_tone = 1 if toning == "heart" else 0
 			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
+		"echo2":
+			var field := SlotPatterns.filled_distance(outline)
+			outline["field"] = field
+			var depth := 0.0
+			for v in field:
+				depth = maxf(depth, v)
+			var radii := _graded_rows(region, r_row, design["grade"], design["spacers"], depth)
+			var shapes := []
+			var tones := []
+			for k in radii.size():
+				var spacer: bool = design["spacers"] and k % 2 == 1
+				shapes.append("round" if spacer else design["row_shape"])
+				tones.append(1 if spacer else _row_tone(toning, k / 2 if design["spacers"] else k))
+			SlotPatterns.outline_rows(self, outline, radii, shapes, tones)
+			_tone = 1 if toning == "heart" else 0
+			_fill_rest([r_row, r_row * 0.75, r_row * 0.55])
 		"halo":
 			var rows: int = design["halo_rows"]
+			# Tight halos keep their rows going inward, as echo does, so the
+			# center stone stays a stone rather than filling a big region.
+			if tight:
+				rows = maxi(1, _graded_rows(region, r_row, 1.0, false).size() - 1)
 			var radii := []
 			var shapes := []
 			var tones := []
@@ -456,8 +591,17 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([r_row * 0.8, r_row * 0.6])
 		"rosette":
 			_tone = 1 if toning in ["heart", "rows"] else 0
+			var first := slots.size()
 			var rc := _rosette(region, r_row, design["petal_shape"])
 			_tone = 0
+			if rc < 0.0:
+				# No whole ring of petals fits: rows fill the area instead.
+				slots.resize(first)
+				_reset_free(region)
+				var rows := design.duplicate()
+				rows["style"] = "echo"
+				_pack_pattern(region, rows)
+				return
 			# Outline rows stop short of the rosette.
 			var depth: float = region["max_dist"] - rc
 			var n := clampi(floori(depth / (2.0 * r_row + gap)), 0, 3)
@@ -470,7 +614,12 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 				shapes.append("round" if spacer else design["row_shape"])
 				tones.append(1 if spacer else _row_tone("edge" if toning == "edge" else "solid", k))
 			_rows(region, radii, shapes, tones)
-			_fill_rest([r_row, r_row * 0.7, r_row * 0.5])
+			# Tight rosettes leave the gaps between petals and rows open
+			# rather than dotting stones into them.
+			if tight:
+				_part += 1
+			else:
+				_fill_rest([r_row, r_row * 0.7, r_row * 0.5])
 		"honeycomb":
 			if design["edge_row"] or design["spacers"]:
 				_rows(region, [r_row * 0.6], ["round"], [1 if toning != "solid" else 0])
@@ -488,14 +637,36 @@ func _pack_pattern(region: Dictionary, design: Dictionary) -> void:
 			_fill_rest([r_row * 0.7, r_row * 0.5])
 		"pave":
 			_fill_rest([u * 1.2, u * 0.85, u * 0.6, u * 0.45])
+		"taper":
+			var grow: bool = design["taper_grow"]
+			var radii := _graded_rows(region, u * (0.55 if grow else 1.5), 1.3 if grow else 0.75, false)
+			var shapes := []
+			var tones := []
+			for k in radii.size():
+				shapes.append(design["row_shape"])
+				tones.append(k % 2)
+			_rows(region, radii, shapes, tones)
+			_tone = 0
+			_fill_rest([radii[-1] if not radii.is_empty() else r_row])
+		"spiral", "swirl":
+			SlotPatterns.spiral(self, region, r_row, design["row_shape"], 2 if style == "spiral" else 3, design["spin"])
+			_fill_rest([r_row * 0.8])
+		"waves", "zigzag":
+			SlotPatterns.waves(self, region, r_row, design["row_shape"], design["lattice_turn"] * 1.5, true,
+					style == "zigzag")
+			_fill_rest([r_row * 0.8])
 		"spine":
 			_tone = 1 if toning == "heart" else 0
-			_spine(region, u * 2.0, u * MIN_STONE)
+			# Tight chains keep near one size: as big as most of the band
+			# allows rather than swelling into every bulge.
+			var r_max: float = minf(u * 2.0, region["max_dist"] * 0.7) if tight else u * 2.0
+			_spine(region, r_max, u * MIN_STONE)
 		"solitaire":
 			_tone = 1 if toning == "heart" else 0
 			_center_stone(region, INF, design)
 			_tone = 0
-			_fill_rest([u * 0.8, u * 0.6])
+			if not tight:
+				_fill_rest([u * 0.8, u * 0.6])
 
 
 ## The first passes of a tiered design: one large stone at the region's
@@ -548,8 +719,8 @@ func _row_tone(toning: String, k: int) -> int:
 ## `grade` times the one outside it (kept between 0.45 and 1.6 units), every
 ## other row a thin spacer row when `spaced`. The last row may sit a little past the
 ## middle; its stones shrink to fit.
-func _graded_rows(region: Dictionary, r: float, grade: float, spaced: bool) -> Array:
-	var depth: float = region["max_dist"]
+func _graded_rows(region: Dictionary, r: float, grade: float, spaced: bool, deepest := -1.0) -> Array:
+	var depth: float = region["max_dist"] if deepest < 0.0 else deepest
 	var d := gap
 	var out := []
 	var base := r
@@ -594,8 +765,10 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 	var n: int
 	var step: float
 	var start := 0.0
+	# Tight rows take the nearest count rather than the most that fit, and
+	# shrink their stones to it, so stones are never most of a stone apart.
 	if closed:
-		n = maxi(1, floori(length / pitch))
+		n = maxi(1, roundi(length / pitch) if tight else floori(length / pitch))
 		if mirror_axes and Geometry2D.is_point_in_polygon(_pic_center, pts):
 			# A row around the picture's center keeps its symmetry.
 			var lay := Symmetry.ring_layout(n, _row_sym(), pts, _pic_center)
@@ -603,10 +776,12 @@ func _along(pts: PackedVector2Array, closed: bool, r: float, shape: String) -> v
 			start = lay[1]
 		step = length / n
 	else:
-		n = floori(length / pitch) + 1
+		n = (roundi(length / pitch) if tight else floori(length / pitch)) + 1
 		step = length / (n - 1) if n > 1 else 0.0
 		if n == 1:
 			start = length / 2.0
+	if tight and n > 1 and step < pitch:
+		r = maxf(r * 0.5, (step - gap) / (2.0 * aspect))
 	var floor_r := maxf(r * 0.5, unit * MIN_STONE)
 	for i in n:
 		var at: Array = Contours.sample(pts, closed, fposmod(start + step * i, length) if closed else start + step * i)
@@ -665,8 +840,20 @@ func _center_stone(region: Dictionary, cap: float, design: Dictionary) -> void:
 	_place(design["center_shape"], c, region["axis"], r, 0.0)
 
 
+## Whether the stones from `first` on (one center stone) cover at least
+## TIGHT_SOLITAIRE_COVER of the region, each taken as its capsule.
+func _covers(region: Dictionary, first: int) -> bool:
+	var covered := 0.0
+	for s in slots.slice(first):
+		var r: float = s["width"] / 2.0
+		var h: float = maxf(0.0, s["size"] / 2.0 - r)
+		covered += PI * r * r + 4.0 * r * h
+	return covered >= TIGHT_SOLITAIRE_COVER * float(region["area"])
+
+
 ## A center stone ringed by outward petals (teardrops, kites or marquises).
-## Returns the ring's outer radius.
+## Returns the ring's outer radius; -1 if tight packing found no whole ring
+## of petals that fits (the center stone is placed all the same).
 func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
 	var peak := _peak()
 	if peak < 0:
@@ -683,6 +870,25 @@ func _rosette(region: Dictionary, r_row: float, petal: String) -> float:
 	var spokes := _spokes(region, maxi(5, int(TAU * ring / (2.0 * rt + gap * 2.0))))
 	var k: int = spokes[0]
 	var offset: float = spokes[1]
+	if tight:
+		# The whole ring of petals or none: smaller petals if they don't all
+		# fit, and rows instead if even those don't.
+		for scale: float in [1.0, 0.85, 0.7]:
+			var pr := rt * scale
+			var h: float = pr * (float(ASPECT.get(petal, 1.0)) - 1.0)
+			var at: float = rc + gap + pr + h
+			var all_fit := true
+			for j in k:
+				var a := offset + TAU * j / k
+				if not _fits(c + Vector2.from_angle(a) * at, Vector2.from_angle(a), h, pr):
+					all_fit = false
+					break
+			if all_fit:
+				for j in k:
+					var a := offset + TAU * j / k
+					_place(petal, c + Vector2.from_angle(a) * at, a, pr, h)
+				return at + pr + h + gap
+		return -1.0
 	for j in k:
 		var a := offset + TAU * j / k
 		var p := c + Vector2.from_angle(a) * ring
@@ -756,11 +962,21 @@ func _spine(region: Dictionary, r_max: float, r_min: float) -> void:
 				# The next stone sits just past this one, sized for where it lands.
 				var ahead: Vector2 = Contours.sample(pts, closed, s + 2.0 * r + gap)[0]
 				var nr := clampf(_dist_at(ahead) - gap, r_min, minf(r_max, r * 1.4))
+				if tight:
+					# Where the region narrows the next stone comes out smaller
+					# than guessed: step back to touch it.
+					for _k in 3:
+						var q: Vector2 = Contours.sample(pts, closed, s + r + gap + nr)[0]
+						var got := minf(r_max * _scale_at(q), _free_at(q) - gap)
+						if got >= nr - 0.5 or got < r_min:
+							break
+						nr = got
 				s += r + gap + nr
 			else:
 				s += 1.0
 	# Wide spots the axis missed (a fat end, a corner) get one stone each.
-	_fill_rest([r_max * 0.5, unit * 0.6, unit * MIN_STONE])
+	if not tight:
+		_fill_rest([r_max * 0.5, unit * 0.6, unit * MIN_STONE])
 
 
 func _dist_at(p: Vector2) -> float:
@@ -775,6 +991,8 @@ func _dist_at(p: Vector2) -> float:
 ## sizes only, so leftovers match the pattern instead of turning to dust.
 func _fill_rest(sizes: Array) -> void:
 	_part += 1
+	if tight:
+		sizes = [sizes[0]]
 	var r_min: float = sizes[-1]
 	while true:
 		var peak := _argmax()

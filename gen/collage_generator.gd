@@ -20,9 +20,32 @@ extends RefCounted
 ##     sit closer together (GemLines.DENSE_GAP), areas get smaller stones in
 ##     more rows, closer together and more often with spacer rows
 ##     (SlotPacker.DENSE_GAP), and dense areas are never sparse, so more
-##     areas are filled. Pictures may have more stones (DENSE_MAX_SLOTS).
+##     areas are filled. Pictures may have more stones (DENSE_MAX_SLOTS);
+##   cluster: fewer, bigger stones (about CLUSTER_AIM, CLUSTER_MIN_SLOTS..
+##     CLUSTER_MAX_SLOTS) in fewer gem types (CLUSTER_TYPES_MIN..MAX), every
+##     group and line packed tight (SlotPacker.DENSE_GAP of the gap, stones
+##     their usual size), and no filler: no spacer rows, no scatter or
+##     outline fills, no free-form pave, no stones shrinking toward the
+##     center or (lattices) the rim while their spacing stays, rows and
+##     chains spaced to their stones (see SlotPacker.tight), and pattern
+##     parts whose stones sit loose (farther from their neighbors than
+##     LOOSE_GAP of their own radius) are left out, so the stones that
+##     remain sit in close groups. Nor tiny runs of one or two stones of a
+##     part (TINY_FILLER), nor gem types of fewer than MIN_TYPE_STONES
+##     stones but accents. Gem lines over fine line art take stones small
+##     enough to fit along it (CLUSTER_LINE_MIN), and such pictures may go
+##     over the stone range rather than lose lines. Groups can still spread
+##     over the picture, with bare areas and the background between them.
+##   fine: packed as dense (the same share of dense groups and line classes,
+##     stones and limits), tidied as cluster pictures are: tight packing
+##     (SlotPacker.tight: line patterns, no pave, no stones dotted into
+##     what patterns leave, solitaires only where their stone fills the
+##     area), no scatter or outline fills, no tiny fillers, no loose
+##     pattern parts and no gem types of only one or two stones but
+##     accents. Spacer rows stay, as in dense.
 ## A picture is made the same again only in its own layout: a puzzle
-## request without one (from before dense) stays classic.
+## request without one (from before dense) stays classic, and dense stays
+## as it was (newer requests use fine).
 ##
 ## Result format (saved as JSON through PatternIO):
 ## {
@@ -30,6 +53,7 @@ extends RefCounted
 ##   layout: one of LAYOUTS, dense: the share of groups and line classes made dense,
 ##   setting: "gems" | "metal", pattern_seed, line_gems: GemLines style or "",
 ##   bold_lines: how many classes of lines got medium or large stones,
+##   loose_dropped: how many loose area stones the cluster layout left out,
 ##   dropped: how many elements (classes of gem lines, groups of areas) were
 ##     left out to stay under max_slots stones,
 ##   lines: PackedByteArray mask (255 = line); every line separates regions
@@ -69,12 +93,52 @@ const LINE_PAD := 0.5
 ## Gem types (shape + color, any size) a collage aims for.
 const GEM_TYPES_MIN := 25
 const GEM_TYPES_MAX := 30
-const LAYOUTS := ["classic", "dense"]
+const LAYOUTS := ["classic", "dense", "cluster", "fine"]
+## Layouts that tidy their stones (see "fine" and "cluster" above).
+const TIDY_LAYOUTS := ["cluster", "fine"]
+## Tidy layouts: how often echo groups take echo2 in posed animals (see
+## SlotPacker.ECHO2_CHANCE for the rest).
+const POSED_ECHO2_CHANCE := 0.75
 ## Dense layout: the share of groups of areas and of classes of gem lines
 ## made dense (picked per seed in this range), and its most stones.
 const DENSE_SHARE_MIN := 0.67
 const DENSE_SHARE_MAX := 0.75
 const DENSE_MAX_SLOTS := 7500
+## Cluster layout: its stone range and aim, the stone unit it starts from
+## (a share of SlotPacker.UNIT's; then rescaled into range), its gem types,
+## and when a stone sits loose: its second-nearest neighbor is farther away
+## (edge to edge) than this share of its own radius. A pattern part with at
+## least LOOSE_SHARE of its stones loose is left out (its group keeps its
+## biggest part, unless LOOSE_GROUP_SHARE of the group's stones are loose:
+## then the whole group is left bare), up to LOOSE_PASSES times, as leaving
+## stones out can leave their neighbors loose.
+const CLUSTER_MIN_SLOTS := 420
+const CLUSTER_MAX_SLOTS := 580
+const CLUSTER_AIM := 500.0
+const CLUSTER_UNIT := 2.0
+const CLUSTER_MAX_UNIT := 3.0
+const CLUSTER_METAL_MAX_UNIT := 4.0
+const CLUSTER_TRIES := 10
+## No gem type keeps fewer stones than this (accents excepted: stones at
+## least ACCENT_SIZE times their area's typical stone, or an area's only one
+## or two, and accent stones along lines).
+const MIN_TYPE_STONES := 3
+## Cluster layout: the smallest line stone (in units) where the areas beside
+## the lines are shallow (otherwise 0.45).
+const CLUSTER_LINE_MIN := 0.2
+const ACCENT_SIZE := 1.5
+## Tiny fillers left out: a run of one or two stones of a pattern part (not
+## touching more of its part) under this share of their area's typical stone.
+const TINY_FILLER := 0.6
+const CLUSTER_TYPES_MIN := 10
+const CLUSTER_TYPES_MAX := 15
+const LOOSE_GAP := 1.0
+const LOOSE_SHARE := 0.5
+const LOOSE_GROUP_SHARE := 0.6
+const LOOSE_PASSES := 3
+## Whole groups are left bare only while this share of the packed area
+## stones stays.
+const LOOSE_KEEP := 0.6
 
 
 ## options:
@@ -99,14 +163,16 @@ const DENSE_MAX_SLOTS := 7500
 ##   spacers: bool, thin rows of small stones between every pattern's main rows
 ##            (default: some groups; all when the picture is short of gem types)
 ##   gem_types: how many gem types (shape + color, any size) to aim for
-##              (default: 25-30, picked per seed)
+##              (default: 25-30, or 10-15 in the cluster layout, picked per seed)
 ##   shapes: the only shapes and cuts to use, {shape: [cuts]} (default {}: all);
 ##           other stones take a stand-in shape (see GemVariety.restrict)
 ##   seed, gap: passed to SlotPacker
 ##   unit: base stone radius in px; by default SlotPacker.UNIT of the picture, then scaled
 ##         so the collage has MIN_SLOTS..MAX_SLOTS stones (gem-line pictures
-##         first leave out their busiest classes of lines, see MAX_DROPPED)
-##   max_slots: the most stones (default MAX_SLOTS)
+##         first leave out their busiest classes of lines, see MAX_DROPPED;
+##         cluster pictures start from CLUSTER_UNIT of it and only rescale,
+##         toward CLUSTER_AIM)
+##   max_slots: the most stones (default MAX_SLOTS, DENSE_MAX_SLOTS or CLUSTER_MAX_SLOTS)
 ##   drop_lines, bare_at: classes of gem lines and centroids of areas to leave
 ##     out (set when over max_slots)
 ##   layout: one of LAYOUTS (default "classic")
@@ -116,11 +182,15 @@ const DENSE_MAX_SLOTS := 7500
 ##     lines are one class (see GemLines) and its areas one group.
 ##   source: Dictionary describing where the lines came from, stored as is
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
-	var unit: float = options.get("unit", minf(w, h) * SlotPacker.UNIT)
+	var layout: String = options.get("layout", "")
+	var cluster := layout == "cluster"
+	var unit: float = options.get("unit", minf(w, h) * SlotPacker.UNIT * (CLUSTER_UNIT if cluster else 1.0))
+	if cluster and not options.has("unit"):
+		return _fit_cluster(mask, w, h, options, unit, options.get("max_slots", CLUSTER_MAX_SLOTS))
 	var picture := _build(mask, w, h, options, unit)
-	if options.has("unit") and options.has("spacers"):
+	if (options.has("unit") and options.has("spacers")) or cluster:
 		return picture
-	var max_slots: int = options.get("max_slots", DENSE_MAX_SLOTS if options.get("layout", "") == "dense" else MAX_SLOTS)
+	var max_slots: int = options.get("max_slots", DENSE_MAX_SLOTS if layout in ["dense", "fine"] else MAX_SLOTS)
 	# Too many stones: leave out the element with the most stones (a class of
 	# gem lines, or a group of areas), all its symmetric copies at once, as a
 	# symmetric gap, rather than making every stone bigger.
@@ -161,6 +231,96 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 	return picture
 
 
+## A cluster picture in CLUSTER_MIN_SLOTS..max_slots stones. The unit is
+## rescaled toward CLUSTER_AIM, up to CLUSTER_MAX_UNIT of SlotPacker.UNIT's
+## with gem lines (fine line art keeps their stones small however big the
+## unit gets, while its areas lose theirs) and CLUSTER_METAL_MAX_UNIT
+## without. With stones that big and still too many, a picture whose gem
+## lines take most of its stones keeps them all, with more stones than the
+## range (line art that fine would break up without them); otherwise the
+## busiest elements (a class of gem lines, or a group of areas, with their
+## symmetric copies) are left out as symmetric gaps, as other
+## layouts do. Keeps the try closest to the aim (by ratio) if none lands in
+## range.
+static func _fit_cluster(mask: PackedByteArray, w: int, h: int, options: Dictionary, unit: float,
+		max_slots: int) -> Dictionary:
+	var base := minf(w, h) * SlotPacker.UNIT
+	var picture := _build(mask, w, h, options, unit)
+	var best := picture
+	var drop := []
+	var bare := []
+	# The count jumps as the unit crosses the sizes that pick each area's
+	# pattern, so once one unit gave too many stones and a bigger one too
+	# few, the next try is halfway between them (on a log scale).
+	var too_many := 0.0
+	var too_few := INF
+	for _attempt in CLUSTER_TRIES:
+		var n: int = picture["slots"].size()
+		if n >= CLUSTER_MIN_SLOTS and n <= max_slots:
+			return picture
+		if n > max_slots:
+			too_many = unit
+		else:
+			too_few = unit
+		# Line stones go about as 1 / unit (they fill the lines' length),
+		# area stones as 1 / unit^2.
+		var on_lines := 0
+		for s in picture["slots"]:
+			if picture["regions"][s["region"]]["kind"] == "line":
+				on_lines += 1
+		var on_areas := n - on_lines
+		var top := base * (CLUSTER_MAX_UNIT if picture["setting"] == "gems" else CLUSTER_METAL_MAX_UNIT)
+		if n > max_slots and unit >= top * 0.99 and on_lines > on_areas:
+			# Gem lines take most of the stones even at the biggest unit: the
+			# line art is too fine for the aim, and leaving lines out would
+			# break it up. It keeps them all, with more stones.
+			break
+		if n > max_slots and unit >= top * 0.99:
+			# The busiest elements, as many as it takes to come down to the aim
+			# (at least one), in one rebuild.
+			var excess := n - int(CLUSTER_AIM)
+			var gone := 0
+			for e: Dictionary in _elements_by_size(picture):
+				if gone >= excess and gone > 0:
+					break
+				# Leaving out an element bigger than the excess twice over
+				# would overshoot; take a smaller one instead, unless none is.
+				if gone > 0 and gone + e["stones"] > excess * 2:
+					continue
+				var el: Dictionary = e["element"]
+				if el.has("lines"):
+					drop.append(el["lines"])
+				else:
+					bare.append_array(el["areas"])
+				gone += e["stones"]
+			if gone == 0:
+				break
+			options = options.duplicate()
+			options["drop_lines"] = drop.duplicate()
+			options["bare_at"] = bare.duplicate()
+			too_many = 0.0
+			too_few = INF
+		elif too_many > 0.0 and too_few < INF:
+			# Units this close make the same picture: the count jumps here.
+			if absf(too_few / too_many - 1.0) < 0.02:
+				break
+			unit = sqrt(too_many * too_few)
+		else:
+			# The scale that brings on_lines / s + on_areas / s^2 to the aim.
+			var s := (on_lines + sqrt(on_lines * on_lines + 4.0 * CLUSTER_AIM * on_areas)) / (2.0 * CLUSTER_AIM)
+			unit = minf(unit * clampf(s, 0.5, 2.5), top)
+		picture = _build(mask, w, h, options, unit)
+		if _off_aim(picture) < _off_aim(best):
+			best = picture
+	return best
+
+
+## How far a picture's stone count is from CLUSTER_AIM, as a ratio (so 250
+## and 1000 stones are as far off).
+static func _off_aim(picture: Dictionary) -> float:
+	return absf(log(maxf(1.0, picture["slots"].size()) / CLUSTER_AIM))
+
+
 static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, unit: float) -> Dictionary:
 	var pattern_seed: int = options.get("pattern_seed", 0)
 	var seed_value: int = options.get("seed", 1)
@@ -173,14 +333,17 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	# A symmetric picture's center region stays, however small: it is the focus.
 	var center := Vector2i(w / 2, h / 2) if symmetry != "none" else Vector2i(-1, -1)
 	var side := float(mini(w, h))
-	var gap: float = options.get("gap", unit * SlotPacker.GAP)
 	# The share of groups and line classes made dense, from a stream of its
 	# own so classic pictures come out as they always have.
 	var layout: String = options.get("layout", "classic")
 	if not layout in LAYOUTS:
 		layout = "classic"
+	var cluster := layout == "cluster"
+	var tidy := layout in TIDY_LAYOUTS
+	# Cluster pictures sit tight everywhere, as dense groups do.
+	var gap: float = options.get("gap", unit * SlotPacker.GAP * (SlotPacker.DENSE_GAP if cluster else 1.0))
 	var dense := 0.0
-	if layout == "dense":
+	if layout in ["dense", "fine"]:
 		var dense_rng := RandomNumberGenerator.new()
 		dense_rng.seed = hash([seed_value, "dense"])
 		dense = dense_rng.randf_range(DENSE_SHARE_MIN, DENSE_SHARE_MAX)
@@ -208,7 +371,10 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			depths.append(r["max_dist"])
 		depths.sort()
 		var typical: float = depths[depths.size() / 2] if not depths.is_empty() else unit * 3.0
-		line_r = clampf(typical * 0.3, unit * 0.45, unit * 0.7) * [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
+		# Cluster pictures' stones are big, so fine line art keeps line stones
+		# that fit beside it (rather than ones shrunk into gaps along it).
+		line_r = clampf(typical * 0.3, unit * (CLUSTER_LINE_MIN if cluster else 0.45), unit * 0.7) \
+				* [0.85, 1.0, 1.15][rng.randi_range(0, 2)]
 		var bold: int = options.get("bold_lines", rng.randi_range(2, 3))
 		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold, mask,
 				options.get("drop_lines", []), dense,
@@ -230,6 +396,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if setting == "gems":
 		plan_options["line_style"] = "none"
 	plan_options["dense"] = dense
+	if tidy:
+		plan_options["tight"] = true
 	var plan := DesignPlan.make(map, groups, plan_options, seed_value)
 	# Areas left out to stay under max_slots (by where they are, as region
 	# numbers can shift between builds).
@@ -252,10 +420,31 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		if dense_regions[r] == 1:
 			dense_groups[groups[r]] = true
 	pack_options["dense_groups"] = dense_groups
+	if tidy:
+		pack_options["allow_spacers"] = not cluster
+		pack_options["tight"] = true
+		pack_options["radial_size"] = false
+		# Posed animals' coats read best with rows that follow the animal.
+		if not pack_options.has("echo2_chance") and options.get("source", {}).has("animal_mesh"):
+			pack_options["echo2_chance"] = POSED_ECHO2_CHANCE
 	var styles := DesignPlan.packer_styles(plan)
 	styles.merge(options.get("styles", {}), true)
 	pack_options["styles"] = styles
 	var slots := SlotPacker.pack(map, pack_options)
+	var packed := slots.size()
+	var loose_bare := {}
+	if tidy:
+		slots = _drop_tiny_fillers(slots)
+		# Leaving stones out can leave their neighbors loose: a few passes.
+		for _pass in LOOSE_PASSES:
+			var kept := _drop_loose(slots, line_slots, groups, ceili(packed * LOOSE_KEEP))
+			var before := slots.size()
+			slots = kept["slots"]
+			loose_bare.merge(kept["bare"])
+			if slots.size() == before:
+				break
+		# ...and so can leaving loose parts out strand a stone or two.
+		slots = _drop_tiny_fillers(slots)
 
 	var n := map.regions.size()
 	var theme: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
@@ -332,6 +521,9 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		slots.append(sl)
 
 	var fills: PackedStringArray = plan["fills"]
+	for r in fills.size():
+		if loose_bare.has(groups[r]):
+			fills[r] = "bare"
 	var outlined: PackedByteArray = plan["outlined"]
 	var slot_count := PackedInt32Array()
 	slot_count.resize(colors.size())
@@ -369,11 +561,17 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 				neighbors[o].append(n_groups + k)
 	var type_rng := RandomNumberGenerator.new()
 	type_rng.seed = hash([seed_value, "gem types"])
-	var type_target: int = options.get("gem_types", type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
+	var type_target: int = options.get("gem_types", type_rng.randi_range(CLUSTER_TYPES_MIN, CLUSTER_TYPES_MAX) if cluster
+			else type_rng.randi_range(GEM_TYPES_MIN, GEM_TYPES_MAX))
 	var allowed: Dictionary = options.get("shapes", {})
 	GemVariety.restrict(slots, allowed)
+	if tidy:
+		_mark_accents(slots, n)
 	var gem_types := GemVariety.balance(slots, group_of,
-			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors)
+			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors,
+			MIN_TYPE_STONES if tidy else 0)
+	for s in slots:
+		s.erase("keep_type")
 	# The centerpiece may have changed shape: stand it upright again.
 	for s in slots:
 		if s.get("centerpiece", false):
@@ -381,6 +579,12 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 			s.erase("centerpiece")
 	# Every stone of a gem type in the same proportions; only sizes vary.
 	GemVariety.even_aspects(slots)
+	# Evening a type's proportions shrinks some stones: any left as tiny
+	# loners go too.
+	if tidy:
+		slots = _drop_tiny_fillers(slots, n)
+		gem_types = GemVariety.kinds(slots).size()
+		_clear_corners(slots)
 
 	var regions := []
 	for r in map.regions:
@@ -440,6 +644,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"line_gems": line_gems,
 		"line_colors": ("matched" if line_matched else "neutral") if setting == "gems" else "",
 		"bold_lines": bold_lines.size(),
+		"loose_dropped": packed - slots.size() + line_slots.size(),
 		"dropped": options.get("drop_lines", []).size() + _bare_groups(options.get("bare_at", []), groups, map),
 		"radial_size": pack_options["radial_size"],
 		"tiers": pack_options["tiers"],
@@ -457,10 +662,314 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	}
 
 
+## Area stones without tiny fillers: a run of one or two stones of a pattern
+## part (stones of one area and part touching, edge to edge, within the
+## bigger one's radius) that are all under TINY_FILLER of the area's median
+## stone. Areas with only one or two stones keep them, and regions from
+## `line_from` on (gem lines) are left as they are. Renumbers ids.
+static func _drop_tiny_fillers(slots: Array[Dictionary], line_from := 1 << 30) -> Array[Dictionary]:
+	var by_region := {}
+	for s in slots:
+		if s["region"] >= line_from:
+			continue
+		if not by_region.has(s["region"]):
+			by_region[s["region"]] = []
+		by_region[s["region"]].append(s)
+	var drop := {}
+	for region: int in by_region:
+		var list: Array = by_region[region]
+		if list.size() < 3:
+			continue
+		var radii := []
+		for s: Dictionary in list:
+			radii.append(float(s["width"]) / 2.0)
+		radii.sort()
+		var typical: float = radii[radii.size() / 2]
+		var by_part := {}
+		for s: Dictionary in list:
+			if not by_part.has(s["part"]):
+				by_part[s["part"]] = []
+			by_part[s["part"]].append(s)
+		for part: int in by_part:
+			var members: Array = by_part[part]
+			# Runs of touching stones, by flood fill.
+			var seen := {}
+			for i in members.size():
+				if seen.has(i):
+					continue
+				var run := [i]
+				seen[i] = true
+				var k := 0
+				while k < run.size() and run.size() <= 2:
+					var a: Dictionary = members[run[k]]
+					for j in members.size():
+						if seen.has(j):
+							continue
+						var b: Dictionary = members[j]
+						if _capsule_gap(a, b) <= maxf(a["width"], b["width"]) / 2.0:
+							seen[j] = true
+							run.append(j)
+					k += 1
+				if run.size() > 2:
+					continue
+				var tiny := true
+				for j: int in run:
+					if members[j]["width"] / 2.0 >= typical * TINY_FILLER:
+						tiny = false
+				if tiny:
+					for j: int in run:
+						drop[members[j]] = true
+	var out: Array[Dictionary] = []
+	for s in slots:
+		if drop.has(s):
+			continue
+		s["id"] = out.size()
+		out.append(s)
+	return out
+
+
+## Shrinks stones whose outline reaches past the capsule packing gave them
+## (square corners: baguettes, emerald cuts, squares) until their outline
+## clears every neighbor's: on a tight curve the corners of a ring of long
+## stones would otherwise run into each other. Centers and proportions stay.
+static func _clear_corners(slots: Array) -> void:
+	var polys := {}
+	var boxy := []
+	var reach := 1.0
+	for i in slots.size():
+		var s: Dictionary = slots[i]
+		reach = maxf(reach, float(s["size"]))
+		if _reaches_past_capsule(s):
+			boxy.append(i)
+	if boxy.is_empty():
+		return
+	var grid := {}
+	for i in slots.size():
+		var key := Vector2i(floori(slots[i]["x"] / reach), floori(slots[i]["y"] / reach))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(i)
+	var poly := func(i: int) -> PackedVector2Array:
+		if not polys.has(i):
+			polys[i] = GemShapes.slot_polygon(slots[i], 16)
+		return polys[i]
+	for i: int in boxy:
+		var s: Dictionary = slots[i]
+		var key := Vector2i(floori(s["x"] / reach), floori(s["y"] / reach))
+		for _try in 8:
+			var hit := false
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					for j: int in grid.get(key + Vector2i(dx, dy), []):
+						if j == i or hit:
+							continue
+						var o: Dictionary = slots[j]
+						var d := Vector2(s["x"], s["y"]).distance_to(Vector2(o["x"], o["y"]))
+						if d > (float(s["size"]) + float(o["size"])) * 0.75:
+							continue
+						var area := 0.0
+						for piece: PackedVector2Array in Geometry2D.intersect_polygons(poly.call(i), poly.call(j)):
+							area += absf(_area(piece))
+						if area > 0.5:
+							hit = true
+			if not hit:
+				break
+			s["size"] = s["size"] * 0.9
+			s["width"] = s["width"] * 0.9
+			polys.erase(i)
+
+
+## Whether a stone's outline goes past the capsule (a segment grown by half
+## its width) that packing kept clear for it.
+static func _reaches_past_capsule(s: Dictionary) -> bool:
+	var r: float = s["width"] / 2.0
+	var h := maxf(0.0, s["size"] / 2.0 - r)
+	var c := Vector2(s["x"], s["y"])
+	var half := Vector2.from_angle(s["rotation"]) * h
+	for q in GemShapes.slot_polygon(s, 16):
+		var on := Geometry2D.get_closest_point_to_segment(q, c - half, c + half)
+		if q.distance_to(on) > r + 0.5:
+			return true
+	return false
+
+
+static func _area(poly: PackedVector2Array) -> float:
+	var a := 0.0
+	for k in poly.size():
+		var p := poly[k]
+		var q := poly[(k + 1) % poly.size()]
+		a += p.x * q.y - q.x * p.y
+	return a / 2.0
+
+
+## Marks the stones that may keep a gem type of their own however few
+## ("keep_type"): an area's only one or two stones, area stones at least
+## ACCENT_SIZE times their area's median, and accent stones along lines.
+## `line_from`: the first region id of the line regions.
+static func _mark_accents(slots: Array, line_from: int) -> void:
+	var by_region := {}
+	for s: Dictionary in slots:
+		if not by_region.has(s["region"]):
+			by_region[s["region"]] = []
+		by_region[s["region"]].append(s)
+	for region: int in by_region:
+		var list: Array = by_region[region]
+		if region >= line_from:
+			for s: Dictionary in list:
+				if s.get("tone", 0) != 0 or s.get("seq", -1) >= 0:
+					s["keep_type"] = true
+			continue
+		if list.size() <= 2:
+			for s: Dictionary in list:
+				s["keep_type"] = true
+			continue
+		var radii := []
+		for s: Dictionary in list:
+			radii.append(float(s["width"]) / 2.0)
+		radii.sort()
+		var typical: float = radii[radii.size() / 2]
+		for s: Dictionary in list:
+			if s["width"] / 2.0 >= typical * ACCENT_SIZE:
+				s["keep_type"] = true
+
+
+## Leaves out the area stones that sit loose: farther from their
+## second-nearest neighbor (area or line stone, edge to edge) than LOOSE_GAP
+## of their own radius. Whole pattern parts go (a row, a ring, a tier...
+## with all their symmetric copies) when at least LOOSE_SHARE of their
+## stones sit loose; a group keeps its biggest part (by stone area) unless
+## LOOSE_GROUP_SHARE of the group's stones sit loose (a few stones adrift in
+## small cells), and then it is left bare, loosest groups first, while at
+## least `keep_at_least` stones and one group stay. Renumbers ids.
+## Returns {slots, bare: the groups left bare}.
+static func _drop_loose(slots: Array[Dictionary], line_slots: Array[Dictionary], groups: PackedInt32Array,
+		keep_at_least: int) -> Dictionary:
+	var loose := _loose(slots, slots + line_slots)
+	var parts := {}  # "group|part" -> {loose, n, area, group}
+	var group_n := {}  # group -> [stones, loose stones]
+	for i in slots.size():
+		var s := slots[i]
+		var g: int = groups[s["region"]]
+		var pk := "%d|%d" % [g, s.get("part", 0)]
+		if not parts.has(pk):
+			parts[pk] = {"loose": 0, "n": 0, "area": 0.0, "group": g}
+		parts[pk]["n"] += 1
+		parts[pk]["area"] += float(s["width"]) * float(s["size"])
+		parts[pk]["loose"] += loose[i]
+		if not group_n.has(g):
+			group_n[g] = [0, 0]
+		group_n[g][0] += 1
+		group_n[g][1] += loose[i]
+	var biggest := {}  # group -> its part with the most stone area
+	for pk: String in parts:
+		var g: int = parts[pk]["group"]
+		if not biggest.has(g) or parts[pk]["area"] > parts[biggest[g]]["area"]:
+			biggest[g] = pk
+	# Loosest groups first, while keep_at_least stones stay.
+	var candidates := []
+	for g: int in group_n:
+		if group_n[g][1] >= group_n[g][0] * LOOSE_GROUP_SHARE:
+			candidates.append(g)
+	candidates.sort_custom(func(a: int, b: int) -> bool:
+		var la: float = float(group_n[a][1]) / group_n[a][0]
+		var lb: float = float(group_n[b][1]) / group_n[b][0]
+		return la > lb or (la == lb and a < b))
+	var bare := {}
+	var left := slots.size()
+	for g: int in candidates:
+		if left - group_n[g][0] < keep_at_least or bare.size() + 1 >= group_n.size():
+			continue
+		bare[g] = true
+		left -= group_n[g][0]
+	var out: Array[Dictionary] = []
+	for s in slots:
+		var g: int = groups[s["region"]]
+		var pk := "%d|%d" % [g, s.get("part", 0)]
+		var p: Dictionary = parts[pk]
+		if bare.has(g) or (p["loose"] >= p["n"] * LOOSE_SHARE and biggest[g] != pk):
+			continue
+		s["id"] = out.size()
+		out.append(s)
+	return {"slots": out, "bare": bare}
+
+
+## 1 for each of `slots` that sits loose: its second-nearest stone among
+## `all` (which holds `slots`) is farther, edge to edge, than LOOSE_GAP of
+## its own radius; else 0. Stones of an area with only one or two are
+## whole elements (a solitaire filling its cell), never loose.
+static func _loose(slots: Array, all: Array) -> PackedByteArray:
+	var per_region := {}
+	for s: Dictionary in slots:
+		per_region[s["region"]] = per_region.get(s["region"], 0) + 1
+	var reach := 1.0
+	for s: Dictionary in all:
+		reach = maxf(reach, float(s["size"]))
+	# A grid of cells as wide as the biggest stone: any stone close enough to
+	# count has its center within two cells.
+	var grid := {}
+	for j in all.size():
+		var key := Vector2i(floori(all[j]["x"] / reach), floori(all[j]["y"] / reach))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(j)
+	var out := PackedByteArray()
+	out.resize(slots.size())
+	for i in slots.size():
+		var s: Dictionary = slots[i]
+		if per_region[s["region"]] < 3:
+			continue
+		var key := Vector2i(floori(s["x"] / reach), floori(s["y"] / reach))
+		var near := [INF, INF]
+		for dy in range(-2, 3):
+			for dx in range(-2, 3):
+				for j: int in grid.get(key + Vector2i(dx, dy), []):
+					if is_same(all[j], s):
+						continue
+					var d := _capsule_gap(s, all[j])
+					if d < near[0]:
+						near[1] = near[0]
+						near[0] = d
+					elif d < near[1]:
+						near[1] = d
+		if near[1] > s["width"] / 2.0 * LOOSE_GAP:
+			out[i] = 1
+	return out
+
+
+## Share of a picture's area stones that sit loose (see _loose; line stones
+## count as neighbors). Used by tests and tuning.
+static func loose_share(picture: Dictionary) -> float:
+	var slots: Array = picture["slots"]
+	var areas := slots.filter(func(s: Dictionary) -> bool: return picture["regions"][s["region"]]["kind"] == "area")
+	var n := 0
+	for v in _loose(areas, slots):
+		n += v
+	return float(n) / maxi(1, areas.size())
+
+
+## Edge-to-edge distance between two stones, each taken as a capsule along
+## its rotation (as SlotPacker does).
+static func _capsule_gap(a: Dictionary, b: Dictionary) -> float:
+	var ra: float = a["width"] / 2.0
+	var rb: float = b["width"] / 2.0
+	var ha := Vector2.from_angle(a["rotation"]) * maxf(0.0, a["size"] / 2.0 - ra)
+	var hb := Vector2.from_angle(b["rotation"]) * maxf(0.0, b["size"] / 2.0 - rb)
+	var ca := Vector2(a["x"], a["y"])
+	var cb := Vector2(b["x"], b["y"])
+	var pts := Geometry2D.get_closest_points_between_segments(ca - ha, ca + ha, cb - hb, cb + hb)
+	return pts[0].distance_to(pts[1]) - ra - rb
+
+
 ## The element with the most stones: a class of inner gem lines (not the
 ## silhouette's, nor bold lines) as {"lines": class}, or a symmetry group of
 ## areas as {"areas": [their centroids]}; {} if none.
 static func _busiest_element(picture: Dictionary) -> Dictionary:
+	var list := _elements_by_size(picture)
+	return list[0]["element"] if not list.is_empty() else {}
+
+
+## The elements _busiest_element picks from, busiest first: [{element, stones}].
+static func _elements_by_size(picture: Dictionary) -> Array:
 	var lines := {}
 	var areas := {}
 	for s in picture["slots"]:
@@ -469,21 +978,18 @@ static func _busiest_element(picture: Dictionary) -> Dictionary:
 			areas[region["group"]] = areas.get(region["group"], 0) + 1
 		elif region.get("line", "") != "outer" and s["part"] < GemLines.NODE_PARTS and not (s["seq"] < 0 and s["tone"] == 1):
 			lines[s["part"]] = lines.get(s["part"], 0) + 1
-	var best := {}
-	var most := 0
+	var out := []
 	for part: int in lines:
-		if lines[part] > most:
-			most = lines[part]
-			best = {"lines": part}
+		out.append({"element": {"lines": part}, "stones": lines[part]})
 	for g: int in areas:
-		if areas[g] > most:
-			most = areas[g]
-			var at := []
-			for r in picture["regions"]:
-				if r["kind"] == "area" and r["group"] == g:
-					at.append(r["centroid"])
-			best = {"areas": at}
-	return best
+		var at := []
+		for r in picture["regions"]:
+			if r["kind"] == "area" and r["group"] == g:
+				at.append(r["centroid"])
+		out.append({"element": {"areas": at}, "stones": areas[g]})
+	# Busiest first; lines before areas on a tie, as before.
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["stones"] > b["stones"])
+	return out
 
 
 ## How many symmetry groups the areas left out (by centroid) belong to.

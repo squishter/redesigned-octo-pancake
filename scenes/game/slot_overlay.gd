@@ -24,6 +24,16 @@ const TINT_ALPHA := 0.32
 const PALE_LUMINANCE := 0.7
 const PALE_SATURATION := 0.2
 const PALE_TINT := Color(0.55, 0.55, 0.58, 0.45)
+## Kits lie on charcoal paper (GemBoard3D.KIT_PAPER_COLOR), where the dark
+## outlines and numbers above wouldn't show: light ones instead, and dark
+## stones' slots (at most this light) take a medium gray tint, as pale
+## stones' do on white paper.
+const DARK_OUTLINE := Color(0.82, 0.8, 0.88, 0.38)
+const DARK_OUTLINE_SELECTED := Color(0.96, 0.94, 1.0, 0.95)
+const DARK_NUMBER := Color(0.86, 0.84, 0.92, 0.75)
+const DARK_NUMBER_SELECTED := Color(1.0, 1.0, 1.0, 1.0)
+const DARK_LUMINANCE := 0.25
+const DARK_TINT := Color(0.5, 0.5, 0.54, 0.45)
 ## Numbers show when the slot is at least this many px across (the font is
 ## about half of it, up to MAX_FONT).
 const MIN_LABEL_PX := 44.0
@@ -40,6 +50,8 @@ var type_of := PackedInt32Array()
 var type_colors := PackedColorArray()
 ## 1 for placed slots.
 var placed := PackedByteArray()
+## On dark paper (kits): light outlines and numbers (see DARK_OUTLINE).
+var dark_paper := false
 ## The selected gem type, or -1.
 var selected := -1:
 	set(value):
@@ -91,6 +103,7 @@ func _ready() -> void:
 ## Starts showing a puzzle: its slots, their types and which are placed.
 func setup(picture: Dictionary, types: PackedInt32Array, colors: PackedColorArray, done: PackedByteArray) -> void:
 	slots = picture["slots"]
+	dark_paper = picture.get("kind", "") == "kit"
 	type_of = types
 	type_colors = colors
 	placed = done
@@ -285,8 +298,11 @@ func _follow_view() -> void:
 
 
 ## The selected gem's tint over its open slots: its own color, faint, or
-## PALE_TINT for white and pale gray stones.
-static func tint_for(color: Color) -> Color:
+## PALE_TINT for white and pale gray stones (on `dark` paper, DARK_TINT for
+## dark stones instead).
+static func tint_for(color: Color, dark := false) -> Color:
+	if dark:
+		return DARK_TINT if color.get_luminance() <= DARK_LUMINANCE else Color(color, TINT_ALPHA)
 	if color.get_luminance() >= PALE_LUMINANCE and color.s <= PALE_SATURATION:
 		return PALE_TINT
 	return Color(color, TINT_ALPHA)
@@ -294,12 +310,12 @@ static func tint_for(color: Color) -> Color:
 
 func _draw_shapes() -> void:
 	if _tint != null and selected >= 0:
-		_shapes.draw_mesh(_tint, null, Transform2D.IDENTITY, tint_for(type_colors[selected]))
+		_shapes.draw_mesh(_tint, null, Transform2D.IDENTITY, tint_for(type_colors[selected], dark_paper))
 	for t in _lines.size():
 		if t != selected and _lines[t].size() >= 2:
-			_shapes.draw_multiline(_lines[t], OUTLINE)
+			_shapes.draw_multiline(_lines[t], DARK_OUTLINE if dark_paper else OUTLINE)
 	if selected >= 0 and selected < _lines.size() and _lines[selected].size() >= 2:
-		_shapes.draw_multiline(_lines[selected], OUTLINE_SELECTED)
+		_shapes.draw_multiline(_lines[selected], DARK_OUTLINE_SELECTED if dark_paper else OUTLINE_SELECTED)
 
 
 ## Numbers for the open slots in view that are big enough to hold one.
@@ -326,6 +342,8 @@ func _draw_labels() -> void:
 				var text := str(type_of[i] + 1)
 				var at := xf * Vector2(s["x"], s["y"])
 				var color := NUMBER_SELECTED if type_of[i] == selected else NUMBER
+				if dark_paper:
+					color = DARK_NUMBER_SELECTED if type_of[i] == selected else DARK_NUMBER
 				var line := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 				var baseline := at + Vector2(-line.x / 2.0, (font.get_ascent(font_size) - font.get_descent(font_size)) / 2.0)
 				_labels.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
