@@ -13,7 +13,10 @@ const BACKGROUND := Color("#f4eee6")
 ## for flowers (see FlowerGenerator), shape, collar, patterns and recent for
 ## hearts (see HeartGenerator), shape, border, body, antennae and recent for
 ## butterflies (see ButterflyGenerator), center, arm, tip, between, details
-## and recent for snowflakes (see SnowflakeGenerator), size (raster px,
+## and recent for snowflakes (see SnowflakeGenerator), flower, leaf, camera
+## and the rest for posed plants (see MandalaGenerator and
+## PlantMeshGenerator; their `collar` is the aura around them, one of
+## GemAura.STYLES or "none", used by mandala_collage), size (raster px,
 ## default 768), line_width (px, default size / 170), and FrameDesign's
 ## framing options (frame, background, ...); most pictures get a frame.
 ## Swirls (layout, shape, recent; see SwirlGenerator) aren't symmetric but
@@ -73,11 +76,22 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 		opts["source"]["snowflake"] = mandala["snowflake"]
 	if mandala.has("mandala"):
 		opts["source"]["mandala"] = mandala["mandala"]
-	for key: String in ["swirl", "animal", "animal_mesh"]:
+	for key: String in ["swirl", "animal", "animal_mesh", "plant_mesh"]:
 		if mandala.has(key):
 			opts["source"][key] = mandala[key]
 	if lines.has("motifs"):
 		opts["motifs"] = lines["motifs"]
+	# A plant's collar is an aura around it (unless it is framed: the frame
+	# and its background take that room).
+	# Its stems and stalks are pairs of lines a stone or two apart: bold
+	# stones along one would run into the other's.
+	if mandala["variant"] == "plant_mesh" and not opts.has("bold_lines"):
+		opts["bold_lines"] = 0
+	if mandala["variant"] == "plant_mesh" and not opts.has("aura"):
+		var collar: String = options.get("collar", "random")
+		opts["aura"] = "none"
+		if mandala["frame"].is_empty() and collar != "none":
+			opts["aura"] = collar if collar in GemAura.STYLES else "auto"
 	if not mandala["frame"].is_empty():
 		opts["source"]["frame"] = mandala["frame"]
 	return CollageGenerator.generate(lines["mask"], lines["width"], lines["height"], opts)

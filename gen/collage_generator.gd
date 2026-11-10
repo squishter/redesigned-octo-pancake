@@ -67,11 +67,14 @@ extends RefCounted
 ##            (default: some groups; all when the picture is short of gem types)
 ##   gem_types: how many gem types it uses; gem_kinds: [{shape, gem, color, count}],
 ##   unit, tiers, radial_size: the stone size and design choices used,
+##   aura: {style, stones, region}: the aura's style ("none" without one),
+##     how many stones it has and its region (kind "aura", listed last),
 ## }
 ## Coordinates and sizes are in px of width x height. Regions in the same
 ## `group` are symmetric copies, which free-color mode can paint together.
-## kind is "area" for a closed area or "line" for the gems along the lines
-## (one region for the inner lines and one for the silhouette). Slots with
+## kind is "area" for a closed area, "line" for the gems along the lines
+## (one region for the inner lines and one for the silhouette) or "aura" for
+## the aura's stones. Slots with
 ## tone 1 take their region's accent color.
 
 const SETTINGS := ["gems", "metal"]
@@ -139,6 +142,14 @@ const LOOSE_PASSES := 3
 ## Whole groups are left bare only while this share of the packed area
 ## stones stays.
 const LOOSE_KEEP := 0.6
+## The aura (see _add_aura): at most this many stones for each of the
+## picture's own, and how far its two tones are tinted toward the paper.
+const AURA_SHARE := 0.3
+const AURA_PAPER := Color("#f4eee6")
+const AURA_TINT := 0.45
+const AURA_OUTER_TINT := 0.7
+## The share of the gems (palest first) the aura's tints may snap to.
+const AURA_PALEST := 0.2
 
 
 ## options:
@@ -181,7 +192,19 @@ const LOOSE_KEEP := 0.6
 ##     [{"at", "family"}]}. A family stands in for symmetric copies: its gem
 ##     lines are one class (see GemLines) and its areas one group.
 ##   source: Dictionary describing where the lines came from, stored as is
+##   aura: one of GemAura.STYLES, "auto" (picked per seed) or "none" (the
+##     default): small pale stones around the subject of a picture that
+##     stands on bare background, drifting away and thinning out (see
+##     GemAura and _add_aura); aura_reach: GemAura's `reach`
 static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary = {}) -> Dictionary:
+	var picture := _fitted(mask, w, h, options)
+	# The aura goes around the finished picture, outside its stone count.
+	_add_aura(picture, options)
+	return picture
+
+
+## The picture without its aura, in its layout's range of stones.
+static func _fitted(mask: PackedByteArray, w: int, h: int, options: Dictionary) -> Dictionary:
 	var layout: String = options.get("layout", "")
 	var cluster := layout == "cluster"
 	var unit: float = options.get("unit", minf(w, h) * SlotPacker.UNIT * (CLUSTER_UNIT if cluster else 1.0))
@@ -229,6 +252,92 @@ static func generate(mask: PackedByteArray, w: int, h: int, options: Dictionary 
 		if spaced["gem_types"] > picture["gem_types"] and n >= MIN_SLOTS and n <= max_slots:
 			picture = spaced
 	return picture
+
+
+## Adds the picture's aura (see GemAura): small stones in the bare
+## background around its subject, as one more region of kind "aura" (after
+## the areas and the line regions) in two pale tints of a theme color (as
+## near as her palest gems come), the paler one farther out. They aren't part of the stone range or the gem
+## type target, but there are at most AURA_SHARE as many as the picture's
+## own stones: a fuller aura than that is thinned (GemAura's `max_stones`).
+## Sets picture["aura"]: {style, stones, region (-1 with no stones)}.
+static func _add_aura(picture: Dictionary, options: Dictionary) -> void:
+	var style: String = options.get("aura", "none")
+	picture["aura"] = {"style": "none", "stones": 0, "region": -1}
+	if style == "none" or options.get("colors_image") is Image:
+		return
+	var seed_value: int = options.get("seed", 1)
+	var pattern_seed: int = options.get("pattern_seed", 0)
+	if pattern_seed != 0:
+		seed_value = hash([seed_value, pattern_seed]) & 0x7fffffff
+	var slots: Array = picture["slots"]
+	var unit: float = picture["unit"]
+	var aura := GemAura.place(picture["lines"], picture["width"], picture["height"], seed_value, {"style": style,
+			"unit": unit, "gap": unit * SlotPacker.GAP, "keep_clear": slots,
+			"reach": options.get("aura_reach", GemAura.REACH), "max_stones": int(slots.size() * AURA_SHARE)})
+	picture["aura"]["style"] = aura["style"]
+	var stones: Array = aura["slots"]
+	if stones.is_empty():
+		return
+	var theme: PackedColorArray = (options["theme_colors"] if options.has("theme_colors")
+			else Palettes.theme_colors(options.get("theme", "sunset")))
+	var gems: Array = options.get("gems", Palettes.starter_gems())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "aura colors"])
+	var base: Color = theme[rng.randi_range(0, theme.size() - 1)]
+	var colors := PackedColorArray([base.lerp(AURA_PAPER, AURA_TINT), base.lerp(AURA_PAPER, AURA_OUTER_TINT)])
+	var ids := [null, null]
+	if not gems.is_empty():
+		# Only her palest gems (the AURA_PALEST nearest the paper) may stand in
+		# for the tints, so a small set of gems can't turn the aura vivid.
+		var paper := LabColor.from_color(AURA_PAPER)
+		var pale := gems.duplicate()
+		pale.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return LabColor.from_color(a["color"]).distance_to(paper) < LabColor.from_color(b["color"]).distance_to(paper))
+		pale = pale.slice(0, clampi(int(gems.size() * AURA_PALEST), 2, 6))
+		var snapped := RegionPaint.snap_to_gems(colors, pale)
+		for k in 2:
+			colors[k] = pale[snapped[k]]["color"]
+			ids[k] = pale[snapped[k]]["id"]
+	var regions: Array = picture["regions"]
+	var region := regions.size()
+	var group := 0
+	for r: Dictionary in regions:
+		group = maxi(group, int(r["group"]) + 1)
+	var allowed: Dictionary = options.get("shapes", {})
+	GemVariety.restrict(stones, allowed)
+	var sum := Vector2.ZERO
+	for s: Dictionary in stones:
+		var tone: int = s["tone"]
+		s["id"] = slots.size()
+		s["region"] = region
+		s.erase("strand")
+		s["target_color"] = colors[tone]
+		s["target_gem"] = ids[tone]
+		s["cut"] = GemCuts.pick(s["shape"], str(ids[tone]) if ids[tone] != null else colors[tone].to_html(false),
+				seed_value, allowed.get(s["shape"], []))
+		sum += Vector2(s["x"], s["y"])
+		slots.append(s)
+	regions.append({
+		"id": region,
+		"group": group,
+		"kind": "aura",
+		"color": colors[0],
+		"gem_color_id": ids[0],
+		"accent_color": colors[1],
+		"accent_gem": ids[1],
+		"fill": "aura",
+		"outlined": false,
+		"style": aura["style"],
+		"area": 0,
+		"centroid": sum / stones.size(),
+		"empty": false,
+	})
+	GemVariety.even_aspects(stones)
+	picture["aura"]["stones"] = stones.size()
+	picture["aura"]["region"] = region
+	picture["gem_kinds"] = GemVariety.kinds(slots)
+	picture["gem_types"] = picture["gem_kinds"].size()
 
 
 ## A cluster picture in CLUSTER_MIN_SLOTS..max_slots stones. The unit is

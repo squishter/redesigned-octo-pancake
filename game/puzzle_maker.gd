@@ -39,6 +39,8 @@ const FEATURES := ["frames", "backgrounds", "collars", "zoom", "wobble"]
 ## so recoloring an older puzzle makes the same picture again.
 const LAYOUT := "cluster"
 ## Collage sizes she can pick: the layout each makes, and its name.
+## Pictures projected from posed 3D models (MandalaGenerator variants).
+const POSED_VARIANTS := ["animal_mesh", "plant_mesh"]
 const COLLAGE_SIZES := {"medium": "cluster", "large": "fine"}
 const COLLAGE_SIZE_NAMES := {"medium": "Medium (about 500 gems)", "large": "Large (thousands of gems)"}
 
@@ -157,11 +159,13 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 	var picked: String = opts.get("kit_size", "")
 	var kit_options := {"size": size, "colors": clampi(gems.size(), 6, 20), "gems": gems, "drill": drill,
 			"seed": seed_value}
-	var animal_info := {}
+	# Posed animals and plants keep their recipe in the kit's source.
+	var posed: String = opts.get("variant", "")
+	var posed_info := {}
 	if image == null:
-		if opts.get("variant", "") == "animal_mesh":
+		if posed in POSED_VARIANTS:
 			var lines := PictureSources.mandala_lines(seed_value, opts)
-			animal_info = lines["mandala"]["animal_mesh"]
+			posed_info = lines["mandala"][posed]
 			image = PictureSources.mandala_image(seed_value, opts, lines)
 		else:
 			image = PictureSources.mandala_image(seed_value, opts)
@@ -204,8 +208,8 @@ static func _kit(seed_value: int, opts: Dictionary, unlocks: Dictionary, rng: Ra
 		# of thousands), and turned back into slots on loading (kit_slots).
 		"kit_grid": {"cols": w, "rows": h, "cells": kit["cells"], "palette": palette, "drill": drill, "cut": cut},
 	}
-	if not animal_info.is_empty():
-		picture["source"]["animal_mesh"] = animal_info
+	if not posed_info.is_empty():
+		picture["source"][posed] = posed_info
 	picture["slots"] = kit_slots(picture)
 	return picture
 

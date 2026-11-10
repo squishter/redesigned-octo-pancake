@@ -29,6 +29,8 @@ var _source: OptionButton
 var _variant: OptionButton
 var _template: OptionButton
 var _collar: OptionButton
+var _plant_flower: OptionButton
+var _plant_leaf: OptionButton
 var _silhouette: OptionButton
 var _zoom: OptionButton
 var _frame: OptionButton
@@ -172,7 +174,11 @@ func _ready() -> void:
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
-	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS)
+	# Hearts' collars, and the auras around posed plants (GemAura).
+	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS + GemAura.STYLES)
+	var plants := PlantMeshGenerator.catalog()
+	_plant_flower = _options(controls, "Plant flower", ["random"] + Array(plants["flowers"]))
+	_plant_leaf = _options(controls, "Plant leaf", ["random"] + Array(plants["leaves"]))
 	_silhouette = _options(controls, "Outline", ["random"] + MandalaDesign.SILHOUETTES)
 	_zoom = _options(controls, "Zoom", ["auto", "off", "on"])
 	_frame = _options(controls, "Frame", ["auto", "off", "on"])
@@ -312,7 +318,7 @@ func _options(parent: Control, label: String, items: Array) -> OptionButton:
 	_label(parent, label)
 	var ob := OptionButton.new()
 	for item in items:
-		ob.add_item("Posed animals" if item == "animal_mesh" else str(item).capitalize())
+		ob.add_item({"animal_mesh": "Posed animals", "plant_mesh": "Posed plants"}.get(item, str(item).capitalize()))
 		ob.set_item_metadata(ob.item_count - 1, item)
 	ob.item_selected.connect(func(_i: int) -> void: _generate())
 	_fill_row(ob)
@@ -406,6 +412,8 @@ func _generate() -> void:
 		"variant": _selected(_variant),
 		"template": _selected(_template),
 		"collar": _selected(_collar),
+		"flower": _selected(_plant_flower),
+		"leaf": _selected(_plant_leaf),
 		"silhouette": _selected(_silhouette),
 		"zoom": _selected(_zoom),
 		"frame": _selected(_frame),
@@ -436,6 +444,8 @@ func _run_job(job: Dictionary) -> void:
 		"variant": job["variant"],
 		"template": job["template"],
 		"collar": job["collar"],
+		"flower": job["flower"],
+		"leaf": job["leaf"],
 		"silhouette": job["silhouette"],
 		"theme": job["theme"],
 		"wobble": job["wobble"],
@@ -521,6 +531,11 @@ func _process(_delta: float) -> void:
 			if p["source"].has("animal_mesh"):
 				var an: Dictionary = p["source"]["animal_mesh"]
 				flower = ", %s, %s, %s coat" % [an["species"], an["pose"], an["coat"]["style"]]
+			if p["source"].has("plant_mesh"):
+				var pl: Dictionary = p["source"]["plant_mesh"]
+				var aura: Dictionary = p.get("aura", {})
+				flower = ", %s with %s leaves, %s, %s view, %s" % [pl["flower"], pl["leaf"], pl["pose"], pl["camera"],
+						"%s aura (%d stones)" % [aura["style"], aura["stones"]] if aura.get("stones", 0) > 0 else "no aura"]
 			if p["source"].has("frame"):
 				var fr: Dictionary = p["source"]["frame"]
 				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],

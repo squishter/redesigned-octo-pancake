@@ -54,11 +54,12 @@ func _init() -> void:
 	quit()
 
 
-static func render(p: Dictionary) -> Image:
+## The collage's stones as flat shapes on `paper` (the game's is warm white).
+static func render(p: Dictionary, paper := Color("#2a1f3d")) -> Image:
 	var w: int = p["width"]
 	var h: int = p["height"]
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	img.fill(Color("#2a1f3d"))
+	img.fill(paper)
 	for slot in p["slots"]:
 		var poly := GemShapes.slot_polygon(slot, 16)
 		var box := Rect2(poly[0], Vector2.ZERO)

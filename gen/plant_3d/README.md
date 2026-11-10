@@ -56,7 +56,8 @@ Preset choices are independent: a straight unbranched stem can have 15 blooms,
 or a winding bush can have just one. Bloom load does not alter the structural
 branch graph. Small pedicels join flowers to that graph. Each flower follows
 its pedicel tangent with bounded tilt/roll, independent scale and shape nudges,
-and its own bloom stage. Hanging flower families face down their supports.
+and its own bloom stage. Hanging flower families hang mouth down from an arched
+pedicel.
 
 Controls may be nested under `controls` or passed directly; direct values take
 precedence. Unspecified controls use the preset defaults. Invalid explicit
@@ -109,20 +110,32 @@ not a native replay token. Native replay is tested on Godot 4.7.2 and pinned to
 the baked asset revision; changes to the assembly/RNG contract require a new
 native recipe version. Retain old backends/assets if old puzzles must regenerate.
 
-## Handoff to game integration
+## Game integration
 
-This change deliberately leaves `MandalaGenerator`, `PictureSources`, catalog
-registration, unlocks/UI, framing, and export presets untouched. The integrating
-session should call this entry point from its new source adapter, forward the
-normalized arrays as for animals, and persist `recipe` in puzzle source metadata.
-The test demonstrates injection into existing collage/kit consumers without
-adding a production picture-type route.
+`MandalaGenerator` makes plants as its `plant_mesh` variant, so they go through
+`PictureSources` like every other picture: the *Plant* picture type in the game
+(`GemCatalog.PUZZLES`, collages and kits) and the *Posed plants* shape in the
+generator lab. The resolved choices and the `recipe` are kept in the puzzle's
+`source.plant_mesh`; pass that dictionary back as the `plant` option to make
+the same plant again.
 
-**Before exporting:** include `assets/plants/*.dat` and `assets/plants/CREDITS.md`
-in each export preset's non-resource include filter. Reference/preload
-`PlantMeshGenerator` from the production adapter so its scripts and the JSON
-catalog are reachable. The current animal-only include filter will omit the raw
-plant component files. Export registration is left to the integration session.
+The adapter narrows what the seed picks, because the generator's own defaults
+(tall thin stems, up to 15 small heads) come out as specks in a gem collage:
+unless asked otherwise a picture's plant has one to three big heads, at most
+two side branches, large leaves and a short thick stem
+(`MandalaGenerator.PLANT_PICTURE`), seen from the front, side, three-quarter or
+high view. Explicit options win, `plant_natural: true` turns the narrowing off,
+and choices the plants don't have are ignored rather than failing.
+
+Plants stand unframed, in an **aura** of small pale stones (`GemAura`, the
+plant's `collar` option: `streams`, `veil`, `none`, or picked per pattern seed).
+The game leaves it off until *Collars and auras* is unlocked.
+
+Hanging families (bell, fuchsia, bleeding heart) hang from a pedicel that
+arches over like a crook, mouth down and clear of the stem.
+
+Both export presets include `assets/plants/*.dat` and `assets/plants/CREDITS.md`
+as non-resource files; the JSON catalog is preloaded by `PlantComponentData`.
 
 The baked library is about 7.4 MiB. Runtime stems and per-organ deformation remain
 continuous; component topology comes from four authored variants per family.

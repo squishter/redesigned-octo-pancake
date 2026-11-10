@@ -162,6 +162,23 @@ static func flower_sockets(branches: Array, wanted: int, flowers: int) -> Array:
 	return selected
 
 
+## The pedicel of a hanging head: up from its socket, over, and down a
+## little, leaning away from the stem (or to a seeded side when the socket
+## points straight up), far enough for a head of `scale` to hang clear.
+static func _hook(site: Dictionary, scale: float, rng: RandomNumberGenerator) -> PackedVector3Array:
+	var from: Vector3 = site.attachment
+	var top: Vector3 = site.root
+	var out := Vector3(top.x - from.x, 0., top.z - from.z)
+	if out.length() < .03:
+		var angle := rng.randf_range(0., TAU)
+		out = Vector3(cos(angle), 0., sin(angle))
+	out = out.normalized()
+	var reach := .06 + .13 * scale
+	var crown := top + Vector3(0., .03, 0.) + out * reach * .45
+	return PackedVector3Array([from, (from + top) * .5 + Vector3(0., .025, 0.), top + out * reach * .1,
+		crown, top + out * reach * .85 - Vector3(0., .01, 0.), top + out * reach - Vector3(0., .07, 0.)])
+
+
 static func assemble(recipe: Dictionary) -> Dictionary:
 	var c: Dictionary = recipe.controls
 	var p: Dictionary = recipe.pose_controls
@@ -205,16 +222,23 @@ static func assemble(recipe: Dictionary) -> Dictionary:
 	for i in sockets.size():
 		var site: Dictionary = sockets[i]
 		var mid: Vector3 = (site.attachment + site.root) * .5 + Vector3(0., .025, 0.)
-		mesh.tube(PackedVector3Array([site.attachment, mid, site.root]), .009, part)
 		var support_axis: Vector3 = (site.root - mid).normalized()
+		if site.kind != "bud" and recipe.flower in HANGING:
+			# A hanging head needs something to hang from: its pedicel arches
+			# over like a crook and the head hangs from the end, mouth down and
+			# clear of the stem, rather than sitting on the tip mouth-first.
+			var hook := _hook(site, c.flower_scale, _rng(recipe.seed, part, 1531))
+			mesh.tube(hook, .009, part)
+			site.root = hook[-1]
+			support_axis = (hook[-1] - hook[-2]).normalized()
+		else:
+			mesh.tube(PackedVector3Array([site.attachment, mid, site.root]), .009, part)
 		var support := PlantMeshSurface.frame(support_axis, PlantMeshSurface.frame(site.tangent).z)
 		var rng := _rng(recipe.seed, part, 769)
 		var theta := deg_to_rad(rng.randf_range(0., c.flower_angle_jitter))
 		var azimuth := rng.randf_range(0., TAU)
 		var axis := (support_axis * cos(theta) + sin(theta) * (support.x * cos(azimuth) + support.z * sin(azimuth))).normalized()
 		var is_bud: bool = site.kind == "bud"
-		if not is_bud and recipe.flower in HANGING:
-			axis = -axis
 		var basis := PlantMeshSurface.frame(axis, support.z)
 		var roll := deg_to_rad(rng.randf_range(-1., 1.) * c.flower_angle_jitter * 1.65)
 		basis *= Basis(Vector3.UP, roll)
