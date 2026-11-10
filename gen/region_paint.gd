@@ -96,6 +96,8 @@ const MIN_CONTRAST := 18.0
 ## The chance that two neighboring groups may show the same accent or
 ## feature color anyway (see may_match), so pictures aren't too strict.
 const SAME_COLOR_CHANCE := 0.05
+## The share of a palette that counts as quiet (see split_palette).
+const QUIET_SHARE := 0.34
 
 
 ## Neighboring groups: per group, the other groups (sorted) holding a region
@@ -223,6 +225,79 @@ static func theme_colors(map: RegionMap, symmetry: String, palette: PackedColorA
 	out.resize(map.regions.size())
 	for r in map.regions.size():
 		out[r] = palette[group_color[groups[r]]]
+	return out
+
+
+## A palette split by how far its colors stand from `paper` (in Lab): {"bold":
+## the ones that stand out, "quiet": the QUIET_SHARE nearest it (at least
+## one, and two of a palette of four or more)}, each in the palette's order.
+## A palette of one color is both.
+static func split_palette(palette: PackedColorArray, paper: Color) -> Dictionary:
+	var lab := LabColor.from_color(paper)
+	var order := range(palette.size())
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var da := LabColor.from_color(palette[a]).distance_to(lab)
+		var db := LabColor.from_color(palette[b]).distance_to(lab)
+		return da < db or (da == db and a < b))
+	var n_quiet := clampi(roundi(palette.size() * QUIET_SHARE), 2 if palette.size() >= 4 else 1, maxi(1, palette.size() - 1))
+	var is_quiet := {}
+	for i in mini(n_quiet, order.size()):
+		is_quiet[order[i]] = true
+	var bold := PackedColorArray()
+	var quiet := PackedColorArray()
+	for i in palette.size():
+		if is_quiet.has(i):
+			quiet.append(palette[i])
+		else:
+			bold.append(palette[i])
+	if bold.is_empty():
+		bold = quiet
+	return {"bold": bold, "quiet": quiet}
+
+
+## The groups that hold a mark of a bold family (`marks` as for
+## motif_groups, `bold`: family -> true): group -> true.
+static func bold_groups(map: RegionMap, groups: PackedInt32Array, marks: Array, bold: Dictionary) -> Dictionary:
+	var out := {}
+	for m: Dictionary in marks:
+		if not bold.has(m["family"]):
+			continue
+		var at: Vector2 = m["at"]
+		var label := map.label_at(int(at.x), int(at.y))
+		if label >= 0:
+			out[groups[label]] = true
+	return out
+
+
+## A color per region by its group's role: groups in `bold` (group -> true)
+## take any of the palette's bold colors, the others its quiet ones
+## (`split`: split_palette's). Groups that touch get colors that read apart
+## where their palette allows, the groups with most neighbors choosing first.
+static func role_colors(map: RegionMap, groups: PackedInt32Array, split: Dictionary, seed_value: int,
+		neighbors: Array, bold: Dictionary) -> PackedColorArray:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "roles"])
+	var n_groups := 0
+	for g in groups:
+		n_groups = maxi(n_groups, g + 1)
+	var order := range(n_groups)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var na: int = neighbors[a].size() if a < neighbors.size() else 0
+		var nb: int = neighbors[b].size() if b < neighbors.size() else 0
+		return na > nb or (na == nb and a < b))
+	var group_color := {}
+	for g: int in order:
+		var palette: PackedColorArray = split["bold"] if bold.has(g) else split["quiet"]
+		var near := []
+		if g < neighbors.size():
+			for o: int in neighbors[g]:
+				if group_color.has(o):
+					near.append(group_color[o])
+		group_color[g] = palette[_pick(palette, [near], rng)]
+	var out := PackedColorArray()
+	out.resize(map.regions.size())
+	for r in map.regions.size():
+		out[r] = group_color[groups[r]]
 	return out
 
 

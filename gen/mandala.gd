@@ -60,6 +60,7 @@ const PLANT_PICTURE := {
 ## projection, backend; `recipe` makes the same plant again, see
 ## PlantMeshGenerator). A plant that can't be made (an unknown flower, say)
 ## comes back with no lines.
+## A plant's marks also carry "organ": which flower head or leaf they are on.
 ## Swirls, animals and plants aren't symmetric; instead they also return "families" (an id per
 ## polyline; a frame's lines get one more) and "marks" ([{"at", "family"}],
 ## points inside motif areas), see SwirlGenerator.
@@ -161,7 +162,9 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			families.append(frame_family)
 		var marks := []
 		for m: Dictionary in design["marks"]:
-			marks.append({"at": m["at"] * framing["scale"], "family": m["family"]})
+			var mark := m.duplicate()
+			mark["at"] = m["at"] * framing["scale"]
+			marks.append(mark)
 		out["families"] = families
 		out["family_names"] = design["family_names"] + PackedStringArray(["frame"])
 		out["marks"] = marks

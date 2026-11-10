@@ -136,6 +136,12 @@ picture takes the plant's shape, between 0.6 and 1.25 wide for its height,
 with the usual size as its longer side, and the plant is moved and scaled to
 fill it. And plant collages always use gem lines, with no sparse or bare areas.
 
+Colors follow the plant: each flower head (its petals, its center) is a color
+group of its own and takes any of the theme colors that stand out from the
+paper, so heads can differ, while stems and leaves take the quietest ones.
+The projection's marks carry an `organ` for this; `PictureSources` turns each
+head into an area family of its own and lists them as the picture's bold areas.
+
 Plants stand unframed, in an **aura** of small pale stones (`GemAura`, the
 plant's `collar` option: `streams`, `veil`, `halo` (whole rows of even stones
 close around the outline), `none`, or picked per pattern seed).

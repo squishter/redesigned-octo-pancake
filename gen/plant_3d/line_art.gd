@@ -67,7 +67,10 @@ static func project(data: Dictionary, view: String, size := 320, camera_override
 	for i in design.families.size():
 		design.families[i] = posmod(design.families[i], 8)
 	design.marks = AnimalSurfaceProjection._marks(labels, size)
+	# Each mark also says which organ it is on (a flower head with its
+	# center, a leaf), so a picture can color every head on its own.
 	for mark: Dictionary in design.marks:
+		mark.organ = (mark.family / 8) / PlantGrowth.STRIDE
 		mark.family = posmod(mark.family, 8)
 	design.family_names = PackedStringArray(FAMILY_NAMES)
 	design.projection_size = size

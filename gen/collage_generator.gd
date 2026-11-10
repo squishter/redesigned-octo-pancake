@@ -191,6 +191,9 @@ const AURA_STONE_RANK := 0.85
 ##   drop_lines, bare_at: classes of gem lines and centroids of areas to leave
 ##     out (set when over max_slots)
 ##   layout: one of LAYOUTS (default "classic")
+##   (motifs' "bold", from a posed plant: the area families that take the
+##     colors that stand out from the paper; the other areas take the quiet
+##     ones, see RegionPaint.split_palette)
 ##   motifs: a free-form picture's families of lines and areas (see
 ##     PictureSources.mandala_lines): {"lines": a family per pixel, "areas":
 ##     [{"at", "family"}]}. A family stands in for symmetric copies: its gem
@@ -582,6 +585,12 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	var features := PackedColorArray()
 	var from_image: bool = options.get("colors_image") is Image
 	var gems: Array = options.get("gems", Palettes.starter_gems())
+	# Groups held to some of the colors (group -> {gem key: true}), see below,
+	# with the palette's split, each role's gem keys and the bold groups.
+	var role_palettes := {}
+	var role_split := {}
+	var role_keys := {}
+	var role_bold := {}
 	# Which groups of areas touch, so neighbors get colors that read apart.
 	var neighbors := RegionPaint.group_neighbors(
 			map.adjacency(_neighbor_reach(line_slots, unit, gap), maxi(4, int(unit))), groups)
@@ -594,9 +603,41 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		# Choose among the gems the theme snaps to, so two theme colors that
 		# land on one gem don't count as different.
 		var paint := _snapped_palette(theme, gems)
-		colors = RegionPaint.theme_colors(map, symmetry, paint, seed_value, groups, neighbors)
-		accents = RegionPaint.accent_colors(map, groups, colors, paint, seed_value, neighbors)
-		features = RegionPaint.accent_colors(map, groups, accents, paint, seed_value + 1, neighbors, colors)
+		if options.get("motifs", {}).has("bold"):
+			# Bold areas (a plant's flowers) in the colors that stand out from
+			# the paper, the rest (its stems and leaves) in the quiet ones:
+			# their accent and feature stones too, and whatever the variety
+			# pass recolors.
+			var split := RegionPaint.split_palette(paint, AURA_PAPER)
+			var bold := RegionPaint.bold_groups(map, groups, options["motifs"]["areas"], options["motifs"]["bold"])
+			role_split = split
+			role_bold = bold
+			colors = RegionPaint.role_colors(map, groups, split, seed_value, neighbors, bold)
+			var keys := {}
+			for role: String in split:
+				var sub: PackedColorArray = split[role]
+				keys[role] = {}
+				for c in sub:
+					keys[role][c.to_html(false)] = true
+				if not gems.is_empty():
+					for i in RegionPaint.snap_to_gems(sub, gems):
+						keys[role][str(gems[i]["id"])] = true
+				var role_accents := RegionPaint.accent_colors(map, groups, colors, sub, seed_value, neighbors)
+				var role_features := RegionPaint.accent_colors(map, groups, role_accents, sub, seed_value + 1, neighbors, colors)
+				if accents.is_empty():
+					accents = role_accents
+					features = role_features
+				for r in colors.size():
+					if bold.has(groups[r]) == (role == "bold"):
+						accents[r] = role_accents[r]
+						features[r] = role_features[r]
+			role_keys = keys
+			for g in groups:
+				role_palettes[g] = keys["bold" if bold.has(g) else "quiet"]
+		else:
+			colors = RegionPaint.theme_colors(map, symmetry, paint, seed_value, groups, neighbors)
+			accents = RegionPaint.accent_colors(map, groups, colors, paint, seed_value, neighbors)
+			features = RegionPaint.accent_colors(map, groups, accents, paint, seed_value + 1, neighbors, colors)
 
 	var n_groups := 0
 	for g in groups:
@@ -609,10 +650,20 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 	if setting == "gems":
 		var neutral := _line_colors(theme, from_image, rng)
 		line_matched = not from_image and rng.randf() < 0.5
+		# With bold and quiet areas, every line (the silhouette's too) goes by
+		# the area it borders, a bold one first: a flower's outline is bold,
+		# a leaf's or a stem's quiet. Lines beside no area are quiet.
+		var roles := not role_split.is_empty()
+		if roles:
+			line_matched = true
+			var quiet: PackedColorArray = role_split["quiet"]
+			neutral = PackedColorArray([quiet[0], quiet[quiet.size() - 1]])
 		for sl in line_slots:
 			var key: Variant = "outer" if sl["region"] == 1 else "inner"
-			if line_matched and key == "inner":
-				key = _bordered_group(sl, map, groups, gap)
+			if line_matched and (key == "inner" or roles):
+				var bordered: Variant = _bordered_group(sl, map, groups, gap, role_bold)
+				if not roles or bordered is int:
+					key = bordered
 			var k := line_keys.find(key)
 			if k < 0:
 				k = line_keys.size()
@@ -624,7 +675,17 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 					colors.append(neutral[1] if key == "outer" else neutral[0])
 				# Second and third colors for lines that repeat a sequence.
 				var base: Color = colors[colors.size() - 1]
-				var seq_colors := _distinct_colors(base, theme + PackedColorArray(neutral), 2, hash([seed_value, str(key)]))
+				var seq_choices := theme + PackedColorArray(neutral)
+				if roles:
+					var role := "bold" if key is int and role_bold.has(key) else "quiet"
+					seq_choices = role_split[role]
+					role_palettes[n_groups + k] = role_keys[role]
+				var seq_colors := _distinct_colors(base, seq_choices, 2, hash([seed_value, str(key)]))
+				if roles:
+					# A color of its own palette rather than a shade from outside it.
+					for i in 2:
+						if not seq_colors[i] in seq_choices:
+							seq_colors[i] = seq_choices[(maxi(0, seq_choices.find(base)) + 1 + i) % seq_choices.size()]
 				accents.append(seq_colors[0])
 				features.append(seq_colors[1])
 			sl["region"] = n + k
@@ -697,7 +758,7 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		_mark_accents(slots, n)
 	var gem_types := GemVariety.balance(slots, group_of,
 			[] if from_image else _variety_colors(slots, theme, gems), type_target, seed_value, allowed, neighbors,
-			MIN_TYPE_STONES if tidy else 0)
+			MIN_TYPE_STONES if tidy else 0, role_palettes)
 	for s in slots:
 		s.erase("keep_type")
 	# The centerpiece may have changed shape: stand it upright again.
@@ -1262,8 +1323,9 @@ static func _variety_colors(slots: Array, theme: PackedColorArray, gems: Array) 
 
 ## Symmetry group of the area a line stone borders: of the areas on its two
 ## sides, the one with the lower group (nearer the center or the top); "inner"
-## if neither side is an area.
-static func _bordered_group(slot: Dictionary, map: RegionMap, groups: PackedInt32Array, gap: float) -> Variant:
+## if neither side is an area. Groups in `prefer` come before the others.
+static func _bordered_group(slot: Dictionary, map: RegionMap, groups: PackedInt32Array, gap: float,
+		prefer: Dictionary = {}) -> Variant:
 	var c := Vector2(slot["x"], slot["y"])
 	var nrm := Vector2.from_angle(slot["rotation"]).orthogonal()
 	var best := -1
@@ -1271,8 +1333,12 @@ static func _bordered_group(slot: Dictionary, map: RegionMap, groups: PackedInt3
 		for side in [-1.0, 1.0]:
 			var q: Vector2 = c + nrm * reach * side
 			var l := map.label_at(int(q.x), int(q.y))
-			if l >= 0 and (best < 0 or groups[l] < best):
-				best = groups[l]
+			if l < 0:
+				continue
+			var g := groups[l]
+			# A preferred group (`prefer`: group -> true) wins over any other.
+			if best < 0 or (prefer.has(g) and not prefer.has(best)) or (prefer.has(g) == prefer.has(best) and g < best):
+				best = g
 	return best if best >= 0 else "inner"
 
 
