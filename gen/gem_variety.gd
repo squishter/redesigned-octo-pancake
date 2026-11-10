@@ -49,13 +49,17 @@ const STAND_IN_LAST := ["pebble", "clover", "sunburst", "butterfly"]
 ##   afterwards takes the type of the nearest stone its shape can become
 ##   (in its own group first), so it sits beside stones like it. Slots marked
 ##   "keep_type" (accents that fill a feature on their own) are exempt.
+## palettes: group id -> {gem key (the gem's id, or the color's hex when not
+##   snapped): true}: the only colors that group's parts may be given
+##   (default: any).
 ## Sets every slot's "cut". Returns the number of gem types afterwards.
 static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, target: int, seed_value: int,
-		allowed: Dictionary = {}, neighbors: Array = [], min_stones: int = 0) -> int:
+		allowed: Dictionary = {}, neighbors: Array = [], min_stones: int = 0, palettes: Dictionary = {}) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "variety"])
 	# Colors each group shows (gem key -> parts), to keep neighbors apart.
-	var ctx := {"neighbors": neighbors, "seed": seed_value, "group_colors": {}, "labs": {}, "may_match": {}}
+	var ctx := {"neighbors": neighbors, "seed": seed_value, "group_colors": {}, "labs": {}, "may_match": {},
+			"palettes": palettes}
 	var units := {}  # key -> {slots, shape, color, gem, combo}
 	var unit_keys := []
 	for s in slots:
@@ -421,6 +425,10 @@ static func _recolor(ctx: Dictionary, holders: Dictionary, stones: Dictionary, u
 static func _clashes(ctx: Dictionary, u: Dictionary, gem: Variant, color: Color) -> bool:
 	var neighbors: Array = ctx["neighbors"]
 	var g: int = u["group"]
+	# A group held to a palette of its own takes no color outside it.
+	var palettes: Dictionary = ctx.get("palettes", {})
+	if palettes.has(g) and not palettes[g].has(_gem_key(gem, color)):
+		return true
 	if g < 0 or g >= neighbors.size():
 		return false
 	var key := _gem_key(gem, color)

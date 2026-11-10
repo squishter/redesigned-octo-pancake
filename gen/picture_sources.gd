@@ -6,6 +6,10 @@ extends RefCounted
 const DEFAULT_SIZE := 768
 const LINE_COLOR := Color("#3a2a4a")
 const BACKGROUND := Color("#f4eee6")
+## A posed plant's families that make up its flowers, and the first area
+## family id given to single flower heads (see mandala_lines).
+const PLANT_FLOWER_FAMILIES := ["petals", "centers", "buds"]
+const PLANT_HEAD_FAMILY := 1000
 
 
 ## Mandala options: variant, wobble (see MandalaGenerator), silhouette,
@@ -22,26 +26,50 @@ const BACKGROUND := Color("#f4eee6")
 ## Swirls (layout, shape, recent; see SwirlGenerator) aren't symmetric but
 ## come with families of lines and areas; those are returned as "motifs":
 ## {"lines": a family per pixel (-1 off the lines), "areas": [{"at": px,
-## "family"}], "names": the families' names}, for CollageGenerator.
-## Returns {"mask", "width", "height", "mandala"} (and "motifs").
+## "family"}], "names": the families' names}, for CollageGenerator. A posed
+## plant's also have "bold": the area families (one per flower head and
+## kind: its petals, its center) that take the colors that stand out from
+## the background, while the rest (stems, leaves) take the quiet ones.
+## Returns {"mask", "width", "height", "mandala"} (and "motifs"); pictures
+## are `size` px square, but for unframed plants, which take their own
+## shape (the mandala's "aspect") with `size` as the longer side.
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
 	var size: int = options.get("size", DEFAULT_SIZE)
 	var line_width: float = options.get("line_width", size / 170.0)
 	var px := Vector2i(size, size)
+	# A picture of its own shape (an unframed plant): `size` is its longer side.
+	var aspect: float = mandala.get("aspect", 1.0)
+	if aspect < 1.0:
+		px.x = roundi(size * aspect)
+	elif aspect > 1.0:
+		px.y = roundi(size / aspect)
 	var mask := LineRaster.rasterize(mandala["polylines"], mandala["closed"], px, line_width)
-	var out := {"mask": mask, "width": size, "height": size, "mandala": mandala}
+	var out := {"mask": mask, "width": px.x, "height": px.y, "mandala": mandala}
 	if mandala.has("families"):
 		# A little wider than the lines, so their centerlines read it.
 		var areas := []
+		var names: PackedStringArray = mandala.get("family_names", PackedStringArray())
+		# A plant's flowers: each head is a family of its own (so heads differ
+		# in color), and they are the picture's bold areas.
+		var bold := {}
 		for m: Dictionary in mandala["marks"]:
-			areas.append({"at": LineRaster.to_px(m["at"], px), "family": m["family"]})
+			var family: int = m["family"]
+			# What is left of a leaf's midrib is leaf: one color with it.
+			if m.has("organ") and family < names.size() and names[family] == "midribs" and "leaves" in names:
+				family = names.find("leaves")
+			if m.has("organ") and family < names.size() and names[family] in PLANT_FLOWER_FAMILIES:
+				family = PLANT_HEAD_FAMILY + int(m["organ"]) * names.size() + family
+				bold[family] = true
+			areas.append({"at": LineRaster.to_px(m["at"], px), "family": family})
 		out["motifs"] = {
 			"lines": LineRaster.rasterize_labels(mandala["polylines"], mandala["closed"], mandala["families"], px,
 					line_width + 2.0),
 			"areas": areas,
-			"names": PackedStringArray(mandala.get("family_names", PackedStringArray())),
+			"names": names,
 		}
+		if not bold.is_empty():
+			out["motifs"]["bold"] = bold
 	return out
 
 
@@ -81,6 +109,13 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 			opts["source"][key] = mandala[key]
 	if lines.has("motifs"):
 		opts["motifs"] = lines["motifs"]
+	# Thin as a plant is, every area counts: gem lines rather than a metal
+	# outline around little, and no area left sparse or bare.
+	if mandala["variant"] == "plant_mesh":
+		if not opts.has("setting") or opts["setting"] == "auto":
+			opts["setting"] = "gems"
+		if float(opts.get("sparsity", -1.0)) < 0.0:
+			opts["sparsity"] = 0.0
 	# A plant's collar is an aura around it (unless it is framed: the frame
 	# and its background take that room).
 	# Its stems and stalks are pairs of lines a stone or two apart, where
@@ -119,8 +154,15 @@ static func mandala_image(seed_value: int, options: Dictionary = {}, lines: Dict
 	# Areas facing each other across a line get colors that read apart.
 	var reach := maxf(4.0, float(options.get("line_width", w / 170.0))) * 3.0
 	var neighbors := RegionPaint.group_neighbors(map.adjacency(reach, maxi(4, int(reach / 2.0))), groups)
-	var colors := RegionPaint.theme_colors(map, symmetry, palette, seed_value, groups, neighbors)
 	var background: Color = options.get("background", BACKGROUND)
+	var colors: PackedColorArray
+	if lines.get("motifs", {}).has("bold"):
+		# A plant: bold flowers, quiet stems and leaves.
+		var bold := RegionPaint.bold_groups(map, groups, lines["motifs"]["areas"], lines["motifs"]["bold"])
+		colors = RegionPaint.role_colors(map, groups, RegionPaint.split_palette(palette, background), seed_value,
+				neighbors, bold)
+	else:
+		colors = RegionPaint.theme_colors(map, symmetry, palette, seed_value, groups, neighbors)
 	var plan := DesignPlan.make(map, groups, options, seed_value)
 	var fills: PackedStringArray = plan["fills"]
 	for r in colors.size():
