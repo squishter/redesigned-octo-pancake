@@ -107,12 +107,12 @@ const IMPOSTOR_BACK := 1.2
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
 const KIT_DRILL := 0.98
-## The paper's color (linear): warm white under collages, a neutral gray
-## under kits, which shows between round drills and would otherwise pale
-## the picture (paper_color in gem_light.gdshaderinc; the stones see it
+## The paper's color (linear): warm white under collages, charcoal under
+## kits, which shows between round drills and would otherwise pale the
+## picture (paper_color in gem_light.gdshaderinc; the stones see it
 ## below them and their caustics take it on too).
 const PAPER_COLOR := Color(0.86, 0.84, 0.8)
-const KIT_PAPER_COLOR := Color(0.3, 0.3, 0.3)
+const KIT_PAPER_COLOR := Color(0.08, 0.08, 0.08)
 ## The paper's grain is baked into a texture at most this many texels per
 ## board unit and this many on a side (it is very soft; filtering fills in).
 const GRAIN_DENSITY := 2.0

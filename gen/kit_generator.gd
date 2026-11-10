@@ -21,7 +21,7 @@ const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 ## Drills on the board look a little paler than their gems' own colors (the
 ## paper shows between them), so pictures are made this much more colorful
 ## (Lab chroma) before they are matched to gems.
-const SATURATION := 1.05
+const SATURATION := 1.12
 
 
 ## Builds a kit pattern dictionary (see KitPattern for the format).

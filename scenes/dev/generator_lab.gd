@@ -17,11 +17,12 @@ const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
 ## Kit paper choices: linear colors.
 const KIT_PAPERS := {
-	"game gray": GemBoard3D.KIT_PAPER_COLOR,
+	"game charcoal": GemBoard3D.KIT_PAPER_COLOR,
 	"warm white": GemBoard3D.PAPER_COLOR,
 	"light gray": Color(0.5, 0.5, 0.5),
+	"mid gray": Color(0.3, 0.3, 0.3),
 	"dark gray": Color(0.18, 0.18, 0.18),
-	"charcoal": Color(0.08, 0.08, 0.08),
+	"black": Color(0.02, 0.02, 0.02),
 }
 
 var _source: OptionButton
@@ -191,7 +192,7 @@ func _ready() -> void:
 			boosts.append("%d%%" % pct)
 	_kit_saturation = _options(controls, "Kit saturation", boosts)
 	# The paper under kits on the 3D board (GemBoard3D.kit_paper): the
-	# game's gray first, the collages' warm white, then other grays.
+	# game's charcoal first, the collages' warm white, then grays.
 	_kit_paper = _options(controls, "Kit paper", KIT_PAPERS.keys())
 	_sparsity = _options(controls, "Sparse", ["auto", "none", "some", "lots"])
 	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)

@@ -228,8 +228,8 @@ mode for trying out new pattern generation.
   Drills fill 98% of their cell, so neighbors almost touch, like a real kit
   (square drills' slots are sized by `GemShapes.drill_length`, since a square
   draws at 75% of its slot to fit round collage slots).
-  Kit pictures are made 5% more colorful before their colors are matched
-  (`KitGenerator.SATURATION`), and kits lie on neutral gray paper
+  Kit pictures are made 12% more colorful before their colors are matched
+  (`KitGenerator.SATURATION`), and kits lie on charcoal paper
   (`GemBoard3D.KIT_PAPER_COLOR`) rather than the collages' warm white, so
   the paper between round drills doesn't pale the picture.
   *Kit size* in the New puzzle panel (for photo kits too) sets the drills
