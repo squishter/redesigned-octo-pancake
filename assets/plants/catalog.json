@@ -1,0 +1,636 @@
+{
+  "buds": {
+    "opening_bud": {
+      "bloom_profile": "fixed",
+      "bytes": 136637,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/bud_opening_bud.dat",
+      "raw_sha256": "1fa0086d174748a841369fbae5fead0ca8c02aece95f17afb7e8b3f7045300b5",
+      "sha256": "5aa5a94a92f360d87a31548e33c7cca61a8b3f2a3d39dd3448a6e5cfee17e113",
+      "triangles": 5264,
+      "vertices": 2909
+    },
+    "pointed_bud": {
+      "bloom_profile": "fixed",
+      "bytes": 2907,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/bud_pointed_bud.dat",
+      "raw_sha256": "2ccbf31ba58250465a8cfd0dffcdfedfcf01cd06be2e9b0b18efc4e537931c69",
+      "sha256": "0c2cf36a9d72880a92a207e1d4fb01a8a4e1ddd4aeb2f78b99bac4aa5773a1fe",
+      "triangles": 224,
+      "vertices": 144
+    },
+    "ribbed_bud": {
+      "bloom_profile": "fixed",
+      "bytes": 15065,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/bud_ribbed_bud.dat",
+      "raw_sha256": "46299d21be813ed071c9c5e3a3cbcddb31a230bc4c4b05ef2f8a03c14c4418f5",
+      "sha256": "c08c478f8d652ad74ee84e83bb074ad299b91a3761d006f7c7a142635961da0f",
+      "triangles": 1904,
+      "vertices": 998
+    },
+    "round_bud": {
+      "bloom_profile": "fixed",
+      "bytes": 2914,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/bud_round_bud.dat",
+      "raw_sha256": "274fdf87f847c0e5856706d2fe224a39709db5b61fbfa3ca26d01cd4d6fd1a9d",
+      "sha256": "605310b9fd58e3c6ebe2b971c99a7d21264afe5e2f55775d4928b5dadb30e41e",
+      "triangles": 224,
+      "vertices": 144
+    },
+    "sepal_bud": {
+      "bloom_profile": "fixed",
+      "bytes": 136644,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/bud_sepal_bud.dat",
+      "raw_sha256": "79d03a3b4238d8fb42a41b1008fcde0fec7998a48ad89f807dbdbe0abfb2ceaa",
+      "sha256": "207addf67f5afcf736cbc30bac7095316b3de8183566398f30ca25eed021ee4f",
+      "triangles": 5264,
+      "vertices": 2909
+    }
+  },
+  "flowers": {
+    "allium": {
+      "bloom_profile": "fixed",
+      "bytes": 699688,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_allium.dat",
+      "raw_sha256": "795816aa68be845697d16bc102f638bbcd964d92a0e74a68d769a04743b6ee93",
+      "sha256": "48719f16f09e2b3d44fed0e5edeb2b4a7ec05b6f19a64b7c24b5898e41371614",
+      "triangles": 24768,
+      "vertices": 15066
+    },
+    "anemone": {
+      "bloom_profile": "cup",
+      "bytes": 58345,
+      "endpoint_error": 5.618469141565346e-17,
+      "file": "res://assets/plants/flower_anemone.dat",
+      "raw_sha256": "496cd3646ec9575d30a5227b114305083ec043d27b06110f6f76a4c2ad3c4aef",
+      "sha256": "8a3a49a224d386954790a41ac046498552f57b5863734675a0cf1d65067ae3e6",
+      "triangles": 2016,
+      "vertices": 1224
+    },
+    "anthurium": {
+      "bloom_profile": "fixed",
+      "bytes": 16256,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_anthurium.dat",
+      "raw_sha256": "62a6f7e66514bb8f427555e7fad692031feb6251751cb13df8f531004cf8bfaa",
+      "sha256": "f6aa860969d02962bed21b4e96f7092fcbcd4ec1e888c29b6a268b73207e80b7",
+      "triangles": 1040,
+      "vertices": 571
+    },
+    "aster": {
+      "bloom_profile": "ray",
+      "bytes": 213983,
+      "endpoint_error": 4.220764384040162e-17,
+      "file": "res://assets/plants/flower_aster.dat",
+      "raw_sha256": "7bf019afb4ac293de5e89993f6e133b8d2bb170e15bb14badfd9154d0c0634e9",
+      "sha256": "69a3a69e418a5ef695811861e40e7a564764e66f9b2e3c9f787a3d542227d636",
+      "triangles": 5152,
+      "vertices": 3114
+    },
+    "bell": {
+      "bloom_profile": "fixed",
+      "bytes": 35898,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_bell.dat",
+      "raw_sha256": "6a47f92830103f037bb64b48b1f1609edeb32aeb505a73d8c25575accf2396f7",
+      "sha256": "3fc2f48b8a80fe3d18f26febe6c7761be3d44a28aae5f9e32625a2b7b5ee20b3",
+      "triangles": 2384,
+      "vertices": 1303
+    },
+    "bleeding_heart": {
+      "bloom_profile": "fixed",
+      "bytes": 7161,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_bleeding_heart.dat",
+      "raw_sha256": "8091ac62ddc8d66d5c736c8c3e96dd06c4e43bcaa68dc1ec65a8b25a63af812b",
+      "sha256": "08dea26ad6f36e2a7ca2f239ea1bbc3c16e2392c0c47447835e5c3ad3fbe9cde",
+      "triangles": 672,
+      "vertices": 432
+    },
+    "buttercup": {
+      "bloom_profile": "cup",
+      "bytes": 47535,
+      "endpoint_error": 5.594315114139762e-17,
+      "file": "res://assets/plants/flower_buttercup.dat",
+      "raw_sha256": "085eec1e49973be86d042358dad6b5169d87dbf245c16d25194bba757c754a51",
+      "sha256": "f783580be239806f1bb735cf50b7baa6d4eb92448e93618e73caf650b48ae4e7",
+      "triangles": 1344,
+      "vertices": 819
+    },
+    "calla": {
+      "bloom_profile": "fixed",
+      "bytes": 25448,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_calla.dat",
+      "raw_sha256": "20a0b85bb2d7a752c5923d6fceab50796a89759d689082bc9e854f91ba31b6f5",
+      "sha256": "e2fa0ef99fcd25dc4627b42bb25b6c7678e72a1b2b3bf3048f10262f920ece15",
+      "triangles": 1000,
+      "vertices": 547
+    },
+    "camellia": {
+      "bloom_profile": "layered",
+      "bytes": 211439,
+      "endpoint_error": 3.469446951953614e-17,
+      "file": "res://assets/plants/flower_camellia.dat",
+      "raw_sha256": "097151c9f290772fdf6f5210a50d73e17ad35b5230c6b5bc2a28f3e673b64d96",
+      "sha256": "ba62ace313382afaec3e71f77b19164f538a44bd0bbf8b397803d60f729de9de",
+      "triangles": 5600,
+      "vertices": 3384
+    },
+    "chrysanthemum": {
+      "bloom_profile": "layered",
+      "bytes": 945793,
+      "endpoint_error": 5.551115123125783e-17,
+      "file": "res://assets/plants/flower_chrysanthemum.dat",
+      "raw_sha256": "dd189d63d05ac3aa50e442bfcbc7d3959dab48e278f760b8b5f275694a9c5a5d",
+      "sha256": "9275a1de70b46bd6e8bf36c9b5c560fa9a995f462e0c20287788bda5651803d2",
+      "triangles": 19936,
+      "vertices": 12024
+    },
+    "cosmos": {
+      "bloom_profile": "ray",
+      "bytes": 59901,
+      "endpoint_error": 3.925231146709438e-17,
+      "file": "res://assets/plants/flower_cosmos.dat",
+      "raw_sha256": "73871967ef99c989455c438961df4f2fae9a847d15a4bcaeb8d86949092a5c27",
+      "sha256": "512c6b6ab3fb597bcf6422e15a06a12813433112f9d28e8735bc4744d1fa3896",
+      "triangles": 2016,
+      "vertices": 1224
+    },
+    "daffodil": {
+      "bloom_profile": "fixed",
+      "bytes": 58889,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_daffodil.dat",
+      "raw_sha256": "88b5f2947dbf1daf01bebbe5f21eec23fceb173ca9f979619c2f3111f506431b",
+      "sha256": "96d0e56515c76140c84a3b7fba46101661189c50543d7c18931d408968e6c9f3",
+      "triangles": 3728,
+      "vertices": 2113
+    },
+    "dahlia": {
+      "bloom_profile": "layered",
+      "bytes": 457832,
+      "endpoint_error": 3.1031676915590914e-17,
+      "file": "res://assets/plants/flower_dahlia.dat",
+      "raw_sha256": "f45e3e4f28ca62b46af946b03b0124f860535cef35e9083279845edac96aacae",
+      "sha256": "574627907396a6867dd43098ef20389dace9efe01759918923b285b20cb7d239",
+      "triangles": 10976,
+      "vertices": 6624
+    },
+    "daisy": {
+      "bloom_profile": "ray",
+      "bytes": 101325,
+      "endpoint_error": 3.925231146709438e-17,
+      "file": "res://assets/plants/flower_daisy.dat",
+      "raw_sha256": "82c95c332746211a5f299e9ebf4a201a42fbb828881ec51ab350f72957478ec1",
+      "sha256": "8ddf64a95a6235e4233c2430f85478346b78a0eea2e4419cf513f47ff71b9d70",
+      "triangles": 2912,
+      "vertices": 1764
+    },
+    "fuchsia": {
+      "bloom_profile": "fixed",
+      "bytes": 43985,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_fuchsia.dat",
+      "raw_sha256": "56c6d375e76510247b2be13c23355758b042358a892ac91510ad91a8d0930909",
+      "sha256": "ccda9df5d9db48eba07d0260de2cdc7c5521f18573fbaa2d1edb61dd2bb22131",
+      "triangles": 3280,
+      "vertices": 1843
+    },
+    "gerbera": {
+      "bloom_profile": "ray",
+      "bytes": 293949,
+      "endpoint_error": 5.594315114139762e-17,
+      "file": "res://assets/plants/flower_gerbera.dat",
+      "raw_sha256": "b106dd21d07abec887bf8baa1d85e34c271c26458c9e8aa1101c17e8b0799f24",
+      "sha256": "42a09fe2129e91f1d30a6c616dd4e2fb9036f2f78dc634d5584225c8e5c352a5",
+      "triangles": 7392,
+      "vertices": 4464
+    },
+    "hibiscus": {
+      "bloom_profile": "ray",
+      "bytes": 77621,
+      "endpoint_error": 0.001294275488721123,
+      "file": "res://assets/plants/flower_hibiscus.dat",
+      "raw_sha256": "1660c9b2f327a5436c6066b9b629ec167448c60b00a1130c2e50401856b3d27a",
+      "sha256": "716e0e4c7f9cc358f8e9e486c6bfd59876b416a3ae2f0bbe10244f662e351c79",
+      "triangles": 2496,
+      "vertices": 1557
+    },
+    "hydrangea": {
+      "bloom_profile": "fixed",
+      "bytes": 162597,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_hydrangea.dat",
+      "raw_sha256": "6fece613b27f07ac1be11abd2873f2258a4c6281456f3c6bc1adbaf33a4c1f6c",
+      "sha256": "a4bfcd5b7fcd13fa7f6d76f7b9b990219a9d8d7c52f9c6f3919a2bea2e3968dd",
+      "triangles": 10080,
+      "vertices": 6156
+    },
+    "iris": {
+      "bloom_profile": "fixed",
+      "bytes": 31154,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_iris.dat",
+      "raw_sha256": "056ac3c1923dabc80391c2cc2376bf44b305ff00c182c3e3c9b70794cc1ff63c",
+      "sha256": "5861c5d969891073c56e1f5c43049052b929b03516f011772d5adb05a4e0c3c1",
+      "triangles": 1568,
+      "vertices": 954
+    },
+    "lavender": {
+      "bloom_profile": "fixed",
+      "bytes": 383180,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_lavender.dat",
+      "raw_sha256": "7c57ae1d6e72264382b63da892c2981f2b5cf4ffee8f31de7c3517a03c34e09c",
+      "sha256": "324c9536036d61102368b7bff82b7e2217d1d28e33187ffec408c942bab22b2f",
+      "triangles": 13760,
+      "vertices": 8370
+    },
+    "lily": {
+      "bloom_profile": "ray",
+      "bytes": 49273,
+      "endpoint_error": 5.721958498152797e-17,
+      "file": "res://assets/plants/flower_lily.dat",
+      "raw_sha256": "137763ec8d4bd64ba1bfef6c407d98af59c0c041179660f3f06627220fd4471c",
+      "sha256": "a3ae8d3e5ae490109f88c55ca844775502640fcc932d35101f2fc97ac9c73dfe",
+      "triangles": 1568,
+      "vertices": 954
+    },
+    "lotus": {
+      "bloom_profile": "layered",
+      "bytes": 318578,
+      "endpoint_error": 5.594315114139762e-17,
+      "file": "res://assets/plants/flower_lotus.dat",
+      "raw_sha256": "cae5c25982718022217183c6f320ceb56394ef38c87a57b3833816e8da4a2339",
+      "sha256": "c21052f3c04addf4325a99c01505f91a69d49a05b89b69278080e15df02fe8d4",
+      "triangles": 6944,
+      "vertices": 4194
+    },
+    "magnolia": {
+      "bloom_profile": "cup",
+      "bytes": 200758,
+      "endpoint_error": 5.721958498152797e-17,
+      "file": "res://assets/plants/flower_magnolia.dat",
+      "raw_sha256": "2d35a5b0e51d8ad8c61f010376f729676c51e4bc69d56648a46a3a69f0795fb5",
+      "sha256": "2d6d731cab30045138ce6b1097a1f11ce5b8de295b894c5f108f9ef08018d1a9",
+      "triangles": 4256,
+      "vertices": 2574
+    },
+    "orchid": {
+      "bloom_profile": "fixed",
+      "bytes": 27898,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_orchid.dat",
+      "raw_sha256": "5e885fb8473c91ce5bd8e6054c3fc23df5a37e5a59cf026029f7b6b778b0ac35",
+      "sha256": "86c72090e6ae49aedd35d0fd7d18df8f6eaa70fe7a8fe04ddeaacfe4d4889f72",
+      "triangles": 1344,
+      "vertices": 819
+    },
+    "pansy": {
+      "bloom_profile": "fixed",
+      "bytes": 27961,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_pansy.dat",
+      "raw_sha256": "71a771d58c1caac878d20ae2a5a7c61871c552ee76d1aa013ef94b6ff51c8142",
+      "sha256": "143938e4fecc318de9535797d090efd1f7a07e73996983342aa17d8a03b8af23",
+      "triangles": 1344,
+      "vertices": 819
+    },
+    "poppy": {
+      "bloom_profile": "cup",
+      "bytes": 29076,
+      "endpoint_error": 6.206335383118183e-17,
+      "file": "res://assets/plants/flower_poppy.dat",
+      "raw_sha256": "3d0042a4ed5875a7b8ca2777a49a008547d7ed011b3f65734222ef2c797a6892",
+      "sha256": "0f8e40ad11b2f9540bda0115d6ff1ff619d956afd14fe73ce5545d1185296296",
+      "triangles": 1120,
+      "vertices": 684
+    },
+    "rose": {
+      "bloom_profile": "layered",
+      "bytes": 317784,
+      "endpoint_error": 5.561946577567963e-17,
+      "file": "res://assets/plants/flower_rose.dat",
+      "raw_sha256": "3c37e380646eefc84926a7cfa7f7a37434db513143d55946cb7f194390ae312f",
+      "sha256": "3781aaabaf392f6f23bfd1d94e37ab4d5ffb0e2ccc8f3f1a60df703a4cdb93bd",
+      "triangles": 6496,
+      "vertices": 3924
+    },
+    "star": {
+      "bloom_profile": "ray",
+      "bytes": 47604,
+      "endpoint_error": 5.551115123125783e-17,
+      "file": "res://assets/plants/flower_star.dat",
+      "raw_sha256": "ad5e70b2d1a59c2065582ba71e2a981bb8564bee9c982bf5f954a9cf8d37ed46",
+      "sha256": "b61fb97c6c2ef840e9e835ef0590d220705ced11f9bbe39fab154649661c0eaf",
+      "triangles": 1344,
+      "vertices": 819
+    },
+    "sunflower": {
+      "bloom_profile": "ray",
+      "bytes": 380826,
+      "endpoint_error": 5.647850449853784e-17,
+      "file": "res://assets/plants/flower_sunflower.dat",
+      "raw_sha256": "0986cb54bb03101954e52f25e4b5eb3f5cb3b891c582b6a29401bc9cd7958db1",
+      "sha256": "25ed8e745733ae28166544ae2617680e3d1ffd5f8d95976722b58667bff3accd",
+      "triangles": 8512,
+      "vertices": 5148
+    },
+    "trumpet": {
+      "bloom_profile": "fixed",
+      "bytes": 35951,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/flower_trumpet.dat",
+      "raw_sha256": "b569f0ac242811421b8f9f2ced29ddb81ecbcdc3a96cd4e34028ffad09727b87",
+      "sha256": "6db3f30916071de9ceeb719fdf1f1ab0ed934ef225601250df382d22e2b38fff",
+      "triangles": 2384,
+      "vertices": 1303
+    },
+    "tulip": {
+      "bloom_profile": "cup",
+      "bytes": 49354,
+      "endpoint_error": 4.185862945154403e-17,
+      "file": "res://assets/plants/flower_tulip.dat",
+      "raw_sha256": "54dca80ce424acc0b3c0d3821c527b64938bc3615d5b387b141140a4f05839c1",
+      "sha256": "ef38b7d479b9ded5502c32ddf5226e93b52c8a8ee2d4401efaf578ba9d8d378a",
+      "triangles": 1568,
+      "vertices": 954
+    },
+    "zinnia": {
+      "bloom_profile": "layered",
+      "bytes": 449033,
+      "endpoint_error": 4.163336342344337e-17,
+      "file": "res://assets/plants/flower_zinnia.dat",
+      "raw_sha256": "776cec2d59e2ce41e01a7bba50550e84871d89e090c745a2b8c67a4d5bd158d6",
+      "sha256": "0c0da8d78ed258798a4b00caffffab12926bffd9e6f42caff272513da354c81e",
+      "triangles": 9632,
+      "vertices": 5814
+    }
+  },
+  "leaves": {
+    "arrow": {
+      "bloom_profile": "fixed",
+      "bytes": 18900,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_arrow.dat",
+      "raw_sha256": "92d052dcea41390746cf611b64beb63d2eca535fdd17c64dd0cfabfbdcb851e5",
+      "sha256": "aa44675daf5977e31753ea39844250a3133c28a6d95e546fbf902c6c27ba20ce",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "birch": {
+      "bloom_profile": "fixed",
+      "bytes": 18882,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_birch.dat",
+      "raw_sha256": "9a99e03b899d9ef6ea812cbecaa4cb60905ec56510668637337c5cabf037aa37",
+      "sha256": "65ba36ba6e7031f3cd65e945804cf0d1c918d486332054c6fbaf91f3a57b1a17",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "eucalyptus": {
+      "bloom_profile": "fixed",
+      "bytes": 18844,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_eucalyptus.dat",
+      "raw_sha256": "ad3c9c596a57f0cb6d3bb2c493ec207463346700a13204ba61fdd867240e1a21",
+      "sha256": "ca3b5a406f444939542770270ab567e65b8b9714d50cc1ee51117569f599d7ae",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "fan": {
+      "bloom_profile": "fixed",
+      "bytes": 21362,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_fan.dat",
+      "raw_sha256": "c10c28188cef14dccf14a515519efba056ffc11021352c2f44b4c2ab822f0f49",
+      "sha256": "c811f18938c62360871742481913f694db4e52ccec6b1c602a7f7f81766c7a4d",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "fern": {
+      "bloom_profile": "fixed",
+      "bytes": 395021,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_fern.dat",
+      "raw_sha256": "cc3d7f309ce7c45acef208e2d883009b3639da5b9ac7c1964663bb4259800321",
+      "sha256": "3038d7bc4825b3c98c3acf5b50f8ff6fad14e2fb4c2238186384e40b0db25347",
+      "triangles": 17168,
+      "vertices": 9419
+    },
+    "ginkgo": {
+      "bloom_profile": "fixed",
+      "bytes": 21454,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_ginkgo.dat",
+      "raw_sha256": "9c773c00bce41038f9a40c7921e7fe86d0a34b9626d1aa3fece225be280f124c",
+      "sha256": "4a0e0c53583e5d9a71557d4cc07e4f584f7d9eceab98b4e8978523b4c0550a33",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "heart": {
+      "bloom_profile": "fixed",
+      "bytes": 21657,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_heart.dat",
+      "raw_sha256": "823bb9d947e67a2781ee2273754712eccebf45bfee5b54902c3cab320c7be012",
+      "sha256": "fbfd145624a939d053ad98a7d8025426289fb451034cd3bfe543274918e1dba3",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "holly": {
+      "bloom_profile": "fixed",
+      "bytes": 18872,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_holly.dat",
+      "raw_sha256": "39d9bdf58321771cd0b817e689ed1fc4e97ce81de7ac4a049aae320138cde661",
+      "sha256": "3954c86b810a9c1b7556f19efc2a2c4e3814263e058a815d4bafc9102fdb746f",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "ivy": {
+      "bloom_profile": "fixed",
+      "bytes": 21673,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_ivy.dat",
+      "raw_sha256": "afea63f6ad80f4b64d2a1f7e4dd1e2605e166cf5aeba9bdf50cd7a783d56c75e",
+      "sha256": "300bc7cae7c029d256692f9e6f8bf0d21dcfeb362dc5ec3642d3a8111d535b39",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "lance": {
+      "bloom_profile": "fixed",
+      "bytes": 18890,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_lance.dat",
+      "raw_sha256": "4297d44d5f3429623b8d3d7ef0f58575944ad355f772ac3127cabb133e9fc215",
+      "sha256": "671382acb6679a89cf1bc3d1589131d4923dc2632e50ec78260e9419e3075bf7",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "maple": {
+      "bloom_profile": "fixed",
+      "bytes": 25684,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_maple.dat",
+      "raw_sha256": "a8ee97b58baf76ab40c43a59d2465125ac37855b46869a71b56ea385b922c7ea",
+      "sha256": "3a62e51c5a84f7342a66fb6da09b6df198f7768d9bb38c1c0c0649f8dcf8d510",
+      "triangles": 1188,
+      "vertices": 657
+    },
+    "monstera": {
+      "bloom_profile": "fixed",
+      "bytes": 71174,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_monstera.dat",
+      "raw_sha256": "6384f3c97980a0d0d3f3efc53573d2695346fe687e38101f17c4a2bbabd63110",
+      "sha256": "c5f7f0b5a9172cb76e81af70fe713d57604f7e395a5180ec57019c4ed92b5fd2",
+      "triangles": 2916,
+      "vertices": 1671
+    },
+    "needle_cluster": {
+      "bloom_profile": "fixed",
+      "bytes": 242216,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_needle_cluster.dat",
+      "raw_sha256": "4d7b1d60c808885ce1dd29fdaf0bd05d0cd23fda80cc57e3641b181436e482e9",
+      "sha256": "fdbff84f69c733b7a955d9007e97e6401326051144d1e7eb0a781c21efafd125",
+      "triangles": 9104,
+      "vertices": 4995
+    },
+    "oak_lobed": {
+      "bloom_profile": "fixed",
+      "bytes": 18890,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_oak_lobed.dat",
+      "raw_sha256": "373da60670bf2fbec388092b19260cf66effda1506f59fe5f61b3ffa8f9a421f",
+      "sha256": "c1d104e669e1550ea45892920e51726ab70543bdaab60ef9f2d9f542990e73bd",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "oval": {
+      "bloom_profile": "fixed",
+      "bytes": 18850,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_oval.dat",
+      "raw_sha256": "0de8ac8260388dc1aaba35b2828a1aca349c4d4ab45d2810a6b93b9c0c87cae8",
+      "sha256": "87e6c567718f799644170fe9184fa0da4d7fdea9491857d60f26e95f26c8b314",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "palm": {
+      "bloom_profile": "fixed",
+      "bytes": 244629,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_palm.dat",
+      "raw_sha256": "2e46ef9d443420a68fe7c0c0146eb86a45890432ada9e1f6023c3c42319453b7",
+      "sha256": "9dbb7f380ede9afc2b2245d2cbf8202af806da086939de579af6f389cd2718a6",
+      "triangles": 11120,
+      "vertices": 6101
+    },
+    "pinnate": {
+      "bloom_profile": "fixed",
+      "bytes": 212107,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_pinnate.dat",
+      "raw_sha256": "00ac805b837d494f2c2d5a2c459426e3a38ecb6d84c46def23192c4b300e1520",
+      "sha256": "6f4a141be87ca9c328c94bf011b3f28b8968227900a49dad44cb578fc72730d6",
+      "triangles": 9104,
+      "vertices": 4995
+    },
+    "ribbon": {
+      "bloom_profile": "fixed",
+      "bytes": 18837,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_ribbon.dat",
+      "raw_sha256": "1ebbf1754c7b2aa4391dbe97536bb28969dba8b37ad9c4aafe04de533f1f6b28",
+      "sha256": "5850ba2f71a2b2a97d4336345e6f72b3d942e99cb9cf55bda88265f965b8fcf5",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "round": {
+      "bloom_profile": "fixed",
+      "bytes": 18868,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_round.dat",
+      "raw_sha256": "1f176eba8181568b75e1406af5d0e6f7a54873e32db5b77070e3a2ac3aba902d",
+      "sha256": "4b81924ae7afa6f4b64834c2a96140a71cc08f7ace3595f694658ccc4f5852e6",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "serrated": {
+      "bloom_profile": "fixed",
+      "bytes": 18872,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_serrated.dat",
+      "raw_sha256": "0bf286f70852e5264dc91af0e4ff5ecf792a467143bd94abc43e404d7d93226a",
+      "sha256": "08fe60c243a64ddd7d92b315064be10e6ade87af557bbc318880f99b2622baa9",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "split_philodendron": {
+      "bloom_profile": "fixed",
+      "bytes": 18875,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_split_philodendron.dat",
+      "raw_sha256": "e8b2daeda8221b42cfb97d5ca2f432a283418e8eb88af882d287b8be680c4474",
+      "sha256": "9bb8902bc49c6698e61e569d93e290547f76db9ce624770898ea211a000e98ae",
+      "triangles": 1008,
+      "vertices": 553
+    },
+    "succulent": {
+      "bloom_profile": "fixed",
+      "bytes": 33785,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_succulent.dat",
+      "raw_sha256": "374439ad7681e020c60a307bd0849131a52edbd1a7f61441cc9dc70ecedbb9be",
+      "sha256": "d0c0b645d84e122959c9628b1f939620c0b55f92cf56c3162ff7957ddee0412c",
+      "triangles": 1912,
+      "vertices": 1152
+    },
+    "trifoliate": {
+      "bloom_profile": "fixed",
+      "bytes": 64199,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_trifoliate.dat",
+      "raw_sha256": "09924a892ee07dd793bf2bdb86b747ce930f6d1f63753e968218183d2b4f3738",
+      "sha256": "35d632285a11712126184522c841ff5aeff6bf3c0c41bacafcef98ba0a0cd482",
+      "triangles": 3056,
+      "vertices": 1677
+    },
+    "willow": {
+      "bloom_profile": "fixed",
+      "bytes": 18836,
+      "endpoint_error": 0.0,
+      "file": "res://assets/plants/leaf_willow.dat",
+      "raw_sha256": "27e62592580b9fd1b8e92b0a50f46b9450a8415d573a8870357102a3aeddae14",
+      "sha256": "380b2564174d0b8125f56349617c89e3f090c17002fdfb7f6389ba380568fc46",
+      "triangles": 1008,
+      "vertices": 553
+    }
+  },
+  "palette": [
+    "#f8f5ee",
+    "#527447",
+    "#8caa68",
+    "#db8ca6",
+    "#e5b956",
+    "#adc27b",
+    "#749455"
+  ],
+  "revision": "0867bc37aca0f280b8df998dd6cfd9245cd51b319768bdf014961cb32265f5bb",
+  "source_sha256": "e3c28d7a280d66d245560517b65a028aab74e89cadfa1987e12bbfa8500a2b0f",
+  "variants": [
+    "reference",
+    "slender",
+    "ruffled",
+    "cupped"
+  ],
+  "version": 1
+}

@@ -625,6 +625,24 @@ frame.
   angles projected to vector line art, with checks through the existing
   collage and kit pipelines. This does not replace the production generator.
 
+- [Mutable 3D plant mesh library](experiments/plant_3d/README.md): three
+  branching stems, 24 leaf families, 32 flower families and five buds, with
+  four seeded shape recipes per family (244 distinct component mutations).
+  Includes GLBs, mutation/camera sheets, an online source audit and checks
+  through the posed-animal projector and both puzzle pipelines. The game
+  picture-type integration remains a separate step.
+  [Stem growth controls](experiments/plant_3d/STEM_GROWTH.md) combine straight,
+  gentle or broadly winding stems, 0/3/15 side branches and 1/5/15 blooms
+  independently. Bend angles come from seeded ranges, branches can cluster,
+  and flowers follow their supporting stems with small shape/scale variations.
+  Comparison renders run from a single rose to a whole bush.
+  [Bloom stages](experiments/plant_3d/BLOOM_STAGES.md) fold and unfurl petals
+  on 19 flower families, letting one plant mix tightly cupped and open heads.
+  The [native Godot entry point](gen/plant_3d/README.md),
+  `PlantMeshGenerator.generate(seed, options)`, returns the same normalized
+  design contract as posed animals and supports saved recipes and worker jobs.
+  Game registration and export configuration are left to the integration session.
+
 - One line art under several pattern seeds, side by side:
 
   ```sh

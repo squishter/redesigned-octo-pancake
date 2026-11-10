@@ -15,7 +15,15 @@ const VECTOR_KEYS := ["centroid"]
 
 
 static func to_json(picture: Dictionary) -> String:
-	return JSON.stringify(_encode(picture))
+	if not picture.has("source"):
+		return JSON.stringify(_encode(picture))
+	# Pixel coordinates can stay compact, but source recipes must keep their
+	# exact parameters: rounding a stem radius changes the regenerated mesh.
+	var body := picture.duplicate()
+	body.erase("source")
+	var compact := JSON.stringify(_encode(body))
+	var source := JSON.stringify(_encode(picture["source"], true), "", true, true)
+	return compact.left(-1) + ("," if not body.is_empty() else "") + '"source":' + source + "}"
 
 
 static func from_json(text: String) -> Dictionary:
@@ -39,17 +47,17 @@ static func load_file(path: String) -> Dictionary:
 	return from_json(FileAccess.get_file_as_string(path))
 
 
-static func _encode(v: Variant) -> Variant:
+static func _encode(v: Variant, precise := false) -> Variant:
 	match typeof(v):
 		TYPE_DICTIONARY:
 			var out := {}
 			for k in v:
-				out[k] = _encode(v[k])
+				out[k] = _encode(v[k], precise)
 			return out
 		TYPE_ARRAY:
 			var out := []
 			for item in v:
-				out.append(_encode(item))
+				out.append(_encode(item, precise))
 			return out
 		TYPE_PACKED_BYTE_ARRAY:
 			# Empty grids (a kit board has no lines) stay empty strings.
@@ -60,7 +68,7 @@ static func _encode(v: Variant) -> Variant:
 			return [v.x, v.y]
 		TYPE_FLOAT:
 			# Two decimals is plenty for px coordinates and keeps files small.
-			return snappedf(v, 0.01)
+			return v if precise else snappedf(v, 0.01)
 	return v
 
 

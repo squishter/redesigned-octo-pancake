@@ -1,0 +1,47 @@
+{
+  "publisher": "Khronos glTF Sample Assets",
+  "flower_author": "Rico Cilliers",
+  "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/GlassVaseFlowers",
+  "license": "CC0-1.0 (model README Legal section)",
+  "hashes": {
+    "README.md": "fc5962a2796263c4ccf18beb515e1b49cf23f830fbd942e8fc172e2497874b81",
+    "GlassVaseFlowers.glb": "faa2e19329961652b585cc62132ef50b1d95dca8a6a2fd63409158e680563761"
+  },
+  "meshes": [
+    {
+      "name": "Flowers",
+      "primitives": [
+        {
+          "vertices": 2561,
+          "material": "Flowers",
+          "alpha_mode": "MASK",
+          "has_morph_targets": false
+        }
+      ]
+    },
+    {
+      "name": "GlassAlpha",
+      "primitives": [
+        {
+          "vertices": 1714,
+          "material": "GlassAlpha",
+          "alpha_mode": "BLEND",
+          "has_morph_targets": false
+        }
+      ]
+    },
+    {
+      "name": "GlassTransmission",
+      "primitives": [
+        {
+          "vertices": 1714,
+          "material": "GlassTransmission",
+          "alpha_mode": "OPAQUE",
+          "has_morph_targets": false
+        }
+      ]
+    }
+  ],
+  "skins": 0,
+  "conclusion": "One combined MASK-material flower mesh, no skin. Requires alpha-aware geometry extraction and organ segmentation; not added to the modular catalog."
+}
