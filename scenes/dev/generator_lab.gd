@@ -15,11 +15,22 @@ signal back_requested
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+## Kit paper choices: linear colors.
+const KIT_PAPERS := {
+	"game charcoal": GemBoard3D.KIT_PAPER_COLOR,
+	"warm white": GemBoard3D.PAPER_COLOR,
+	"light gray": Color(0.5, 0.5, 0.5),
+	"mid gray": Color(0.3, 0.3, 0.3),
+	"dark gray": Color(0.18, 0.18, 0.18),
+	"black": Color(0.02, 0.02, 0.02),
+}
 
 var _source: OptionButton
 var _variant: OptionButton
 var _template: OptionButton
 var _collar: OptionButton
+var _plant_flower: OptionButton
+var _plant_leaf: OptionButton
 var _silhouette: OptionButton
 var _zoom: OptionButton
 var _frame: OptionButton
@@ -27,6 +38,8 @@ var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
 var _drill_colors: OptionButton
+var _kit_saturation: OptionButton
+var _kit_paper: OptionButton
 var _sparsity: OptionButton
 var _line_style: OptionButton
 var _setting: OptionButton
@@ -161,7 +174,11 @@ func _ready() -> void:
 	_source = _options(controls, "Source", ["Mandala", "Photo"])
 	_variant = _options(controls, "Shape", MandalaGenerator.VARIANTS + ["random"])
 	_template = _options(controls, "Petals", ["random"] + FlowerGenerator.TEMPLATES.keys())
-	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS)
+	# Hearts' collars, and the auras around posed plants (GemAura).
+	_collar = _options(controls, "Collar", ["random"] + HeartGenerator.COLLARS + GemAura.STYLES)
+	var plants := PlantMeshGenerator.catalog()
+	_plant_flower = _options(controls, "Plant flower", ["random"] + Array(plants["flowers"]))
+	_plant_leaf = _options(controls, "Plant leaf", ["random"] + Array(plants["leaves"]))
 	_silhouette = _options(controls, "Outline", ["random"] + MandalaDesign.SILHOUETTES)
 	_zoom = _options(controls, "Zoom", ["auto", "off", "on"])
 	_frame = _options(controls, "Frame", ["auto", "off", "on"])
@@ -173,6 +190,16 @@ func _ready() -> void:
 	# colors (as many as Kit colors), each cell mapped straight to the nearest
 	# as the game's photo kits do.
 	_drill_colors = _options(controls, "Drill colors", ["gems", "photo"])
+	# How much more colorful a kit's picture is made before its colors are
+	# matched (KitGenerator.saturate); the game's first.
+	var boosts := ["%d%%" % roundi(KitGenerator.SATURATION * 100.0)]
+	for pct in range(100, 135, 5):
+		if "%d%%" % pct != boosts[0]:
+			boosts.append("%d%%" % pct)
+	_kit_saturation = _options(controls, "Kit saturation", boosts)
+	# The paper under kits on the 3D board (GemBoard3D.kit_paper): the
+	# game's charcoal first, the collages' warm white, then grays.
+	_kit_paper = _options(controls, "Kit paper", KIT_PAPERS.keys())
 	_sparsity = _options(controls, "Sparse", ["auto", "none", "some", "lots"])
 	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)
 	_setting = _options(controls, "Setting", ["auto"] + CollageGenerator.SETTINGS)
@@ -254,6 +281,7 @@ func _refresh_view() -> void:
 		if _board_picture.has("slots"):
 			_board.show_collage(_board_picture)
 		else:
+			_board.kit_paper = KIT_PAPERS[_selected(_kit_paper)]
 			_board.show_kit(_board_picture)
 
 
@@ -290,7 +318,7 @@ func _options(parent: Control, label: String, items: Array) -> OptionButton:
 	_label(parent, label)
 	var ob := OptionButton.new()
 	for item in items:
-		ob.add_item("Posed animals" if item == "animal_mesh" else str(item).capitalize())
+		ob.add_item({"animal_mesh": "Posed animals", "plant_mesh": "Posed plants"}.get(item, str(item).capitalize()))
 		ob.set_item_metadata(ob.item_count - 1, item)
 	ob.item_selected.connect(func(_i: int) -> void: _generate())
 	_fill_row(ob)
@@ -384,6 +412,8 @@ func _generate() -> void:
 		"variant": _selected(_variant),
 		"template": _selected(_template),
 		"collar": _selected(_collar),
+		"flower": _selected(_plant_flower),
+		"leaf": _selected(_plant_leaf),
 		"silhouette": _selected(_silhouette),
 		"zoom": _selected(_zoom),
 		"frame": _selected(_frame),
@@ -394,6 +424,7 @@ func _generate() -> void:
 		"kit_size": _selected(_kit_size),
 		"colors": int(_colors.value),
 		"drill_colors": _selected(_drill_colors),
+		"kit_saturation": float(str(_selected(_kit_saturation)).trim_suffix("%")) / 100.0,
 		"sparsity": {"auto": -1.0, "none": 0.0, "some": 0.3, "lots": 0.6}[_selected(_sparsity)],
 		"line_style": _selected(_line_style),
 		"setting": _selected(_setting),
@@ -413,6 +444,8 @@ func _run_job(job: Dictionary) -> void:
 		"variant": job["variant"],
 		"template": job["template"],
 		"collar": job["collar"],
+		"flower": job["flower"],
+		"leaf": job["leaf"],
 		"silhouette": job["silhouette"],
 		"theme": job["theme"],
 		"wobble": job["wobble"],
@@ -440,7 +473,7 @@ func _run_job(job: Dictionary) -> void:
 		"Kit":
 			var src: Image = photo if photo else PictureSources.mandala_image(job["seed"], opts, lines)
 			var kit_options := {"size": KitGenerator.board_long(src, KitGenerator.LONG_SIDES[job["kit_size"]]),
-					"colors": job["colors"], "seed": job["seed"]}
+					"colors": job["colors"], "seed": job["seed"], "saturation": job["kit_saturation"]}
 			if job["drill_colors"] == "photo":
 				kit_options.merge({"direct": true, "exact": true, "dither": PuzzleMaker.PHOTO_OWN_DITHER,
 						"cleanup": false}, true)
@@ -498,6 +531,11 @@ func _process(_delta: float) -> void:
 			if p["source"].has("animal_mesh"):
 				var an: Dictionary = p["source"]["animal_mesh"]
 				flower = ", %s, %s, %s coat" % [an["species"], an["pose"], an["coat"]["style"]]
+			if p["source"].has("plant_mesh"):
+				var pl: Dictionary = p["source"]["plant_mesh"]
+				var aura: Dictionary = p.get("aura", {})
+				flower = ", %s with %s leaves, %s, %s view, %s" % [pl["flower"], pl["leaf"], pl["pose"], pl["camera"],
+						"%s aura (%d stones)" % [aura["style"], aura["stones"]] if aura.get("stones", 0) > 0 else "no aura"]
 			if p["source"].has("frame"):
 				var fr: Dictionary = p["source"]["frame"]
 				flower += ", %s frame (%s band, %s corners), %s background" % [fr["shape"], fr["band"], fr["corner"],
@@ -511,8 +549,10 @@ func _process(_delta: float) -> void:
 				setting = "gem lines (%s, %s colors, %d bold)" % [p["line_gems"], p["line_colors"], p["bold_lines"]]
 			if p["dropped"] > 0:
 				setting += ", %d left out for stone count" % p["dropped"]
-			if p.get("layout", "classic") == "dense":
-				setting += ", dense layout (%.0f%% of patterns and lines)" % (p["dense"] * 100.0)
+			if p.get("layout", "classic") in ["dense", "fine"]:
+				setting += ", %s layout (%.0f%% of patterns and lines dense)" % [p["layout"], p["dense"] * 100.0]
+			elif p.get("layout", "classic") == "cluster":
+				setting += ", cluster layout (%d loose stones left out)" % p.get("loose_dropped", 0)
 			_say("Collage · %d stones · %d gem types · pattern %d · %d ms" % [p["slots"].size(), p["gem_types"],
 					p["pattern_seed"], ms], ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
 					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [

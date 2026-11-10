@@ -4,6 +4,9 @@ extends GameDialog
 ## Stories are shown by how many colors they have, then by name, one
 ## collapsible section per count (a search opens every section it matches in),
 ## as a grid of cards: as many columns as fit (MIN_COLUMNS to MAX_COLUMNS).
+## A Random card comes first (RANDOM, picked unless another is asked for):
+## the caller draws one of the stories when it makes the puzzle
+## (random_story).
 
 signal chosen(theme_id: String)
 signal cancelled
@@ -17,6 +20,8 @@ const MAX_COLUMNS := 4
 const CARD_WIDTH := 280
 const CARD_GAP := 12
 const CARD_HEIGHT := 150
+## The Random card's id: a story drawn at random when the puzzle is made.
+const RANDOM := "random"
 
 var stories: Array = []
 var selected_id := ""
@@ -67,12 +72,16 @@ func set_stories(choices: Array, select_id := "") -> void:
 		if story["id"] == select_id:
 			selected_id = select_id
 	if selected_id == "" and not stories.is_empty():
-		selected_id = stories.pick_random()["id"]
+		selected_id = RANDOM
 	for child in body.get_children():
 		body.remove_child(child)
 		child.queue_free()
 	_buttons.clear()
 	_sections.clear()
+	if not stories.is_empty():
+		var random := _random_card()
+		body.add_child(random)
+		_buttons[RANDOM] = random
 	for story: Dictionary in stories:
 		var count: int = story["gems"].size()
 		if not _sections.has(count):
@@ -87,6 +96,27 @@ func set_stories(choices: Array, select_id := "") -> void:
 	_filter()
 	_update_selection()
 	body_scroll.scroll_vertical = 0
+
+
+## One of the stories at random (its id; "" if there are none).
+func random_story() -> String:
+	return stories.pick_random()["id"] if not stories.is_empty() else ""
+
+
+## The Random card: a story drawn when the puzzle is made.
+func _random_card() -> Button:
+	var button := Button.new()
+	button.custom_minimum_size.y = GameTheme.TAP_HEIGHT * 1.4
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.theme_type_variation = "ChoiceButton"
+	button.toggle_mode = true
+	button.text = "Random  ·  a surprise story each time"
+	button.icon = GameTheme.icon("palette")
+	button.add_theme_font_size_override("font_size", 28)
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.tooltip_text = "Random\nA color story picked for you when the puzzle is made."
+	button.pressed.connect(func() -> void: _choose(RANDOM))
+	return button
 
 
 ## How many cards fit side by side in `width` px.
@@ -204,7 +234,7 @@ func is_collapsed(colors: int) -> bool:
 func _update_selection() -> void:
 	for id: String in _buttons:
 		(_buttons[id] as Button).set_pressed_no_signal(id == selected_id)
-	_edit.visible = CustomThemes.is_custom(selected_id)
+	_edit.visible = selected_id != RANDOM and CustomThemes.is_custom(selected_id)
 	_make.disabled = not can_create
 	_make.tooltip_text = "Edit or delete a story to make room for another." if not can_create else ""
 	contain_focus.call_deferred()
@@ -220,6 +250,11 @@ func _filter() -> void:
 		if button.visible:
 			count += 1
 			shown[story["gems"].size()] = shown.get(story["gems"].size(), 0) + 1
+	if _buttons.has(RANDOM):
+		var random: Button = _buttons[RANDOM]
+		random.visible = query == "" or query in random.tooltip_text.to_lower()
+		if random.visible:
+			count += 1
 	for colors: int in _sections:
 		var section: Dictionary = _sections[colors]
 		var n: int = shown.get(colors, 0)

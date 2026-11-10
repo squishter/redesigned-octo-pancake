@@ -10,14 +10,26 @@ extends RefCounted
 ##
 ## Each variant has its own generator: MandalaDesign, FlowerGenerator,
 ## SnowflakeGenerator, HeartGenerator, ButterflyGenerator, SwirlGenerator,
-## AnimalGenerator and AnimalMeshGenerator. This class picks one, frames
+## AnimalGenerator, AnimalMeshGenerator and PlantMeshGenerator. This class picks one, frames
 ## most pictures with FrameDesign, and holds the small shape helpers they
 ## share.
 
-const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_mesh"]
+const VARIANTS := ["mandala", "flower", "snowflake", "heart", "butterfly", "swirl", "animal", "animal_mesh",
+		"plant_mesh"]
 ## Swirls are framed less often than the rest (unless `frame` says), so
 ## their own outlines show.
 const SWIRL_FRAME_CHANCE := 0.25
+## Plants picked to read as pictures (see _plant_options): how many heads
+## and branches, the views, and the ranges of PlantParameters' controls.
+const PLANT_PICTURE := {
+	"flowers": ["one", "few", "few"],
+	"branching": ["none", "few"],
+	"cameras": ["front", "three_quarter", "side", "high"],
+	"few_heads": [2, 3],
+	"few_branches": [1, 2],
+	"controls": {"length": [1.4, 1.7], "radius": [0.032, 0.04], "flower_scale": [1.0, 1.15],
+			"leaf_scale": [0.46, 0.55]},
+}
 
 
 ## options: variant (one of VARIANTS or "random", default "mandala"), wobble
@@ -33,8 +45,13 @@ const SWIRL_FRAME_CHANCE := 0.25
 ## tip, between, details), "swirl" (layout, shape, patch, strings, ribbon, motifs),
 ## "animal" (species, blend, plan, coat, pose, facing, scene, feet, ears, horns,
 ## tail, mane, markings) or "animal_mesh" (species, model, plan, pose, camera,
-## coat, pose_record, source_sha256, pose_data_sha256, projection, backend).
-## Swirls and animals aren't symmetric; instead they also return "families" (an id per
+## coat, pose_record, source_sha256, pose_data_sha256, projection, backend) or
+## "plant_mesh" (flower, leaf, curve, branching, flowers, pose, camera,
+## component_variant, stats, recipe, asset_revision, source_sha256,
+## projection, backend; `recipe` makes the same plant again, see
+## PlantMeshGenerator). A plant that can't be made (an unknown flower, say)
+## comes back with no lines.
+## Swirls, animals and plants aren't symmetric; instead they also return "families" (an id per
 ## polyline; a frame's lines get one more) and "marks" ([{"at", "family"}],
 ## points inside motif areas), see SwirlGenerator.
 static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
@@ -75,6 +92,17 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 			symmetry = "none"
 			keys = ["species", "model", "plan", "pose", "camera", "coat", "pose_record",
 					"source_sha256", "pose_data_sha256", "projection", "backend"]
+		"plant_mesh":
+			var plant_options := options.duplicate()
+			plant_options["seed"] = seed_value
+			design = PlantMeshGenerator.generate(seed_value, _plant_options(plant_options))
+			symmetry = "none"
+			keys = ["flower", "leaf", "curve", "branching", "flowers", "pose", "camera", "component_variant", "stats",
+					"recipe", "asset_revision", "source_sha256", "projection", "backend"]
+			if design.is_empty():
+				keys = []
+				design = {"polylines": [], "closed": PackedByteArray(), "families": PackedInt32Array(),
+						"family_names": PackedStringArray(), "marks": []}
 		_:
 			variant = "mandala"
 			design = MandalaDesign.generate(seed_value, options)
@@ -88,7 +116,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var framing := {"polylines": design["polylines"], "closed": design["closed"], "frame": {}, "scale": 1.0}
 	if _frameable(variant, design):
 		var frame_options := options
-		if variant == "animal_mesh" and not options.has("frame"):
+		if variant in ["animal_mesh", "plant_mesh"] and not options.has("frame"):
 			frame_options = options.duplicate()
 			frame_options["frame"] = false
 		elif variant == "swirl" and not options.has("frame"):
@@ -124,6 +152,70 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		out["families"] = families
 		out["family_names"] = design["family_names"] + PackedStringArray(["frame"])
 		out["marks"] = marks
+	return out
+
+
+## PlantMeshGenerator's options out of a picture's: its own keys only (a
+## picture's `pose` or `camera` may be meant for an animal, and a choice the
+## plants don't have would make no plant at all), with "random" and unknown
+## choices left to the seed. `plant` holds them instead when given, so a
+## saved source's "plant_mesh" (with its `recipe`) can be passed straight back.
+##
+## What isn't asked for is picked to suit a picture: the generator's own
+## defaults grow tall thin stems with many small heads, which come out as
+## specks in a gem collage. So few, big flowers and leaves on a short, thick
+## stem with few branches (PLANT_PICTURE), unless `plant_natural` is true.
+static func _plant_options(options: Dictionary) -> Dictionary:
+	var given: Dictionary = options["plant"] if options.get("plant") is Dictionary else options
+	var out := {}
+	if given.get("recipe") is Dictionary:
+		out["recipe"] = given["recipe"]
+		return out
+	var catalog := PlantMeshGenerator.catalog()
+	var choices := {"flower": catalog["flowers"], "leaf": catalog["leaves"], "curve": catalog["curves"],
+			"branching": catalog["branching"], "flowers": catalog["flowering"], "pose": catalog["poses"],
+			"camera": catalog["cameras"], "component_variant": catalog["variants"]}
+	for key: String in choices:
+		var value: Variant = given.get(key, "")
+		if value is String and value in choices[key]:
+			out[key] = value
+	for key: String in ["controls", "pose_controls", "projection_size"]:
+		if given.has(key):
+			out[key] = given[key]
+	if options.get("recent") is Array:
+		out["recent"] = (options["recent"] as Array).filter(func(r: Variant) -> bool:
+			return r is Dictionary and r.has("flower") and r.has("leaf"))
+	if options.get("plant_natural", false):
+		return out
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([int(options.get("seed", 0)), out.get("flower", ""), "plant picture"])
+	var controls: Dictionary = (out["controls"] as Dictionary).duplicate() if out.get("controls") is Dictionary else {}
+	# Every choice draws from the stream whether or not it is used, so asking
+	# for one thing leaves the others as they were.
+	var flowers: String = PLANT_PICTURE["flowers"][rng.randi_range(0, PLANT_PICTURE["flowers"].size() - 1)]
+	var branching: String = PLANT_PICTURE["branching"][rng.randi_range(0, PLANT_PICTURE["branching"].size() - 1)]
+	var camera: String = PLANT_PICTURE["cameras"][rng.randi_range(0, PLANT_PICTURE["cameras"].size() - 1)]
+	var heads := rng.randi_range(PLANT_PICTURE["few_heads"][0], PLANT_PICTURE["few_heads"][1])
+	var branches := rng.randi_range(PLANT_PICTURE["few_branches"][0], PLANT_PICTURE["few_branches"][1])
+	var picked := {}
+	for key: String in PLANT_PICTURE["controls"]:
+		var range: Array = PLANT_PICTURE["controls"][key]
+		picked[key] = rng.randf_range(range[0], range[1])
+	if not out.has("flowers"):
+		out["flowers"] = flowers
+		if flowers == "few" and not controls.has("flower_count"):
+			controls["flower_count"] = heads
+	if not out.has("branching"):
+		out["branching"] = branching
+		if branching == "few" and not controls.has("primary_count"):
+			controls["primary_count"] = branches
+	if not out.has("camera"):
+		out["camera"] = camera
+	if out["flowers"] != "many" and out["branching"] != "many":
+		for key: String in picked:
+			if not controls.has(key) and not given.has(key):
+				controls[key] = picked[key]
+	out["controls"] = controls
 	return out
 
 

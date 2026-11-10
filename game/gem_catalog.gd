@@ -706,6 +706,8 @@ const PUZZLES := {
 			"about": "Free-flowing line art: waves, whirls, blooms, scales and more, no two alike."},
 	"animal": {"name": "Animal collage", "source": "Animal", "variant": "animal_mesh",
 			"about": "Posed cats, dogs, horses and wild animals, with natural coats or decorative markings."},
+	"plant": {"name": "Plant collage", "source": "Plant", "variant": "plant_mesh",
+			"about": "Flowers on their stems, from roses and lotuses to bells and orchids, in a soft aura of gems."},
 	"kit": {"name": "Diamond kit", "source": "Mandala", "variant": "mandala", "kit": true,
 			"about": "Any of your pictures as a grid of drills, one color per cell."},
 }
@@ -722,7 +724,8 @@ const PHOTO_MODES := {
 const FEATURES := {
 	"frames": {"name": "Frames", "about": "Pictures may come framed, in 280 styles."},
 	"backgrounds": {"name": "Frame backgrounds", "about": "Patterns between a frame and its picture."},
-	"collars": {"name": "Heart collars", "about": "Bands of rays, beads or petals inside hearts."},
+	"collars": {"name": "Collars and auras",
+			"about": "Bands of rays, beads or petals inside hearts, and soft auras or halos of small gems around plants."},
 	"zoom": {"name": "Close-ups", "about": "Now and then a mandala seen up close, cropped to a corner."},
 	"wobble": {"name": "Hand-drawn lines", "about": "Some pictures wobble a little, as if drawn by hand."},
 }

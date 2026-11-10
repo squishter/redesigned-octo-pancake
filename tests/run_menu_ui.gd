@@ -27,6 +27,7 @@ func _run() -> void:
 	root.theme = GameTheme.build()
 	await _test_menu_layout()
 	await _test_creation_choices()
+	await _test_new_puzzle_defaults()
 	await _test_carousel()
 	await _test_purchases()
 	await _test_reward_kinds()
@@ -149,6 +150,60 @@ func _test_unlock_all() -> void:
 		"Turning it off gives back exactly her own unlocks")
 	SaveStore.save_profile(loaded)
 	_check(not SaveStore.is_unlock_all(SaveStore.load_profile()), "Off stays off after reloading")
+	menu.queue_free()
+	await process_frame
+
+
+## Random is the default color story and draws a real one; collages offer
+## a size (medium: cluster, large: fine); a new puzzle starts from the last
+## one's settings.
+func _test_new_puzzle_defaults() -> void:
+	print("New puzzle defaults: random story, size, remembered settings")
+	var menu := MainMenu.new()
+	menu.profile = SaveStore.upgrade({})
+	menu.show_developer_tools = false
+	root.add_child(menu)
+	menu._open_new({})
+	await _layout_frames()
+	_check(menu._selected_theme() == ColorStoryPicker.RANDOM, "Random is the default color story")
+	_check(menu._theme.text.begins_with("Random") and not menu._start.disabled, "Random shows and can start")
+	var drawn := menu._resolved_theme()
+	_check(drawn != "" and drawn != ColorStoryPicker.RANDOM and menu._story_picker._buttons.has(drawn),
+		"Random draws one of the stories (%s)" % drawn)
+	_check((menu._collage_size.get_meta("row") as Control).is_visible_in_tree(), "Collages offer a size")
+	_check(menu._collage_size.get_item_metadata(menu._collage_size.selected) == "medium", "Collages start medium")
+	_check(PuzzleMaker.new_request("mandala", "rainbow", "medium")["layout"] == "cluster", "Medium collages are cluster")
+	_check(PuzzleMaker.new_request("mandala", "rainbow", "large")["layout"] == "fine", "Large collages are fine")
+	menu._mode_buttons[1].pressed.emit()
+	await _layout_frames()
+	_check(not (menu._collage_size.get_meta("row") as Control).is_visible_in_tree(), "Kits don't offer the collage size")
+	menu._mode_buttons[0].pressed.emit()
+	# Pick large and a particular story, and remember them as making would.
+	menu._select_meta(menu._collage_size, "large")
+	var story: String = menu._story_picker.stories[0]["id"]
+	menu._story_picker._choose(story)
+	menu._remember_new()
+	menu.go_back()
+	menu._open_new({})
+	await _layout_frames()
+	_check(menu._collage_size.get_item_metadata(menu._collage_size.selected) == "large", "The size is remembered")
+	_check(menu._selected_theme() == story, "The color story is remembered")
+	_check(not menu._is_kit(), "The puzzle kind is remembered")
+	# A remembered Random stays Random; a kit is remembered as a kit.
+	menu._mode_buttons[1].pressed.emit()
+	menu._story_picker._choose(ColorStoryPicker.RANDOM)
+	menu._remember_new()
+	menu.go_back()
+	menu._open_new({})
+	await _layout_frames()
+	_check(menu._is_kit() and menu._selected_theme() == ColorStoryPicker.RANDOM, "Kit and Random are remembered")
+	_check(JSON.parse_string(JSON.stringify(menu.profile["settings"]))[MainMenu.LAST_NEW]["kind"] == "kit",
+		"The remembered settings save as JSON")
+	menu.go_back()
+	# Recoloring doesn't take the remembered settings.
+	menu._open_new({"type": "mandala", "theme": "rainbow"})
+	_check(menu._selected_theme() != "rainbow", "Recoloring never offers the puzzle's own colors")
+	menu.go_back()
 	menu.queue_free()
 	await process_frame
 
