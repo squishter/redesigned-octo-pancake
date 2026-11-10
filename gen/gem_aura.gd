@@ -19,11 +19,20 @@ extends RefCounted
 ##     bending together like grass in a current, each shrinking along its
 ##     length to nothing (fades by stone size, and the lines spread apart);
 ##   veil: tufts of short rows that follow the outline in stones of nearly
-##     one small size, narrower and rarer the farther out (fades by density).
+##     one small size, narrower and rarer the farther out (fades by density);
+##   halo: the exception, for a plainer look: one or two whole rows of even
+##     stones around the outline, close in, like the halo pattern's rows
+##     around its center stone. It has an edge, and no reach or fade.
 
-const STYLES := ["streams", "veil"]
-## How often a picture that leaves the style open takes streams.
-const STREAMS_CHANCE := 0.7
+const STYLES := ["streams", "veil", "halo"]
+## How often a picture that leaves the style open takes each.
+const CHANCES := {"streams": 0.55, "veil": 0.2, "halo": 0.25}
+## A halo: clear paper between the subject and its first row, in units,
+## its second row's stones as a share of the first's, and how often it
+## has a second row.
+const HALO_MARGIN := 0.9
+const HALO_SECOND := 0.8
+const HALO_TWO_ROWS := 0.4
 ## The field's grid: one cell per CELL x CELL px.
 const CELL := 2
 ## The biggest aura stone's radius, in units: smaller than the rows inside
@@ -89,7 +98,8 @@ var _min_stone := MIN_STONE
 ##   keep_clear: Array of slots (the subject's own) the aura stays off,
 ##   max_stones: the most stones (default: no limit); an aura with more
 ##     loses whole strands (a stream, a run of a veil's row), picked per
-##     seed all around the subject, so it gets thinner rather than shorter.
+##     seed all around the subject, so it gets thinner rather than shorter
+##     (a halo loses its second row, and keeps the first whatever its count).
 ## Returns {"style", "slots": [{shape, x, y, rotation, size, width, tone,
 ## part, fade, strand}]}: all round; tone 1 on the paler outer stones; `fade`
 ## is 0 beside the subject and 1 where the aura ends; `strand` numbers the
@@ -100,15 +110,20 @@ static func place(lines: PackedByteArray, w: int, h: int, seed_value: int, optio
 	a._rng.seed = hash([seed_value, "aura"])
 	var style: String = options.get("style", "")
 	var pick := a._rng.randf()
+	var two_rows := a._rng.randf() < HALO_TWO_ROWS
 	if not style in STYLES:
-		style = "streams" if pick < STREAMS_CHANCE else "veil"
+		for name: String in CHANCES:
+			style = name
+			pick -= CHANCES[name]
+			if pick < 0.0:
+				break
 	a._w = w
 	a._h = h
 	a._side = float(mini(w, h))
 	a._unit = options.get("unit", a._side * SlotPacker.UNIT)
 	a._gap = options.get("gap", a._unit * SlotPacker.GAP)
 	a._reach = a._side * float(options.get("reach", REACH))
-	a._margin = a._unit * MARGIN + a._gap
+	a._margin = a._unit * (HALO_MARGIN if style == "halo" else MARGIN) + a._gap
 	a._min_stone = options.get("min_stone", MIN_STONE)
 	for k in 6:
 		a._waves.append([Vector2.from_angle(a._rng.randf() * TAU), a._rng.randf() * TAU])
@@ -119,12 +134,19 @@ static func place(lines: PackedByteArray, w: int, h: int, seed_value: int, optio
 	for s: Dictionary in options.get("keep_clear", []):
 		a._remember(Vector2(s["x"], s["y"]), float(s["size"]) / 2.0)
 	var blocked := a._grid.duplicate(true)
-	if style == "veil":
+	var most := int(options.get("max_stones", -1))
+	if style == "halo":
+		a._halo(r0, 2 if two_rows else 1)
+		# Too many: the outer row goes; the inner one stays whole.
+		if most >= 0 and a._slots.size() > most:
+			a._slots = a._slots.filter(func(s: Dictionary) -> bool: return s["part"] == 0)
+		most = -1
+	elif style == "veil":
 		a._veil(r0)
 	else:
 		a._streams(r0)
 	a._grid = blocked
-	a._thin(int(options.get("max_stones", -1)))
+	a._thin(most)
 	return {"style": style, "slots": a._slots}
 
 
@@ -417,6 +439,47 @@ func _flow(p: Vector2, t: float) -> Vector2:
 		grad = Vector2.UP
 	var turn := (_noise(p, 3, 0.8) - 0.5) * 1.8 * minf(1.0, 0.25 + t * 1.5)
 	return grad.normalized().rotated(turn)
+
+
+## Whole rows of even stones around the outline: `rows` of them, the second
+## of smaller stones in the paler tone, a gap apart along the row.
+func _halo(r0: float, rows: int) -> void:
+	var field := PackedFloat32Array()
+	field.resize(_gw * _gh)
+	var labels := PackedInt32Array()
+	labels.resize(_gw * _gh)
+	for i in _gw * _gh:
+		field[i] = _dist[i] - _margin
+		labels[i] = 0 if field[i] > -_margin else -1
+	var radii := [r0, r0 * HALO_SECOND]
+	var levels := PackedFloat32Array([r0])
+	if rows > 1:
+		levels.append(2.0 * r0 + _gap * 2.0 + r0 * HALO_SECOND)
+	var paths := Contours.iso_lines(field, labels, _gw, _gh, 0, Rect2i(0, 0, _gw, _gh), levels)
+	for k in levels.size():
+		var r: float = radii[k]
+		for path: Dictionary in paths[k]:
+			var pts: PackedVector2Array = path["points"]
+			for i in pts.size():
+				pts[i] *= CELL
+			var closed: bool = path["closed"]
+			var length := Contours.length(pts, closed)
+			if length < (2.0 * r + _gap) * 3.0:
+				continue
+			_strand += 1
+			# Walked in small steps, a stone wherever the last one is a full
+			# stone and gap behind (as the crow flies: the path wiggles).
+			var pitch := 2.0 * r + _gap + 0.05
+			var last := Vector2.INF
+			var at := 0.0
+			while at < length:
+				var p: Vector2 = Contours.sample(pts, closed, at)[0]
+				at += maxf(0.5, r * 0.2)
+				if last != Vector2.INF and p.distance_to(last) < pitch:
+					continue
+				if _add(p, r, 0.1 + 0.5 * k, k):
+					_slots[-1]["tone"] = k
+					last = p
 
 
 ## Leaves out whole strands, in a seeded order, until at most `most` stones

@@ -725,7 +725,7 @@ const FEATURES := {
 	"frames": {"name": "Frames", "about": "Pictures may come framed, in 280 styles."},
 	"backgrounds": {"name": "Frame backgrounds", "about": "Patterns between a frame and its picture."},
 	"collars": {"name": "Collars and auras",
-			"about": "Bands of rays, beads or petals inside hearts, and soft auras of small gems around plants."},
+			"about": "Bands of rays, beads or petals inside hearts, and soft auras or halos of small gems around plants."},
 	"zoom": {"name": "Close-ups", "about": "Now and then a mandala seen up close, cropped to a corner."},
 	"wobble": {"name": "Hand-drawn lines", "about": "Some pictures wobble a little, as if drawn by hand."},
 }

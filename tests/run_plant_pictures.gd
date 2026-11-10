@@ -89,7 +89,7 @@ func _hanging() -> void:
 func _aura() -> void:
 	var with_stones := 0
 	var styles := {}
-	for i in 6:
+	for i in 9:
 		var seed_value := 60 + i
 		var style: String = GemAura.STYLES[i % GemAura.STYLES.size()]
 		var opts := {"variant": "plant_mesh", "layout": "cluster", "theme": "garden", "collar": style,
@@ -110,7 +110,8 @@ func _aura() -> void:
 		if aura["stones"] == 0:
 			continue
 		with_stones += 1
-		_check(aura["stones"] <= own * CollageGenerator.AURA_SHARE, "the aura stays a small share of the stones")
+		_check(aura["stones"] <= own * CollageGenerator.AURA_SHARE or style == "halo",
+				"the aura stays a small share of the stones")
 		var region: Dictionary = p["regions"][aura["region"]]
 		_check(aura["region"] == p["regions"].size() - 1 and region["kind"] == "aura" and region["style"] == style,
 				"the aura is the last region")
@@ -140,9 +141,10 @@ func _aura() -> void:
 			inside = inside and c.x >= r and c.y >= r and c.x <= w - r and c.y <= h - r
 			small = small and r <= minf(unit * GemAura.STONE, typical * CollageGenerator.AURA_STONE) + 0.01
 			typed = typed and s.has("cut") and s.has("target_color") and s["shape"] == "round"
-			# Clear paper all around: no line within a stone and a half of it.
+			# Clear paper all around: no line within a unit of it (a halo sits
+			# closer in: half a unit).
 			for k in 12:
-				var q := c + Vector2.from_angle(TAU * k / 12.0) * (r + unit)
+				var q := c + Vector2.from_angle(TAU * k / 12.0) * (r + unit * (0.5 if style == "halo" else 1.0))
 				if lines_mask[clampi(int(q.y), 0, h - 1) * w + clampi(int(q.x), 0, w - 1)] != 0:
 					clear = false
 			for o: Dictionary in others + stones:
@@ -165,8 +167,15 @@ func _aura() -> void:
 			_check(far_span > near_span * 1.3, "a veil thins outward (%.2f vs %.2f of the reach per third)" % [
 					far_span, near_span])
 		_check(stones[-1]["fade"] < 1.0, "every stone is inside the reach")
-		_check(_reach_spread(stones, Vector2(w, h) / 2.0) > 1.4, "the aura's reach is uneven around the plant")
-	_check(with_stones == 6, "every plant gets an aura (%d of 6)" % with_stones)
+		if style == "halo":
+			# Rows of even stones: one size in a row, at most two rows.
+			var sizes := {}
+			for s: Dictionary in stones:
+				sizes[snappedf(s["width"], 0.01)] = true
+			_check(sizes.size() <= 2, "a halo's rows are even (%d sizes)" % sizes.size())
+		else:
+			_check(_reach_spread(stones, Vector2(w, h) / 2.0) > 1.4, "the aura's reach is uneven around the plant")
+	_check(with_stones == 9, "every plant gets an aura (%d of 9)" % with_stones)
 	_check(styles.size() == GemAura.STYLES.size(), "every aura style was made")
 	# Every stream tapers: each stone smaller than the one before, down to
 	# about the smallest stone there is, so none ends on a full-sized one.

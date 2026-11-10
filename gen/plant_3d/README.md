@@ -128,7 +128,8 @@ high view. Explicit options win, `plant_natural: true` turns the narrowing off,
 and choices the plants don't have are ignored rather than failing.
 
 Plants stand unframed, in an **aura** of small pale stones (`GemAura`, the
-plant's `collar` option: `streams`, `veil`, `none`, or picked per pattern seed).
+plant's `collar` option: `streams`, `veil`, `halo` (whole rows of even stones
+close around the outline), `none`, or picked per pattern seed).
 The game leaves it off until *Collars and auras* is unlocked.
 
 Hanging families (bell, fuchsia, bleeding heart) hang from a pedicel that
