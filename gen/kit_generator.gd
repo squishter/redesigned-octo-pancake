@@ -32,6 +32,16 @@ const SYMBOLS := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abdefghkmnqrty"
 ## (about 1.4 Lab units off for round drills, 3 for square, measured by
 ## leaving each gem out).
 const SEEN_NEIGHBORS := 6
+## fit_light's share of cells left at either end of the picture's lightness.
+const LIGHT_CLIP := 0.01
+## fit_light keeps this share of each color's strength (Lab chroma): a
+## color lifted lighter with all its strength reads as another color (a
+## brown turns orange), so it gives up some, as a pale brown would.
+const LIGHT_CHROMA := 0.5
+## Lightness counts this many times over in matching a cell to a drill: the
+## drills' lightness span is squeezed, so differences in it would otherwise
+## lose out to differences in hue and the picture's detail would fade.
+const LIGHT_WEIGHT := 2.0
 ## Steps of compensated_color's search.
 const COMPENSATE_STEPS := 12
 
@@ -59,10 +69,12 @@ static var _seen_model := {}
 ##           carries on to its neighbors (Floyd-Steinberg in Lab, back and
 ##           forth), so two gems side by side read as the color between
 ##           them                                                      (default 0)
-##   fit_light: map the picture's lightness, black to white, onto the range
-##              the drills can look on the board (fit_light), so dark parts
-##              keep their detail instead of all becoming the darkest drill
+##   fit_light: stretch the picture's lightness onto the range the drills
+##              can look on the board (fit_light), so dark parts keep their
+##              detail instead of all becoming the darkest drill
 ##                                                                  (default true)
+##   light_chroma: with fit_light, the share of each color's strength kept
+##                 (0..1)                                  (default LIGHT_CHROMA)
 static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var size_opt: Variant = options.get("size", "small")
 	var board: Vector2i = size_opt if size_opt is Vector2i else BOARD_SIZES.get(size_opt, BOARD_SIZES["small"])
@@ -88,7 +100,8 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 		var drills := gems
 		if options.get("direct", false) and options.get("exact", false):
 			drills = measured_gems()
-		pixels = fit_light(pixels, light_range(seen_labs(drills, drill)))
+		pixels = fit_light(pixels, light_range(seen_labs(drills, drill)),
+				options.get("light_chroma", LIGHT_CHROMA))
 	if options.get("direct", false):
 		var palette := gems
 		if options.get("exact", false):
@@ -105,10 +118,10 @@ static func generate(source: Image, options: Dictionary = {}) -> Dictionary:
 	var entries := []  # {color: Color, gem_id}
 	var cluster_to_entry := PackedInt32Array()
 	cluster_to_entry.resize(centers.size())
-	var gem_lab := seen_labs(gems, drill)
+	var gem_lab := _weigh_all(seen_labs(gems, drill))
 	var gem_to_entry := {}
 	for c in centers.size():
-		var gi := LabColor.nearest(centers[c], gem_lab)
+		var gi := LabColor.nearest(_weigh(centers[c]), gem_lab)
 		if not gem_to_entry.has(gi):
 			gem_to_entry[gi] = entries.size()
 			entries.append({"color": gems[gi]["color"], "gem_id": gems[gi]["id"]})
@@ -274,16 +287,27 @@ static func compensated_color(want: Color, drill: String) -> Color:
 ## colors (a black round drill, with the paper and its glints, looks a mid
 ## gray), so a picture can't keep its true lightness: where it is darker
 ## than any drill looks, every cell would get the darkest drill and its
-## detail would be lost. Instead its lightness (Lab L, black to white) is
-## mapped evenly onto `range` (light_range), keeping its colors' hues and
-## strength, so the picture's lights and darks stay in order.
-static func fit_light(pixels: PackedColorArray, range: Vector2) -> PackedColorArray:
+## detail would be lost. Instead the picture's own lightness span (Lab L,
+## from its darkest LIGHT_CLIP of cells to its lightest, so a few specks
+## don't waste the range) is stretched evenly onto `range` (light_range),
+## keeping its colors' hues and `chroma` of their strength: its lights and
+## darks stay in order and use every step of lightness the drills have.
+static func fit_light(pixels: PackedColorArray, range: Vector2, chroma: float = LIGHT_CHROMA) -> PackedColorArray:
+	var labs := PackedVector3Array()
+	labs.resize(pixels.size())
+	var ls := PackedFloat32Array()
+	ls.resize(pixels.size())
+	for i in pixels.size():
+		labs[i] = LabColor.from_color(pixels[i])
+		ls[i] = labs[i].x
+	ls.sort()
+	var lo := ls[int((ls.size() - 1) * LIGHT_CLIP)]
+	var hi := ls[int((ls.size() - 1) * (1.0 - LIGHT_CLIP))]
 	var out := PackedColorArray()
 	out.resize(pixels.size())
-	var scale := (range.y - range.x) / 100.0
 	for i in pixels.size():
-		var lab := LabColor.from_color(pixels[i])
-		out[i] = LabColor.to_color(Vector3(range.x + lab.x * scale, lab.y, lab.z))
+		var t := clampf((labs[i].x - lo) / maxf(hi - lo, 1.0), 0.0, 1.0)
+		out[i] = LabColor.to_color(Vector3(lerpf(range.x, range.y, t), labs[i].y * chroma, labs[i].z * chroma))
 	return out
 
 
@@ -313,6 +337,18 @@ static func seen_labs(gems: Array, drill: String) -> PackedVector3Array:
 	return out
 
 
+## A Lab color with its lightness counted LIGHT_WEIGHT times over.
+static func _weigh(lab: Vector3) -> Vector3:
+	return Vector3(lab.x * LIGHT_WEIGHT, lab.y, lab.z)
+
+
+static func _weigh_all(labs: PackedVector3Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for c in labs:
+		out.append(_weigh(c))
+	return out
+
+
 ## Most a cell's carried-over color may be off (Lab units), so a run of
 ## colors no gem is near doesn't snowball into streaks.
 const MAX_CARRY := 28.0
@@ -324,11 +360,11 @@ const MAX_CARRY := 28.0
 ## rows back and forth). Returns {cells, entries}.
 static func map_direct(pixels: PackedColorArray, w: int, h: int, gems: Array, dither: float,
 		drill: String = "round") -> Dictionary:
-	var gem_lab := seen_labs(gems, drill)
+	var gem_lab := _weigh_all(seen_labs(gems, drill))
 	var lab := PackedVector3Array()
 	lab.resize(pixels.size())
 	for i in pixels.size():
-		lab[i] = LabColor.from_color(pixels[i])
+		lab[i] = _weigh(LabColor.from_color(pixels[i]))
 	var picked := PackedInt32Array()
 	picked.resize(pixels.size())
 	for y in h:
