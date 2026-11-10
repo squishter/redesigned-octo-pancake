@@ -127,6 +127,15 @@ two side branches, large leaves and a short thick stem
 high view. Explicit options win, `plant_natural: true` turns the narrowing off,
 and choices the plants don't have are ignored rather than failing.
 
+Three more things keep a thin plant from looking empty. Patches of the
+projection too small to hold gems (under `PLANT_PICTURE.min_region` of it:
+florets, inner petals, midribs) are folded into the biggest neighbor on their
+own flower head or leaf (`PlantSurfaceProjection._simplify`, the generator's
+`min_region` option; it is not part of the recipe). An unframed plant's
+picture takes the plant's shape, between 0.6 and 1.25 wide for its height,
+with the usual size as its longer side, and the plant is moved and scaled to
+fill it. And plant collages always use gem lines, with no sparse or bare areas.
+
 Plants stand unframed, in an **aura** of small pale stones (`GemAura`, the
 plant's `collar` option: `streams`, `veil`, `halo` (whole rows of even stones
 close around the outline), `none`, or picked per pattern seed).

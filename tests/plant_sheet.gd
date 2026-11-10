@@ -37,7 +37,7 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	var cols := mini(4, count)
 	var sheet := Image.create(cell * 2 * cols, cell * ceili(count / float(cols)), false, Image.FORMAT_RGBA8)
-	sheet.fill(Color.WHITE)
+	sheet.fill(Color(0.35, 0.35, 0.38))
 	var recent := []
 	for i in count:
 		var seed_value := first + i
@@ -57,8 +57,11 @@ func _init() -> void:
 		var at := Vector2i((i % cols) * cell * 2, (i / cols) * cell)
 		for img: Image in [painted, collage]:
 			img.convert(Image.FORMAT_RGBA8)
-			img.resize(cell, cell, Image.INTERPOLATE_LANCZOS)
-			sheet.blit_rect(img, Rect2i(0, 0, cell, cell), at)
+			# Plants' pictures have their own shape: fitted into the cell.
+			var fit := float(cell) / maxi(img.get_width(), img.get_height())
+			var to := Vector2i(roundi(img.get_width() * fit), roundi(img.get_height() * fit))
+			img.resize(to.x, to.y, Image.INTERPOLATE_LANCZOS)
+			sheet.blit_rect(img, Rect2i(Vector2i.ZERO, to), at + (Vector2i(cell, cell) - to) / 2)
 			at.x += cell
 		var aura: Dictionary = p.get("aura", {})
 		print("seed %d (%d ms): %s with %s leaves, %s/%s/%s, %s, %s; %d stones, %d in the %s aura" % [seed_value, ms,

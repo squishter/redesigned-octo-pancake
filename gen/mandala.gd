@@ -27,6 +27,14 @@ const PLANT_PICTURE := {
 	"cameras": ["front", "three_quarter", "side", "high"],
 	"few_heads": [2, 3],
 	"few_branches": [1, 2],
+	# Patches of the plant under this share of its projection are folded
+	# into their neighbors (PlantSurfaceProjection): too small for gems.
+	"min_region": 0.004,
+	# An unframed plant's picture (see _fit_plant): its width / height at
+	# the narrowest and widest, and the room around the plant for its
+	# collar, in unit space (1 is half the picture's shorter side).
+	"aspect": [0.6, 1.25],
+	"pad": 0.26,
 	"controls": {"length": [1.4, 1.7], "radius": [0.032, 0.04], "flower_scale": [1.0, 1.15],
 			"leaf_scale": [0.46, 0.55]},
 }
@@ -37,7 +45,8 @@ const PLANT_PICTURE := {
 ## (frame, frame_shape, frame_band, frame_corner, background, frame_recent),
 ## plus the chosen generator's own options (see each generator). Returns
 ## {"seed", "variant", "symmetry": "radial" | "mirror" | "none", "polylines",
-## "closed", "frame"} ("frame" is FrameDesign's choices, or empty), plus the
+## "closed", "frame"} ("frame" is FrameDesign's choices, or empty; unframed
+## plants add "aspect", their picture's width / height, see _fit_plant), plus the
 ## design's choices under the variant's name: "mandala"
 ## (folds, silhouette, center, rings, extras, zoom), "flower" (template,
 ## symmetric, rings, center), "heart" (shape, collar, patterns, divider), "butterfly"
@@ -103,6 +112,8 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 				keys = []
 				design = {"polylines": [], "closed": PackedByteArray(), "families": PackedInt32Array(),
 						"family_names": PackedStringArray(), "marks": []}
+			elif not options.has("frame") or (options["frame"] is bool and not options["frame"]):
+				_fit_plant(design)
 		_:
 			variant = "mandala"
 			design = MandalaDesign.generate(seed_value, options)
@@ -139,6 +150,8 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 		"frame": framing["frame"],
 		variant: info,
 	}
+	if design.has("aspect"):
+		out["aspect"] = design["aspect"]
 	if design.has("families"):
 		# The frame's lines are one more family, and the marks move with the
 		# picture inside it.
@@ -155,6 +168,42 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	return out
 
 
+## Gives an unframed plant a picture of its own shape, so a tall plant
+## fills a tall picture instead of standing in the middle of a square one:
+## sets design["aspect"] (width / height, within PLANT_PICTURE's `aspect`
+## range) and moves and scales its lines and marks to fill that picture,
+## less `pad` all around for its collar. Unit space still spans the
+## picture's shorter side, as LineRaster maps it.
+static func _fit_plant(design: Dictionary) -> void:
+	var lines: Array[PackedVector2Array] = design["polylines"]
+	var box := Rect2()
+	var first := true
+	for line in lines:
+		for v in line:
+			if first:
+				box = Rect2(v, Vector2.ZERO)
+				first = false
+			else:
+				box = box.expand(v)
+	if first or box.size.x <= 0.0 or box.size.y <= 0.0:
+		return
+	var pad: float = PLANT_PICTURE["pad"]
+	var range: Array = PLANT_PICTURE["aspect"]
+	# The picture's shape: the plant's, with the padding around it.
+	var aspect := clampf((box.size.x + 2.0 * pad) / (box.size.y + 2.0 * pad), range[0], range[1])
+	var half := Vector2(1.0, 1.0 / aspect) if aspect <= 1.0 else Vector2(aspect, 1.0)
+	var k := minf((half.x - pad) * 2.0 / box.size.x, (half.y - pad) * 2.0 / box.size.y)
+	var center := box.get_center()
+	for i in lines.size():
+		var moved := PackedVector2Array()
+		for v in lines[i]:
+			moved.append((v - center) * k)
+		lines[i] = moved
+	for mark: Dictionary in design["marks"]:
+		mark["at"] = (mark["at"] - center) * k
+	design["aspect"] = aspect
+
+
 ## PlantMeshGenerator's options out of a picture's: its own keys only (a
 ## picture's `pose` or `camera` may be meant for an animal, and a choice the
 ## plants don't have would make no plant at all), with "random" and unknown
@@ -167,7 +216,7 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 ## stem with few branches (PLANT_PICTURE), unless `plant_natural` is true.
 static func _plant_options(options: Dictionary) -> Dictionary:
 	var given: Dictionary = options["plant"] if options.get("plant") is Dictionary else options
-	var out := {}
+	var out := {"min_region": float(options.get("plant_min_region", PLANT_PICTURE["min_region"]))}
 	if given.get("recipe") is Dictionary:
 		out["recipe"] = given["recipe"]
 		return out

@@ -23,14 +23,22 @@ const BACKGROUND := Color("#f4eee6")
 ## come with families of lines and areas; those are returned as "motifs":
 ## {"lines": a family per pixel (-1 off the lines), "areas": [{"at": px,
 ## "family"}], "names": the families' names}, for CollageGenerator.
-## Returns {"mask", "width", "height", "mandala"} (and "motifs").
+## Returns {"mask", "width", "height", "mandala"} (and "motifs"); pictures
+## are `size` px square, but for unframed plants, which take their own
+## shape (the mandala's "aspect") with `size` as the longer side.
 static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var mandala := MandalaGenerator.generate(seed_value, options)
 	var size: int = options.get("size", DEFAULT_SIZE)
 	var line_width: float = options.get("line_width", size / 170.0)
 	var px := Vector2i(size, size)
+	# A picture of its own shape (an unframed plant): `size` is its longer side.
+	var aspect: float = mandala.get("aspect", 1.0)
+	if aspect < 1.0:
+		px.x = roundi(size * aspect)
+	elif aspect > 1.0:
+		px.y = roundi(size / aspect)
 	var mask := LineRaster.rasterize(mandala["polylines"], mandala["closed"], px, line_width)
-	var out := {"mask": mask, "width": size, "height": size, "mandala": mandala}
+	var out := {"mask": mask, "width": px.x, "height": px.y, "mandala": mandala}
 	if mandala.has("families"):
 		# A little wider than the lines, so their centerlines read it.
 		var areas := []
@@ -81,6 +89,13 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 			opts["source"][key] = mandala[key]
 	if lines.has("motifs"):
 		opts["motifs"] = lines["motifs"]
+	# Thin as a plant is, every area counts: gem lines rather than a metal
+	# outline around little, and no area left sparse or bare.
+	if mandala["variant"] == "plant_mesh":
+		if not opts.has("setting") or opts["setting"] == "auto":
+			opts["setting"] = "gems"
+		if float(opts.get("sparsity", -1.0)) < 0.0:
+			opts["sparsity"] = 0.0
 	# A plant's collar is an aura around it (unless it is framed: the frame
 	# and its background take that room).
 	# Its stems and stalks are pairs of lines a stone or two apart, where

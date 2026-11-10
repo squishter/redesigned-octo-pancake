@@ -55,6 +55,39 @@ func _line_art() -> void:
 	var natural := MandalaGenerator.generate(41, {"variant": "plant_mesh", "plant_natural": true})
 	_check(not natural["plant_mesh"].is_empty() and natural["plant_mesh"]["recipe"]["controls"]["length"] == 2.25,
 			"plant_natural leaves the generator's defaults")
+	# An unframed plant's picture takes the plant's shape, and the plant fills it.
+	var limits: Array = picked["aspect"]
+	_check(a.has("aspect") and a["aspect"] >= limits[0] and a["aspect"] <= limits[1], "a plant's picture has its shape")
+	var lines := PictureSources.mandala_lines(41, {"variant": "plant_mesh", "size": 400})
+	_check(maxi(lines["width"], lines["height"]) == 400 and absf(float(lines["width"]) / lines["height"] - a["aspect"]) < 0.01,
+			"the picture is rasterized in that shape (%dx%d)" % [lines["width"], lines["height"]])
+	var half := Vector2(1.0, 1.0 / a["aspect"]) if a["aspect"] <= 1.0 else Vector2(a["aspect"], 1.0)
+	var box := Rect2(a["polylines"][0][0], Vector2.ZERO)
+	for line: PackedVector2Array in a["polylines"]:
+		for v in line:
+			box = box.expand(v)
+	var pad: float = picked["pad"]
+	_check(box.position.x >= -half.x + pad - 0.01 and box.end.x <= half.x - pad + 0.01
+			and box.position.y >= -half.y + pad - 0.01 and box.end.y <= half.y - pad + 0.01, "the plant keeps room for its collar")
+	_check(box.size.x >= (half.x - pad) * 2.0 - 0.02 or box.size.y >= (half.y - pad) * 2.0 - 0.02, "the plant fills its picture")
+	var framed := MandalaGenerator.generate(41, {"variant": "plant_mesh", "frame": true})
+	_check(not framed.has("aspect") and not framed["frame"].is_empty(), "a framed plant stays square")
+	# Patches too small for gems are folded away: a hydrangea's florets
+	# become a few areas, not hundreds of lines.
+	var fine := MandalaGenerator.generate(32, {"variant": "plant_mesh", "flower": "hydrangea", "plant_min_region": 0.0})
+	var folded := MandalaGenerator.generate(32, {"variant": "plant_mesh", "flower": "hydrangea"})
+	_check(folded["polylines"].size() < fine["polylines"].size() * 0.6 and folded["polylines"].size() > 4,
+			"small patches are folded into their neighbors (%d lines from %d)" % [folded["polylines"].size(),
+			fine["polylines"].size()])
+	var head_lines := PictureSources.mandala_lines(32, {"variant": "plant_mesh", "flower": "hydrangea"})
+	var on_lines := 0
+	for v in head_lines["mask"]:
+		on_lines += int(v != 0)
+	var raw_lines := PictureSources.mandala_lines(32, {"variant": "plant_mesh", "flower": "hydrangea", "plant_min_region": 0.0})
+	var raw_on := 0
+	for v in raw_lines["mask"]:
+		raw_on += int(v != 0)
+	_check(on_lines < raw_on * 0.8, "a folded plant is less line (%d px from %d)" % [on_lines, raw_on])
 	var recent := []
 	var flowers := {}
 	for i in 8:
@@ -265,6 +298,11 @@ func _game() -> void:
 	_check(picture["source"]["variant"] == "plant_mesh" and picture["source"]["plant_mesh"]["recipe"]["seed"] == 4242,
 			"a game plant keeps its recipe")
 	_check(picture["aura"]["style"] in GemAura.STYLES, "a game plant has an aura once collars are unlocked")
+	_check(picture["setting"] == "gems" and picture["sparsity"] == 0.0, "a plant has gem lines and no sparse areas")
+	var bare := 0
+	for r: Dictionary in picture["regions"]:
+		bare += int(r["kind"] == "area" and r["fill"] in ["scatter", "outline", "accent"])
+	_check(bare == 0, "no plant area is sparse")
 	# Saved and loaded, the recipe is exact and the aura's region survives.
 	var loaded := PatternIO.from_json(PatternIO.to_json(picture))
 	_check(loaded["regions"].size() == picture["regions"].size() and loaded["slots"].size() == picture["slots"].size(),

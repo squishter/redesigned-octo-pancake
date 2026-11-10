@@ -33,7 +33,10 @@ static func frame_camera(data: Dictionary, view: String) -> Dictionary:
 	}
 
 
-static func project(data: Dictionary, view: String, size := 320, camera_override: Dictionary = {}) -> Dictionary:
+## `min_region` (a share of the projection's area, 0 for off) folds away
+## what is too small to hold gems: see _simplify.
+static func project(data: Dictionary, view: String, size := 320, camera_override: Dictionary = {},
+		min_region := 0.0) -> Dictionary:
 	var camera := frame_camera(data, view) if camera_override.is_empty() else camera_override
 	if camera.is_empty() or size < 64 or size > 1024:
 		return {}
@@ -53,6 +56,11 @@ static func project(data: Dictionary, view: String, size := 320, camera_override
 		labels[at] = part * 8 + family
 		raster.parts[at] = part
 		image.set_pixel(at % size, at / size, data.palette[family])
+	if min_region > 0.0:
+		_simplify(labels, raster.parts, size, maxi(1, int(size * size * min_region)))
+		for at in labels.size():
+			if labels[at] > 0:
+				image.set_pixel(at % size, at / size, data.palette[posmod(labels[at], 8)])
 	# Animal depth thresholds are too coarse for overlapping thin petals.
 	# Organ IDs give exact visible boundaries even within one paint family.
 	var design := AnimalSurfaceProjection._vectors(labels, raster.depth, raster.parts, size)
@@ -66,3 +74,88 @@ static func project(data: Dictionary, view: String, size := 320, camera_override
 	design.metadata = data.get("metadata", {}).duplicate(true)
 	design.metadata.camera = view
 	return {"design": design, "image": image, "labels": labels}
+
+
+## Folds every visible patch smaller than `least` px into a neighbor, so a
+## head of many small florets (a hydrangea, a lavender spike), a rose's
+## inner petals or a leaf's midrib become a few areas big enough to fill
+## with gems instead of a knot of lines. A patch joins the biggest patch
+## beside it on its own organ (its flower head or leaf) if there is one,
+## else the biggest beside it at all; smallest first, until none is left
+## that has a neighbor. `labels` (part * 8 + family) and `parts` are
+## changed in place: a folded patch takes its neighbor's, so no line is
+## drawn between them.
+static func _simplify(labels: PackedInt32Array, parts: PackedInt32Array, size: int, least: int) -> void:
+	for _pass in 8:
+		# Connected patches of one label.
+		var patch := PackedInt32Array()
+		patch.resize(labels.size())
+		patch.fill(-1)
+		var areas := PackedInt32Array()
+		var stack := PackedInt32Array()
+		for start in labels.size():
+			if labels[start] <= 0 or patch[start] >= 0:
+				continue
+			var id := areas.size()
+			var count := 0
+			patch[start] = id
+			stack.append(start)
+			while not stack.is_empty():
+				var at := stack[stack.size() - 1]
+				stack.resize(stack.size() - 1)
+				count += 1
+				for other in AnimalSurfaceProjection._neighbors(at, size):
+					if patch[other] < 0 and labels[other] == labels[start]:
+						patch[other] = id
+						stack.append(other)
+			areas.append(count)
+		# Each small patch's neighbors, with the px of border they share.
+		var beside := {}
+		var sample := PackedInt32Array()
+		sample.resize(areas.size())
+		for at in labels.size():
+			var id := patch[at]
+			if id < 0:
+				continue
+			sample[id] = at
+			if areas[id] >= least:
+				continue
+			for other in AnimalSurfaceProjection._neighbors(at, size):
+				var oid := patch[other]
+				if oid >= 0 and oid != id:
+					if not beside.has(id):
+						beside[id] = {}
+					beside[id][oid] = beside[id].get(oid, 0) + 1
+		if beside.is_empty():
+			return
+		var order := beside.keys()
+		order.sort_custom(func(a: int, b: int) -> bool: return areas[a] < areas[b] or (areas[a] == areas[b] and a < b))
+		# Smallest first; a patch that has taken another in this pass waits
+		# for the next, when its new size is known.
+		var into := {}
+		var taken := {}
+		for id: int in order:
+			if taken.has(id):
+				continue
+			var organ := parts[sample[id]] / PlantGrowth.STRIDE
+			var best := -1
+			var best_score := -1.0
+			for oid: int in beside[id]:
+				if into.has(oid):
+					continue
+				var own := parts[sample[oid]] / PlantGrowth.STRIDE == organ
+				var score := float(areas[oid]) * (1000.0 if own else 1.0)
+				if score > best_score:
+					best_score = score
+					best = oid
+			if best >= 0:
+				into[id] = best
+				taken[best] = true
+		if into.is_empty():
+			return
+		for at in labels.size():
+			var id := patch[at]
+			if id >= 0 and into.has(id):
+				var to: int = sample[into[id]]
+				labels[at] = labels[to]
+				parts[at] = parts[to]

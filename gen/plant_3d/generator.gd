@@ -9,7 +9,12 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	if built.is_empty():
 		return {}
 	var recipe: Dictionary = built.recipe
-	var result := PlantSurfaceProjection.project(built.data, recipe.camera, recipe.projection_size)
+	# Not part of the recipe: how much of the plant's detail a picture keeps
+	# is the caller's choice, and the same recipe can be drawn either way.
+	var min_region: Variant = options.get("min_region", 0.0)
+	if not (min_region is float or min_region is int) or min_region < 0.0 or min_region > 0.05:
+		return {}
+	var result := PlantSurfaceProjection.project(built.data, recipe.camera, recipe.projection_size, {}, min_region)
 	if result.is_empty():
 		return {}
 	var design: Dictionary = result.design
