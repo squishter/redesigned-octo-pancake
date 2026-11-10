@@ -1060,53 +1060,19 @@ func test_kits() -> void:
 	var owned_kit := KitGenerator.generate(src, {"size": "small", "colors": 16, "gems": owned})
 	for entry in owned_kit["palette"]:
 		check(entry["gem_color_id"] in owned_ids, "kit used %s, which she doesn't own" % entry["gem_color_id"])
-	# Drills are matched by how they look on the board (KitSeenColors): a
-	# picture the color a gem looks as a drill gets that gem, and a kit in
-	# the picture's own colors makes drills that look like them.
-	var gems := Palettes.starter_gems()
-	for drill in ["round", "square"]:
-		for g: Dictionary in gems:
-			var flat := Image.create(20, 20, false, Image.FORMAT_RGBA8)
-			flat.fill(KitGenerator.seen_color(g["color"], drill, g["id"]))
-			var k := KitGenerator.generate(flat, {"size": Vector2i(10, 10), "gems": gems, "drill": drill,
-					"direct": true, "fit_light": false})
-			check(k["palette"].size() == 1 and k["palette"][0]["gem_color_id"] == g["id"],
-					"%s kit of %s's seen color used %s" % [drill, g["id"], k["palette"][0]["gem_color_id"]])
-		# A color drills can look like, and ones they can't (paler or darker
-		# than any drill looks): those should still come closer than the
-		# plain color.
-		for want: Color in [Color(0.8, 0.68, 0.6), Color(0.62, 0.72, 0.84), Color.WHITE, Color.BLACK]:
-			var flat_want := Image.create(20, 20, false, Image.FORMAT_RGBA8)
-			flat_want.fill(want)
-			var own := KitGenerator.generate(flat_want, {"size": Vector2i(10, 10), "colors": 1, "drill": drill,
-					"direct": true, "exact": true, "fit_light": false})
-			var drill_color: Color = own["palette"][0]["color"]
-			var want_lab := LabColor.from_color(want)
-			var off := LabColor.from_color(KitGenerator.seen_color(drill_color, drill)).distance_to(want_lab)
-			var plain := LabColor.from_color(KitGenerator.seen_color(want, drill)).distance_to(want_lab)
-			print("  %s own color %s: looks %.1f dE off (%.1f as is)" % [drill, want.to_html(false), off, plain])
-			check(off <= plain + 0.01, "%s kit's own color %s isn't closer than as is" % [drill, want.to_html(false)])
-			if want != Color.WHITE and want != Color.BLACK:
-				check(off < 2.0, "%s kit's own color %s looks %.1f dE off" % [drill, want.to_html(false), off])
-		# A gray ramp keeps its order, from the darkest-looking gem to the
-		# lightest, instead of the dark half all becoming one drill.
-		var ramp := Image.create(64, 8, false, Image.FORMAT_RGBA8)
-		for x in 64:
-			for y in 8:
-				ramp.set_pixel(x, y, Color(x / 63.0, x / 63.0, x / 63.0))
-		var rk := KitGenerator.generate(ramp, {"size": Vector2i(32, 4), "gems": gems, "drill": drill,
-				"direct": true})
-		var seen_l := []
-		for x in 32:
-			var entry: Dictionary = rk["palette"][rk["cells"][x]]
-			seen_l.append(LabColor.from_color(KitGenerator.seen_color(entry["color"], drill, entry["gem_color_id"])).x)
-		var steps := 0
-		for x in range(1, 32):
-			check(seen_l[x] >= seen_l[x - 1] - 1.0, "%s gray ramp got darker at %d" % [drill, x])
-			if seen_l[x] > seen_l[x - 1] + 0.5:
-				steps += 1
-		print("  %s gray ramp: %d lightness steps, %d gems" % [drill, steps, rk["palette"].size()])
-		check(steps >= 3, "%s gray ramp: only %d lightness steps" % [drill, steps])
+	# Kits make pictures a little more colorful before matching: same
+	# lightness and hue, SATURATION times the chroma; grays stay gray.
+	var tones := PackedColorArray([Color(0.6, 0.4, 0.3), Color(0.2, 0.5, 0.7), Color(0.5, 0.5, 0.5)])
+	var boosted := KitGenerator.saturate(tones, KitGenerator.SATURATION)
+	for i in tones.size():
+		var a := LabColor.from_color(tones[i])
+		var b := LabColor.from_color(boosted[i])
+		check(absf(a.x - b.x) < 0.5, "saturate changed %s's lightness" % tones[i].to_html(false))
+		var ca := Vector2(a.y, a.z).length()
+		var cb := Vector2(b.y, b.z).length()
+		check(absf(cb - ca * KitGenerator.SATURATION) < 0.5, "saturate gave %s chroma %.1f, not %.1f" % [
+				tones[i].to_html(false), cb, ca * KitGenerator.SATURATION])
+	check(KitGenerator.saturate(tones, 1.0) == tones, "saturate 1 changed the colors")
 
 
 func test_photo_line_art() -> void:

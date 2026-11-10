@@ -15,6 +15,14 @@ signal back_requested
 
 const PreviewCanvas := preload("res://scenes/dev/preview_canvas.gd")
 const LabTheme := preload("res://scenes/dev/lab_theme.gd")
+## Kit paper choices: linear colors.
+const KIT_PAPERS := {
+	"game gray": GemBoard3D.KIT_PAPER_COLOR,
+	"warm white": GemBoard3D.PAPER_COLOR,
+	"light gray": Color(0.5, 0.5, 0.5),
+	"dark gray": Color(0.18, 0.18, 0.18),
+	"charcoal": Color(0.08, 0.08, 0.08),
+}
 
 var _source: OptionButton
 var _variant: OptionButton
@@ -27,7 +35,8 @@ var _theme: OptionButton
 var _mode: OptionButton
 var _kit_size: OptionButton
 var _drill_colors: OptionButton
-var _kit_chroma: OptionButton
+var _kit_saturation: OptionButton
+var _kit_paper: OptionButton
 var _sparsity: OptionButton
 var _line_style: OptionButton
 var _setting: OptionButton
@@ -174,13 +183,16 @@ func _ready() -> void:
 	# colors (as many as Kit colors), each cell mapped straight to the nearest
 	# as the game's photo kits do.
 	_drill_colors = _options(controls, "Drill colors", ["gems", "photo"])
-	# How much of each color's strength a kit keeps as its lightness is
-	# stretched onto the drills' (KitGenerator.fit_light); the game's first.
-	var strengths := ["%d%%" % roundi(KitGenerator.LIGHT_CHROMA * 100.0)]
-	for pct in range(0, 101, 10):
-		if "%d%%" % pct != strengths[0]:
-			strengths.append("%d%%" % pct)
-	_kit_chroma = _options(controls, "Kit color strength", strengths)
+	# How much more colorful a kit's picture is made before its colors are
+	# matched (KitGenerator.saturate); the game's first.
+	var boosts := ["%d%%" % roundi(KitGenerator.SATURATION * 100.0)]
+	for pct in range(100, 135, 5):
+		if "%d%%" % pct != boosts[0]:
+			boosts.append("%d%%" % pct)
+	_kit_saturation = _options(controls, "Kit saturation", boosts)
+	# The paper under kits on the 3D board (GemBoard3D.kit_paper): the
+	# game's gray first, the collages' warm white, then other grays.
+	_kit_paper = _options(controls, "Kit paper", KIT_PAPERS.keys())
 	_sparsity = _options(controls, "Sparse", ["auto", "none", "some", "lots"])
 	_line_style = _options(controls, "Lines", ["auto"] + DesignPlan.LINE_STYLES)
 	_setting = _options(controls, "Setting", ["auto"] + CollageGenerator.SETTINGS)
@@ -262,6 +274,7 @@ func _refresh_view() -> void:
 		if _board_picture.has("slots"):
 			_board.show_collage(_board_picture)
 		else:
+			_board.kit_paper = KIT_PAPERS[_selected(_kit_paper)]
 			_board.show_kit(_board_picture)
 
 
@@ -402,7 +415,7 @@ func _generate() -> void:
 		"kit_size": _selected(_kit_size),
 		"colors": int(_colors.value),
 		"drill_colors": _selected(_drill_colors),
-		"kit_chroma": float(str(_selected(_kit_chroma)).trim_suffix("%")) / 100.0,
+		"kit_saturation": float(str(_selected(_kit_saturation)).trim_suffix("%")) / 100.0,
 		"sparsity": {"auto": -1.0, "none": 0.0, "some": 0.3, "lots": 0.6}[_selected(_sparsity)],
 		"line_style": _selected(_line_style),
 		"setting": _selected(_setting),
@@ -449,7 +462,7 @@ func _run_job(job: Dictionary) -> void:
 		"Kit":
 			var src: Image = photo if photo else PictureSources.mandala_image(job["seed"], opts, lines)
 			var kit_options := {"size": KitGenerator.board_long(src, KitGenerator.LONG_SIDES[job["kit_size"]]),
-					"colors": job["colors"], "seed": job["seed"], "light_chroma": job["kit_chroma"]}
+					"colors": job["colors"], "seed": job["seed"], "saturation": job["kit_saturation"]}
 			if job["drill_colors"] == "photo":
 				kit_options.merge({"direct": true, "exact": true, "dither": PuzzleMaker.PHOTO_OWN_DITHER,
 						"cleanup": false}, true)

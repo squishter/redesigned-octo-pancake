@@ -107,6 +107,12 @@ const IMPOSTOR_BACK := 1.2
 ## Kit drills: board units per cell, and the drill's share of it.
 const KIT_CELL := 10.0
 const KIT_DRILL := 0.98
+## The paper's color (linear): warm white under collages, a neutral gray
+## under kits, which shows between round drills and would otherwise pale
+## the picture (paper_color in gem_light.gdshaderinc; the stones see it
+## below them and their caustics take it on too).
+const PAPER_COLOR := Color(0.86, 0.84, 0.8)
+const KIT_PAPER_COLOR := Color(0.3, 0.3, 0.3)
 ## The paper's grain is baked into a texture at most this many texels per
 ## board unit and this many on a side (it is very soft; filtering fills in).
 const GRAIN_DENSITY := 2.0
@@ -157,6 +163,8 @@ var use_sensor := true
 ## The lights' smoothed directions, in board space.
 var key_dir := Vector3.UP
 var fill_dir := Vector3.UP
+## The paper's color under kits (linear; the generator lab tries others).
+var kit_paper := KIT_PAPER_COLOR
 ## Darken the paper under each stone (its caustic light shows either way).
 var shadows := true:
 	set(value):
@@ -456,7 +464,7 @@ func show_collage(picture: Dictionary, shown := PackedByteArray()) -> void:
 	var w: float = picture["width"]
 	var h: float = picture["height"]
 	var lines: PackedByteArray = picture.get("lines_visible", PackedByteArray())
-	_build(picture["slots"], Vector2(w, h), lines, Vector2i(int(w), int(h)))
+	_build(picture["slots"], Vector2(w, h), lines, Vector2i(int(w), int(h)), picture.get("kind", "") == "kit")
 	if not shown.is_empty():
 		for i in mini(shown.size(), _refs.size()):
 			if shown[i] == 0:
@@ -718,7 +726,7 @@ func show_kit(pattern: Dictionary) -> void:
 		for x in w:
 			slots.append({"x": (x + 0.5) * KIT_CELL, "y": (y + 0.5) * KIT_CELL, "size": d, "width": d, "rotation": 0.0,
 					"shape": shape, "cut": "brilliant", "target_color": palette[cells[y * w + x]]["color"]})
-	_build(slots, Vector2(w, h) * KIT_CELL, PackedByteArray(), Vector2i.ZERO)
+	_build(slots, Vector2(w, h) * KIT_CELL, PackedByteArray(), Vector2i.ZERO, true)
 
 
 ## Back to the whole picture.
@@ -728,7 +736,11 @@ func reset_view() -> void:
 	_apply_view()
 
 
-func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Vector2i) -> void:
+## `kit` lays it on kit paper (kit_paper).
+func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Vector2i, kit := false) -> void:
+	var paper := kit_paper if kit else PAPER_COLOR
+	for m: ShaderMaterial in _materials() + [_studio.material]:
+		m.set_shader_parameter("paper_color", Vector3(paper.r, paper.g, paper.b))
 	for child in _layers.get_children():
 		child.queue_free()
 	# The light starts where it should, however the phone is held now.
