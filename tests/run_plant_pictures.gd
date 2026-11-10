@@ -125,6 +125,9 @@ func _aura() -> void:
 				stones.append(s)
 			else:
 				others.append(s)
+		var radii := others.map(func(s: Dictionary) -> float: return s["width"] / 2.0)
+		radii.sort()
+		var typical: float = radii[int((radii.size() - 1) * CollageGenerator.AURA_STONE_RANK)]
 		var lines_mask: PackedByteArray = p["lines"]
 		var clear := true
 		var inside := true
@@ -135,7 +138,7 @@ func _aura() -> void:
 			var r: float = s["width"] / 2.0
 			var c := Vector2(s["x"], s["y"])
 			inside = inside and c.x >= r and c.y >= r and c.x <= w - r and c.y <= h - r
-			small = small and r <= unit * GemAura.STONE + 0.01 and r >= unit * GemAura.MIN_STONE - 0.01
+			small = small and r <= minf(unit * GemAura.STONE, typical * CollageGenerator.AURA_STONE) + 0.01
 			typed = typed and s.has("cut") and s.has("target_color") and s["shape"] == "round"
 			# Clear paper all around: no line within a stone and a half of it.
 			for k in 12:
@@ -146,7 +149,7 @@ func _aura() -> void:
 				if not is_same(o, s) and c.distance_to(Vector2(o["x"], o["y"])) < r + o["width"] / 2.0:
 					apart = false
 		_check(inside, "aura stones are inside the picture")
-		_check(small, "aura stones are small")
+		_check(small, "aura stones are smaller than the plant's bigger stones")
 		_check(typed, "aura stones are whole slots")
 		_check(clear, "the aura keeps clear paper around the plant")
 		_check(apart, "aura stones touch no other stone")
@@ -193,6 +196,17 @@ func _aura() -> void:
 			"unit": plant["unit"], "keep_clear": plant["slots"], "max_stones": placed["slots"].size() / 2})
 	_check(thinned["slots"].size() <= placed["slots"].size() / 2 and thinned["slots"].size() > placed["slots"].size() / 4,
 			"a capped aura is thinned, not dropped (%d of %d)" % [thinned["slots"].size(), placed["slots"].size()])
+	# Line stones on a plant's close lines never run into each other.
+	for seed_value in [1008, 1017]:
+		var classic := PictureSources.mandala_collage(seed_value, {"variant": "plant_mesh", "frame": false, "collar": "none"})
+		var hits := 0
+		var line_stones: Array = classic["slots"].filter(func(s: Dictionary) -> bool:
+			return classic["regions"][s["region"]]["kind"] == "line")
+		for i in line_stones.size():
+			for j in range(i + 1, line_stones.size()):
+				hits += int(CollageGenerator._capsule_gap(line_stones[i], line_stones[j]) < -1.0)
+		_check(hits == 0, "seed %d: %d line stones overlap" % [seed_value, hits])
+		_check(classic["bold_lines"] > 0 or seed_value != 1008, "plants keep their bold line stones")
 	# A framed plant, and pictures that aren't plants, get none.
 	var heart := PictureSources.mandala_collage(7, {"variant": "heart", "layout": "cluster"})
 	_check(heart["aura"]["stones"] == 0, "other pictures have no aura")

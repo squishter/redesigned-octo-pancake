@@ -150,6 +150,10 @@ const AURA_TINT := 0.45
 const AURA_OUTER_TINT := 0.7
 ## The share of the gems (palest first) the aura's tints may snap to.
 const AURA_PALEST := 0.2
+## The aura's biggest stone, as a share of one of the picture's bigger
+## stones: the one this far up its stones in order of size.
+const AURA_STONE := 0.8
+const AURA_STONE_RANK := 0.85
 
 
 ## options:
@@ -192,6 +196,9 @@ const AURA_PALEST := 0.2
 ##     [{"at", "family"}]}. A family stands in for symmetric copies: its gem
 ##     lines are one class (see GemLines) and its areas one group.
 ##   source: Dictionary describing where the lines came from, stored as is
+##   separate_lines: bool, line stones that run into each other are shrunk
+##     until they only touch (default false; for line art with lines that
+##     pass close by each other, like a plant's stems)
 ##   aura: one of GemAura.STYLES, "auto" (picked per seed) or "none" (the
 ##     default): small pale stones around the subject of a picture that
 ##     stands on bare background, drifting away and thinning out (see
@@ -272,8 +279,18 @@ static func _add_aura(picture: Dictionary, options: Dictionary) -> void:
 		seed_value = hash([seed_value, pattern_seed]) & 0x7fffffff
 	var slots: Array = picture["slots"]
 	var unit: float = picture["unit"]
+	# Smaller than the picture's own bigger stones (see AURA_STONE), so it
+	# never outweighs a subject drawn in fine stones.
+	var widths := []
+	for s: Dictionary in slots:
+		widths.append(float(s["width"]))
+	widths.sort()
+	var stone := GemAura.STONE
+	if not widths.is_empty():
+		stone = minf(stone, widths[int((widths.size() - 1) * AURA_STONE_RANK)] / 2.0 / unit * AURA_STONE)
 	var aura := GemAura.place(picture["lines"], picture["width"], picture["height"], seed_value, {"style": style,
-			"unit": unit, "gap": unit * SlotPacker.GAP, "keep_clear": slots,
+			"unit": unit, "gap": unit * SlotPacker.GAP, "keep_clear": slots, "stone": stone,
+			"min_stone": minf(GemAura.MIN_STONE, stone * 0.5),
 			"reach": options.get("aura_reach", GemAura.REACH), "max_stones": int(slots.size() * AURA_SHARE)})
 	picture["aura"]["style"] = aura["style"]
 	var stones: Array = aura["slots"]
@@ -488,6 +505,8 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		line_slots = GemLines.place(graph, outline_map, line_r, gap, line_gems, symmetry, seed_value, bold, mask,
 				options.get("drop_lines", []), dense,
 				options.get("motifs", {}).get("lines", PackedInt32Array()))
+		if options.get("separate_lines", false):
+			_separate(line_slots)
 		for sl in line_slots:
 			if sl["seq"] < 0 and sl["tone"] == 1:
 				bold_lines[sl["part"]] = true
@@ -769,6 +788,38 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		"regions": regions,
 		"slots": slots,
 	}
+
+
+## Shrinks line stones that run into each other (bold stones on two lines
+## that pass close by, as along a stem's two sides) until they only touch:
+## the bigger of a pair first, centers and proportions kept.
+static func _separate(line_slots: Array) -> void:
+	var reach := 1.0
+	for s: Dictionary in line_slots:
+		reach = maxf(reach, float(s["size"]))
+	var grid := {}
+	for i in line_slots.size():
+		var key := Vector2i(floori(line_slots[i]["x"] / reach), floori(line_slots[i]["y"] / reach))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(i)
+	for i in line_slots.size():
+		var a: Dictionary = line_slots[i]
+		var key := Vector2i(floori(a["x"] / reach), floori(a["y"] / reach))
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				for j: int in grid.get(key + Vector2i(dx, dy), []):
+					if j <= i:
+						continue
+					var b: Dictionary = line_slots[j]
+					for _try in 6:
+						var over := -_capsule_gap(a, b)
+						if over <= 0.0:
+							break
+						var big: Dictionary = a if a["width"] >= b["width"] else b
+						var scale := maxf(0.5, 1.0 - (over + 0.25) / float(big["width"]) * 2.0)
+						big["size"] = big["size"] * scale
+						big["width"] = big["width"] * scale
 
 
 ## Area stones without tiny fillers: a run of one or two stones of a pattern

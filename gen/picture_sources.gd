@@ -83,10 +83,10 @@ static func mandala_collage(seed_value: int, options: Dictionary = {}, lines: Di
 		opts["motifs"] = lines["motifs"]
 	# A plant's collar is an aura around it (unless it is framed: the frame
 	# and its background take that room).
-	# Its stems and stalks are pairs of lines a stone or two apart: bold
-	# stones along one would run into the other's.
-	if mandala["variant"] == "plant_mesh" and not opts.has("bold_lines"):
-		opts["bold_lines"] = 0
+	# Its stems and stalks are pairs of lines a stone or two apart, where
+	# bold stones along one can run into the other's.
+	if mandala["variant"] == "plant_mesh" and not opts.has("separate_lines"):
+		opts["separate_lines"] = true
 	if mandala["variant"] == "plant_mesh" and not opts.has("aura"):
 		var collar: String = options.get("collar", "random")
 		opts["aura"] = "none"

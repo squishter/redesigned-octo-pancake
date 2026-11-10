@@ -75,6 +75,7 @@ var _grid := {}
 var _bucket := 16.0
 ## The strand stones are being added to (see _thin).
 var _strand := 0
+var _min_stone := MIN_STONE
 
 
 ## Stones for an aura around the subject of `lines` (a w x h mask, nonzero
@@ -84,6 +85,7 @@ var _strand := 0
 ##   unit (base stone radius in px), gap (px between stones),
 ##   reach (the longest reach as a share of the shorter side, default REACH),
 ##   stone (the biggest stone's radius in units, default STONE),
+##   min_stone (the smallest kept, in units, default MIN_STONE),
 ##   keep_clear: Array of slots (the subject's own) the aura stays off,
 ##   max_stones: the most stones (default: no limit); an aura with more
 ##     loses whole strands (a stream, a run of a veil's row), picked per
@@ -107,6 +109,7 @@ static func place(lines: PackedByteArray, w: int, h: int, seed_value: int, optio
 	a._gap = options.get("gap", a._unit * SlotPacker.GAP)
 	a._reach = a._side * float(options.get("reach", REACH))
 	a._margin = a._unit * MARGIN + a._gap
+	a._min_stone = options.get("min_stone", MIN_STONE)
 	for k in 6:
 		a._waves.append([Vector2.from_angle(a._rng.randf() * TAU), a._rng.randf() * TAU])
 	if not a._measure(lines):
@@ -305,7 +308,7 @@ func _veil(r0: float) -> void:
 			# The sway: nothing beside the subject, up to SWAY of the distance.
 			field[i] = out * (1.0 + SWAY * (_noise(Vector2((x + 0.5) * CELL, (y + 0.5) * CELL), 3, 0.45) - 0.5))
 	var paths := Contours.iso_lines(field, labels, _gw, _gh, 0, Rect2i(0, 0, _gw, _gh), levels)
-	var r_min := _unit * MIN_STONE
+	var r_min := _unit * _min_stone
 	for k in levels.size():
 		for path: Dictionary in paths[k]:
 			var pts: PackedVector2Array = path["points"]
@@ -347,7 +350,7 @@ func _streams(r0: float) -> void:
 		field[i] = _dist[i] - _margin
 		labels[i] = 0 if field[i] > -_margin else -1
 	var starts := Contours.iso_lines(field, labels, _gw, _gh, 0, Rect2i(0, 0, _gw, _gh), PackedFloat32Array([r0]))
-	var r_min := _unit * MIN_STONE
+	var r_min := _unit * _min_stone
 	var part := 0
 	for path: Dictionary in starts[0]:
 		var pts: PackedVector2Array = path["points"]
