@@ -138,7 +138,8 @@ fill it. And plant collages always use gem lines, with no sparse or bare areas.
 
 Colors follow the plant: each flower head (its petals, its center) is a color
 group of its own and takes any of the theme colors that stand out from the
-paper, so heads can differ, while stems and leaves take the quietest ones.
+paper, so heads can differ, while stems and leaves take the quietest ones: one
+color for the stems and another for the leaves, each through and through.
 The projection's marks carry an `organ` for this; `PictureSources` turns each
 head into an area family of its own and lists them as the picture's bold areas.
 

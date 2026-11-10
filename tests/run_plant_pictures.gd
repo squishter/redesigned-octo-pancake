@@ -310,6 +310,18 @@ func _colors() -> void:
 			if not (is_bold if region_bold[s["region"]] else is_quiet).has(key):
 				mixed += 1
 		_check(mixed == 0, "seed %d: %d stones left their region's palette" % [seed_value, mixed])
+		# Stems and leaves: one quiet color each, through and through.
+		var quiet_colors := {}
+		var strayed := 0
+		for r: Dictionary in p["regions"]:
+			if r["kind"] == "area" and not region_bold[r["id"]]:
+				quiet_colors[(r["color"] as Color).to_html(false)] = true
+		for s: Dictionary in p["slots"]:
+			var region: Dictionary = p["regions"][s["region"]]
+			if region["kind"] == "area" and not region_bold[s["region"]] and s["target_color"] != region["color"]:
+				strayed += 1
+		_check(strayed == 0, "seed %d: %d stem or leaf stones aren't their area's color" % [seed_value, strayed])
+		_check(quiet_colors.size() == 2, "seed %d: stems and leaves differ (%d quiet colors)" % [seed_value, quiet_colors.size()])
 		_check(bold_areas > 0 and quiet_areas > 0, "seed %d: bold flowers (%d areas) and quiet greens (%d)" % [seed_value,
 				bold_areas, quiet_areas])
 		# The areas a head's marks fall in: heads may differ from each other.

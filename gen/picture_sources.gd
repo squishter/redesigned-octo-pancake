@@ -55,6 +55,9 @@ static func mandala_lines(seed_value: int, options: Dictionary = {}) -> Dictiona
 		var bold := {}
 		for m: Dictionary in mandala["marks"]:
 			var family: int = m["family"]
+			# What is left of a leaf's midrib is leaf: one color with it.
+			if m.has("organ") and family < names.size() and names[family] == "midribs" and "leaves" in names:
+				family = names.find("leaves")
 			if m.has("organ") and family < names.size() and names[family] in PLANT_FLOWER_FAMILIES:
 				family = PLANT_HEAD_FAMILY + int(m["organ"]) * names.size() + family
 				bold[family] = true

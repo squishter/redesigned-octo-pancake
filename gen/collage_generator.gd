@@ -605,9 +605,9 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 		var paint := _snapped_palette(theme, gems)
 		if options.get("motifs", {}).has("bold"):
 			# Bold areas (a plant's flowers) in the colors that stand out from
-			# the paper, the rest (its stems and leaves) in the quiet ones:
-			# their accent and feature stones too, and whatever the variety
-			# pass recolors.
+			# the paper, the rest (its stems and leaves) in the quiet ones, a
+			# different one for groups that touch: their accent and feature
+			# stones too, and whatever the variety pass recolors.
 			var split := RegionPaint.split_palette(paint, AURA_PAPER)
 			var bold := RegionPaint.bold_groups(map, groups, options["motifs"]["areas"], options["motifs"]["bold"])
 			role_split = split
@@ -632,8 +632,22 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 						accents[r] = role_accents[r]
 						features[r] = role_features[r]
 			role_keys = keys
-			for g in groups:
-				role_palettes[g] = keys["bold" if bold.has(g) else "quiet"]
+			# A quiet group is one color through and through (its accent and
+			# feature stones, its outline, anything recolored), so the stems
+			# stay one color and the leaves another instead of trading tones.
+			var own_keys := {}
+			for r in colors.size():
+				var g := groups[r]
+				if bold.has(g):
+					role_palettes[g] = keys["bold"]
+					continue
+				accents[r] = colors[r]
+				features[r] = colors[r]
+				if not own_keys.has(g):
+					own_keys[g] = {colors[r].to_html(false): true}
+					if not gems.is_empty():
+						own_keys[g][str(gems[RegionPaint.snap_to_gems(PackedColorArray([colors[r]]), gems)[0]]["id"])] = true
+				role_palettes[g] = own_keys[g]
 		else:
 			colors = RegionPaint.theme_colors(map, symmetry, paint, seed_value, groups, neighbors)
 			accents = RegionPaint.accent_colors(map, groups, colors, paint, seed_value, neighbors)
@@ -680,6 +694,10 @@ static func _build(mask: PackedByteArray, w: int, h: int, options: Dictionary, u
 					var role := "bold" if key is int and role_bold.has(key) else "quiet"
 					seq_choices = role_split[role]
 					role_palettes[n_groups + k] = role_keys[role]
+					# A quiet area's outline keeps to the area's one color.
+					if key is int and role == "quiet":
+						seq_choices = PackedColorArray([base])
+						role_palettes[n_groups + k] = role_palettes[key]
 				var seq_colors := _distinct_colors(base, seq_choices, 2, hash([seed_value, str(key)]))
 				if roles:
 					# A color of its own palette rather than a shade from outside it.

@@ -272,7 +272,8 @@ static func bold_groups(map: RegionMap, groups: PackedInt32Array, marks: Array, 
 ## A color per region by its group's role: groups in `bold` (group -> true)
 ## take any of the palette's bold colors, the others its quiet ones
 ## (`split`: split_palette's). Groups that touch get colors that read apart
-## where their palette allows, the groups with most neighbors choosing first.
+## where their palette allows, the groups with most neighbors choosing
+## first, and quiet groups each a quiet color of their own while they last.
 static func role_colors(map: RegionMap, groups: PackedInt32Array, split: Dictionary, seed_value: int,
 		neighbors: Array, bold: Dictionary) -> PackedColorArray:
 	var rng := RandomNumberGenerator.new()
@@ -286,6 +287,9 @@ static func role_colors(map: RegionMap, groups: PackedInt32Array, split: Diction
 		var nb: int = neighbors[b].size() if b < neighbors.size() else 0
 		return na > nb or (na == nb and a < b))
 	var group_color := {}
+	# Quiet colors in use, so quiet groups differ from each other (a plant's
+	# stems from its leaves) even where they don't touch, while colors last.
+	var quiet_used := []
 	for g: int in order:
 		var palette: PackedColorArray = split["bold"] if bold.has(g) else split["quiet"]
 		var near := []
@@ -293,7 +297,17 @@ static func role_colors(map: RegionMap, groups: PackedInt32Array, split: Diction
 			for o: int in neighbors[g]:
 				if group_color.has(o):
 					near.append(group_color[o])
-		group_color[g] = palette[_pick(palette, [near], rng)]
+		if bold.has(g):
+			group_color[g] = palette[_pick(palette, [near], rng)]
+			continue
+		var fresh := PackedColorArray()
+		for c in palette:
+			if not c in quiet_used:
+				fresh.append(c)
+		if fresh.is_empty():
+			fresh = palette
+		group_color[g] = fresh[_pick(fresh, [near], rng)]
+		quiet_used.append(group_color[g])
 	var out := PackedColorArray()
 	out.resize(map.regions.size())
 	for r in map.regions.size():
