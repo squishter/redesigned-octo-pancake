@@ -34,6 +34,9 @@ func _init() -> void:
 	test_design_plans()
 	test_pattern_seeds()
 	test_layouts()
+	test_cluster_layout()
+	test_line_patterns()
+	test_fine_layout()
 	test_symmetry()
 	test_gem_cuts()
 	test_board_light()
@@ -833,6 +836,290 @@ func test_layouts() -> void:
 	var made := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow", "layout": "dense"},
 			unlocks)
 	check(made["layout"] == "dense", "a dense request wasn't dense")
+
+
+## Cluster pictures: about 500 stones in 10-15 gem types, no filler (spacer
+## rows, scatter or outline fills, tiny runs of one or two stones), no gem
+## type of only one or two stones but accents, and few loose stones (see
+## CollageGenerator.loose_share), though their stones are far bigger.
+func test_cluster_layout() -> void:
+	print("Cluster layout")
+	var in_count := 0
+	var in_types := 0
+	var loose_sum := 0.0
+	var line_heavy := 0
+	for i in 6:
+		var seed_value := 2020 + i
+		var opts := {"variant": MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()], "pattern_seed": i,
+				"frame": false}
+		var lines := PictureSources.mandala_lines(seed_value, opts)
+		opts["layout"] = "dense"
+		var dense := PictureSources.mandala_collage(seed_value, opts, lines)
+		opts["layout"] = "cluster"
+		var cluster := PictureSources.mandala_collage(seed_value, opts, lines)
+		check(cluster["layout"] == "cluster", "seed %d: layout cluster not honored" % seed_value)
+		var n: int = cluster["slots"].size()
+		# Fine line art keeps all its gem lines, with more stones: only
+		# pictures whose areas hold most stones must land in range.
+		var on_lines := _line_stones(cluster)
+		if on_lines > n - on_lines:
+			line_heavy += 1
+		elif n >= CollageGenerator.CLUSTER_MIN_SLOTS and n <= CollageGenerator.CLUSTER_MAX_SLOTS:
+			in_count += 1
+		check(n >= CollageGenerator.MIN_SLOTS, "seed %d: %d stones in a cluster picture" % [seed_value, n])
+		check(on_lines > n - on_lines or n <= 800, "seed %d: %d stones in a cluster picture" % [seed_value, n])
+		var types: int = cluster["gem_types"]
+		check(types <= CollageGenerator.CLUSTER_TYPES_MAX, "seed %d: %d gem types in a cluster picture" % [seed_value, types])
+		check(types == cluster["gem_kinds"].size(), "seed %d: gem_types disagrees with gem_kinds" % seed_value)
+		if types >= CollageGenerator.CLUSTER_TYPES_MIN:
+			in_types += 1
+		check(not cluster["spacers"], "seed %d: a cluster picture has spacer rows" % seed_value)
+		for r in cluster["regions"]:
+			check(not r["fill"] in ["scatter", "outline"], "seed %d: a cluster area is %s" % [seed_value, r["fill"]])
+		var lonely := _lonely_types(cluster)
+		check(lonely.is_empty(), "seed %d: gem types of only 1-2 stones that aren't accents: %s" % [seed_value, lonely])
+		var tiny := _tiny_fillers(cluster)
+		check(tiny == 0, "seed %d: %d tiny one- or two-stone fillers" % [seed_value, tiny])
+		var loose := CollageGenerator.loose_share(cluster)
+		var dense_loose := CollageGenerator.loose_share(dense)
+		# Line art pictures' few area stones sit among line stones: only
+		# pictures whose areas hold most stones count.
+		if on_lines <= n - on_lines:
+			loose_sum += loose
+			check(loose <= 0.4, "seed %d: %.0f%% of a cluster picture's stones sit loose" % [seed_value, loose * 100.0])
+		var outline_hits := count_outline_overlaps(cluster["slots"])
+		check(outline_hits == 0, "seed %d: %d cluster stones overlap by their real outlines" % [seed_value, outline_hits])
+		var overlaps := count_overlaps(cluster["slots"], cluster["width"] * 0.002)
+		check(overlaps == 0, "seed %d: %d overlapping stones in the cluster layout" % [seed_value, overlaps])
+		print(("  seed %d %-9s %s: %4d stones (%d on lines), %2d gem types, %d loose left out, loose %.0f%% "
+				+ "(dense %.0f%%, %d stones)") % [
+				seed_value, opts["variant"], cluster["setting"], n, on_lines, types, cluster["loose_dropped"], loose * 100.0,
+				dense_loose * 100.0, dense["slots"].size()])
+		render_collage(cluster).save_png(out_dir.path_join("layout_%d_cluster.png" % seed_value))
+	check(in_count >= 6 - line_heavy - 1, "only %d of %d cluster pictures (not line art) have %d-%d stones" % [
+			in_count, 6 - line_heavy, CollageGenerator.CLUSTER_MIN_SLOTS, CollageGenerator.CLUSTER_MAX_SLOTS])
+	check(in_types >= 4, "only %d of 6 cluster pictures reached %d gem types" % [in_types, CollageGenerator.CLUSTER_TYPES_MIN])
+	var counted := maxi(1, 6 - line_heavy)
+	check(loose_sum / counted <= 0.25, "%.0f%% of cluster pictures' stones sit loose" % [loose_sum / counted * 100.0])
+	var made := PuzzleMaker.make({"type": "mandala", "seed": 5, "pattern_seed": 9, "theme": "rainbow", "layout": "cluster"},
+			GemCatalog.default_unlocks())
+	check(made["layout"] == "cluster", "a cluster request wasn't cluster")
+
+
+## Fine pictures: dense packing, tidied as cluster ones are (no lonely gem
+## types, tiny fillers, scatter, outline or pave fills), and line patterns
+## turn up; dense pictures come out as they did.
+func test_fine_layout() -> void:
+	print("Fine layout")
+	var curves := 0
+	var echo2 := 0
+	for i in 4:
+		var seed_value := 2030 + i
+		var opts := {"variant": MandalaGenerator.VARIANTS[i % MandalaGenerator.VARIANTS.size()], "pattern_seed": i,
+				"frame": false}
+		var lines := PictureSources.mandala_lines(seed_value, opts)
+		opts["layout"] = "fine"
+		var fine := PictureSources.mandala_collage(seed_value, opts, lines)
+		check(fine["layout"] == "fine", "seed %d: layout fine not honored" % seed_value)
+		var n: int = fine["slots"].size()
+		check(n >= CollageGenerator.MIN_SLOTS and n <= CollageGenerator.DENSE_MAX_SLOTS,
+				"seed %d: %d stones in a fine picture" % [seed_value, n])
+		check(fine["gem_types"] <= CollageGenerator.GEM_TYPES_MAX, "seed %d: %d gem types" % [seed_value, fine["gem_types"]])
+		var lonely := _lonely_types(fine)
+		check(lonely.is_empty(), "seed %d: fine gem types of only 1-2 stones that aren't accents: %s" % [seed_value, lonely])
+		var tiny := _tiny_fillers(fine)
+		check(tiny == 0, "seed %d: %d tiny fillers in a fine picture" % [seed_value, tiny])
+		for r in fine["regions"]:
+			check(not r["fill"] in ["scatter", "outline"] and r["style"] != "pave",
+					"seed %d: a fine area is %s / %s" % [seed_value, r["fill"], r["style"]])
+			if r["style"] in SlotPacker.CURVES:
+				curves += 1
+			if r["style"] == "echo2":
+				echo2 += 1
+		check(count_overlaps(fine["slots"], fine["width"] * 0.002) == 0, "seed %d: overlapping fine stones" % seed_value)
+		var touching := count_outline_overlaps(fine["slots"])
+		check(touching == 0, "seed %d: %d fine stones overlap by their real outlines" % [seed_value, touching])
+		print("  seed %d %-9s %s: %4d stones, %2d gem types, %d loose left out" % [seed_value, opts["variant"],
+				fine["setting"], n, fine["gem_types"], fine["loose_dropped"]])
+		render_collage(fine).save_png(out_dir.path_join("layout_%d_fine.png" % seed_value))
+	check(curves > 0, "no fine area took a line pattern")
+	check(echo2 > 0, "no fine area took echo2")
+
+
+## The tight packer's line patterns fill a disc and a ring with tidy rows
+## (spirals and swirls with one tone per arm), and a solitaire stays only in
+## an area its stone covers: a square keeps it, a long strip takes rows.
+func test_line_patterns() -> void:
+	print("Line patterns")
+	var w := 320
+	var c := Vector2(w, w) / 2.0
+	var mask := PackedByteArray()
+	mask.resize(w * w)
+	for y in w:
+		for x in w:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(c)
+			var on := x < 2 or y < 2 or x >= w - 2 or y >= w - 2 or absf(d - 110.0) < 1.5
+			mask[y * w + x] = 255 if on else 0
+	var map := RegionMap.build(mask, w, w, 10)
+	var unit := 6.0
+	for style: String in SlotPacker.CURVES:
+		var styles := {}
+		for r in map.regions:
+			styles[r["id"]] = style
+		var slots := SlotPacker.pack(map, {"tight": true, "styles": styles, "unit": unit, "seed": 3})
+		var per_region := {}
+		var tones := {}
+		for s in slots:
+			per_region[s["region"]] = per_region.get(s["region"], 0) + 1
+			tones[s["tone"]] = true
+		for r in map.regions:
+			check(per_region.get(r["id"], 0) >= 30, "%s: only %d stones in region %d" % [
+					style, per_region.get(r["id"], 0), r["id"]])
+			check(r["style"] == style, "%s: region %d packed as %s" % [style, r["id"], r["style"]])
+		var want := 3 if style == "swirl" else 2
+		check(tones.size() >= want, "%s: %d tones, not %d" % [style, tones.size(), want])
+		check(count_overlaps(slots, 0.5) == 0, "%s: overlapping stones" % style)
+		print("  %-7s %d stones, tones %s" % [style, slots.size(), tones.keys()])
+	# A disc with two small holes and a spot on its edge: echo2 rows follow
+	# the disc's outline alone, around neither hole nor the spot (a feature,
+	# though it touches the edge), and never inside one.
+	mask.fill(0)
+	var holes := [c + Vector2(-50, 10), c + Vector2(40, -30), c + Vector2(0, 128)]
+	for y in w:
+		for x in w:
+			var q := Vector2(x + 0.5, y + 0.5)
+			var on := absf(q.distance_to(c) - 140.0) < 1.5
+			for hc: Vector2 in holes:
+				on = on or (absf(q.distance_to(hc) - 18.0) < 1.5 and q.distance_to(c) < 140.0)
+			mask[y * w + x] = 255 if on else 0
+	map = RegionMap.build(mask, w, w, 10)
+	var disc := -1
+	for r in map.regions:
+		if (r["centroid"] as Vector2).distance_to(c) < 30.0 and r["area"] > 20000:
+			disc = r["id"]
+	var echo_slots := SlotPacker.pack(map, {"tight": true, "styles": {disc: "echo2"}, "unit": unit, "seed": 3})
+	var edge_spot := map.label_at(int(holes[2].x), int(holes[2].y))
+	check(edge_spot >= 0 and edge_spot != disc, "the edge spot isn't a region of its own")
+	check(map.regions[disc]["style"] == "echo2", "a disc with holes took %s, not echo2" % map.regions[disc]["style"])
+	var in_disc := 0
+	for s in echo_slots:
+		if s["region"] != disc:
+			continue
+		in_disc += 1
+		for hc: Vector2 in holes:
+			check(Vector2(s["x"], s["y"]).distance_to(hc) > 18.0, "an echo2 stone sits inside a hole")
+	check(in_disc >= 200, "echo2 put only %d stones in the disc" % in_disc)
+	check(count_overlaps(echo_slots, 0.5) == 0, "echo2: overlapping stones")
+	# The rows ring the disc, not the holes: each row's stones keep one
+	# distance from the disc's edge (the last part is the leftover fill).
+	var depth := {}
+	var last := 0
+	for s in echo_slots:
+		if s["region"] != disc:
+			continue
+		last = maxi(last, s["part"])
+		if not depth.has(s["part"]):
+			depth[s["part"]] = []
+		depth[s["part"]].append(140.0 - Vector2(s["x"], s["y"]).distance_to(c))
+	var rows := 0
+	for part: int in depth:
+		var list: Array = depth[part]
+		if part == last or list.size() < 10:
+			continue
+		rows += 1
+		check(list.max() - list.min() <= unit * 1.5, "echo2: row %d strays %.1f px from one depth" % [
+				part, list.max() - list.min()])
+	check(rows >= 3, "echo2: only %d rows" % rows)
+	print("  echo2   %d stones in a disc with two holes and an edge spot" % in_disc)
+	# A square and a long strip, both asked for a solitaire.
+	mask.fill(0)
+	for y in w:
+		for x in w:
+			var on := x < 2 or y < 2 or x >= w - 2 or y >= w - 2
+			on = on or ((x == 40 or x == 100) and y >= 40 and y <= 100) or ((y == 40 or y == 100) and x >= 40 and x <= 100)
+			on = on or ((x == 140 or x == 300) and y >= 40 and y <= 70) or ((y == 40 or y == 70) and x >= 140 and x <= 300)
+			mask[y * w + x] = 255 if on else 0
+	map = RegionMap.build(mask, w, w, 10)
+	var styles := {}
+	for r in map.regions:
+		styles[r["id"]] = "solitaire"
+	SlotPacker.pack(map, {"tight": true, "styles": styles, "unit": unit, "seed": 3})
+	for r in map.regions:
+		var box: Rect2i = r["bbox"]
+		if box.size.x < 100 and box.size.y < 100 and absi(box.size.x - box.size.y) < 4:
+			check(r["style"] == "solitaire", "a square area took %s, not a solitaire" % r["style"])
+		elif box.size.x > 3 * box.size.y:
+			check(r["style"] in ["echo", "echo2"], "a long strip took %s, not rows" % r["style"])
+
+
+## Gem types with fewer than CollageGenerator.MIN_TYPE_STONES stones that
+## aren't all accents (an area's only stones, a stone ACCENT_SIZE times its
+## area's median, accent stones along lines).
+static func _lonely_types(p: Dictionary) -> Array:
+	var by_region := _stones_by_region(p)
+	var types := {}
+	for s: Dictionary in p["slots"]:
+		var key := GemVariety.type_key(s)
+		if not types.has(key):
+			types[key] = []
+		types[key].append(s)
+	var out := []
+	for key: String in types:
+		var list: Array = types[key]
+		if list.size() >= CollageGenerator.MIN_TYPE_STONES:
+			continue
+		for s: Dictionary in list:
+			var region: Dictionary = p["regions"][s["region"]]
+			var mates: Array = by_region[s["region"]]
+			var accent := false
+			if region["kind"] == "line":
+				accent = s.get("tone", 0) != 0 or s.get("seq", -1) >= 0
+			else:
+				accent = mates.size() <= 2 or s["width"] >= _median_width(mates) * CollageGenerator.ACCENT_SIZE
+			if not accent:
+				out.append(key)
+				break
+	return out
+
+
+## Runs of one or two touching stones of a pattern part, all under
+## CollageGenerator.TINY_FILLER of their area's median stone.
+static func _tiny_fillers(p: Dictionary) -> int:
+	var count := 0
+	var by_region := _stones_by_region(p)
+	for region: int in by_region:
+		var list: Array = by_region[region]
+		if p["regions"][region]["kind"] != "area" or list.size() < 3:
+			continue
+		var typical := _median_width(list)
+		for s: Dictionary in list:
+			if s["width"] >= typical * CollageGenerator.TINY_FILLER:
+				continue
+			var touching := 0
+			for o: Dictionary in list:
+				if o != s and o["part"] == s["part"] and \
+						CollageGenerator._capsule_gap(s, o) <= maxf(s["width"], o["width"]) / 2.0:
+					touching += 1
+			if touching == 0:
+				count += 1
+	return count
+
+
+static func _stones_by_region(p: Dictionary) -> Dictionary:
+	var out := {}
+	for s: Dictionary in p["slots"]:
+		if not out.has(s["region"]):
+			out[s["region"]] = []
+		out[s["region"]].append(s)
+	return out
+
+
+static func _median_width(list: Array) -> float:
+	var widths := []
+	for s: Dictionary in list:
+		widths.append(float(s["width"]))
+	widths.sort()
+	return widths[widths.size() / 2]
 
 
 static func _line_stones(p: Dictionary) -> int:
@@ -1692,6 +1979,38 @@ func render_kit(kit: Dictionary, cell: int = 8) -> Image:
 
 ## Pairs of slots in the same region whose capsules come closer than
 ## `tolerance` px of touching.
+## Pairs of stones whose drawn outlines (GemShapes.slot_polygon) overlap
+## by more than half a square px: square corners reach past the capsules
+## count_overlaps checks.
+func count_outline_overlaps(slots: Array) -> int:
+	var reach := 1.0
+	for s: Dictionary in slots:
+		reach = maxf(reach, float(s["size"]))
+	var grid := {}
+	for i in slots.size():
+		var key := Vector2i(floori(slots[i]["x"] / reach), floori(slots[i]["y"] / reach))
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(i)
+	var polys := []
+	for s: Dictionary in slots:
+		polys.append(GemShapes.slot_polygon(s, 16))
+	var n := 0
+	for i in slots.size():
+		var key := Vector2i(floori(slots[i]["x"] / reach), floori(slots[i]["y"] / reach))
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				for j: int in grid.get(key + Vector2i(dx, dy), []):
+					if j <= i:
+						continue
+					var area := 0.0
+					for piece: PackedVector2Array in Geometry2D.intersect_polygons(polys[i], polys[j]):
+						area += absf(CollageGenerator._area(piece))
+					if area > 0.5:
+						n += 1
+	return n
+
+
 func count_overlaps(slots: Array, tolerance: float) -> int:
 	var cell := 32.0
 	var grid := {}

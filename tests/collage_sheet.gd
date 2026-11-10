@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --headless -s res://tests/collage_sheet.gd -- --out=/tmp/sheet --seeds=1000,1003 --patterns=3
 ##
 ## Options: --setting=gems|metal, --lines=<GemLines style>,
-## --layout=classic|dense|both (both renders each pattern in both layouts,
+## --layout=classic|dense|cluster|both (both renders each pattern in every layout,
 ## to compare them).
 
 
@@ -44,8 +44,10 @@ func _init() -> void:
 				for r in p["regions"]:
 					if r["kind"] == "area":
 						styles[r["style"]] = styles.get(r["style"], 0) + 1
-				print("seed %d pattern %d %s: %s %s radial %s tiers %s, %d slots, %d gem types, unit %.1f, %d ms, %s" % [
+				print(("seed %d pattern %d %s: %s %s radial %s tiers %s, %d slots (%d loose left out, %d elements), "
+						+ "%d gem types, unit %.1f, %d ms, %s") % [
 						s, pattern, layout, p["setting"], p["line_gems"], p["radial_size"], p["tiers"], p["slots"].size(),
+						p.get("loose_dropped", 0), p["dropped"],
 						p["gem_types"], p["unit"], Time.get_ticks_msec() - t0, styles])
 				var suffix := "" if layouts.size() == 1 and layout == "classic" else "_" + layout
 				render(p).save_png(out_dir.path_join("sheet_%d_%s_p%d%s.png" % [s, variant, pattern, suffix]))

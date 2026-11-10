@@ -32,19 +32,25 @@ const PHOTO_DITHER := 0.85
 const PHOTO_OWN_DITHER := 0.5
 ## Picture features make() knows (GemCatalog.FEATURES must be among them).
 const FEATURES := ["frames", "backgrounds", "collars", "zoom", "wobble"]
-## How closely new collages' stones sit (CollageGenerator.LAYOUTS). Requests
-## from before layouts have none and stay "classic", so recoloring an older
-## puzzle makes the same picture again.
-const LAYOUT := "dense"
+## How closely new collages' stones sit (CollageGenerator.LAYOUTS): new
+## puzzles are cluster pictures (about 500 stones in 10-15 gem types, in
+## tight groups) unless a size picks otherwise. Saved requests keep their
+## own layout, and those from before layouts have none and stay "classic",
+## so recoloring an older puzzle makes the same picture again.
+const LAYOUT := "cluster"
+## Collage sizes she can pick: the layout each makes, and its name.
+const COLLAGE_SIZES := {"medium": "cluster", "large": "fine"}
+const COLLAGE_SIZE_NAMES := {"medium": "Medium (about 500 gems)", "large": "Large (thousands of gems)"}
 
 
 ## A new puzzle request with fresh seeds: {type, seed, pattern_seed, theme, layout}.
 ## Kits add the collage `picture` they're made from (GemCatalog.kit_picture).
 ## For one of her own color stories (CustomThemes) the caller adds its
 ## theme_name and theme_gems, which make() colors with instead.
-static func new_request(type_id: String, theme_id: String) -> Dictionary:
+## `size`, one of COLLAGE_SIZES, picks the layout (default: LAYOUT).
+static func new_request(type_id: String, theme_id: String, size := "") -> Dictionary:
 	return {"type": type_id, "seed": randi_range(1, 999999), "pattern_seed": randi_range(1, 999999), "theme": theme_id,
-			"layout": LAYOUT}
+			"layout": COLLAGE_SIZES.get(size, LAYOUT)}
 
 
 ## The puzzle for `request` (see new_request), made from `unlocks` only:

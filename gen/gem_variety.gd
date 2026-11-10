@@ -44,9 +44,14 @@ const STAND_IN_LAST := ["pebble", "clover", "sunburst", "butterfly"]
 ##   its neighbors show (RegionPaint.contrasts), except next to the odd
 ##   neighbor RegionPaint.may_match lets share one; a part whose color
 ##   already blurs into a neighbor's tries a new color before a new shape.
+## min_stones: when above 0, no type is left with fewer stones than this:
+##   parts that small never take a new type, and a type still that small
+##   afterwards takes the type of the nearest stone its shape can become
+##   (in its own group first), so it sits beside stones like it. Slots marked
+##   "keep_type" (accents that fill a feature on their own) are exempt.
 ## Sets every slot's "cut". Returns the number of gem types afterwards.
 static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, target: int, seed_value: int,
-		allowed: Dictionary = {}, neighbors: Array = []) -> int:
+		allowed: Dictionary = {}, neighbors: Array = [], min_stones: int = 0) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "variety"])
 	# Colors each group shows (gem key -> parts), to keep neighbors apart.
@@ -58,11 +63,13 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				_gem_key(s["target_gem"], s["target_color"])]
 		if not units.has(key):
 			units[key] = {"slots": [], "shape": s["shape"], "color": s["target_color"], "gem": s["target_gem"],
-					"group": group_of[s["region"]], "locked": s.get("seq", -1) >= 0,
+					"group": group_of[s["region"]], "locked": s.get("seq", -1) >= 0, "keep": false,
 					"cut": GemCuts.pick(s["shape"], _gem_key(s["target_gem"], s["target_color"]), seed_value,
 							_cuts(s["shape"], allowed))}
 			unit_keys.append(key)
 		units[key]["slots"].append(s)
+		if s.get("keep_type", false):
+			units[key]["keep"] = true
 	unit_keys.sort()
 	for i in range(unit_keys.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
@@ -83,7 +90,7 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 		var changed := false
 		for key in unit_keys:
 			var u: Dictionary = units[key]
-			if holders[_combo(u)] < 2:
+			if holders[_combo(u)] < 2 or u["slots"].size() < min_stones:
 				continue
 			# A new shape in the part's own color first, so the palette stays calm,
 			# then a new cut of it, then a new color (colors are ordered best first).
@@ -178,6 +185,23 @@ static func balance(slots: Array, group_of: PackedInt32Array, colors: Array, tar
 				u["cut"] = into["cut"]
 				u["color"] = into["color"]
 				u["gem"] = into["gem"]
+				_count(holders, stones, ctx, u, 1)
+
+	# Types of only a stone or two: each takes the type of the stone nearest it.
+	if min_stones > 0:
+		for _pass in 2:
+			for key in unit_keys:
+				var u: Dictionary = units[key]
+				if u["locked"] or u["keep"] or stones.get(_combo(u), 0) >= min_stones:
+					continue
+				var v := _nearest_unit(ctx, u, units, unit_keys, allowed)
+				if v.is_empty():
+					continue
+				_count(holders, stones, ctx, u, -1)
+				u["shape"] = v["shape"]
+				u["cut"] = v["cut"]
+				u["color"] = v["color"]
+				u["gem"] = v["gem"]
 				_count(holders, stones, ctx, u, 1)
 
 	for key in unit_keys:
@@ -418,6 +442,36 @@ static func _may_match(ctx: Dictionary, a: int, b: int) -> bool:
 	if not known.has(pair):
 		known[pair] = RegionPaint.may_match(ctx["seed"], a, b)
 	return known[pair]
+
+
+## The part of another type with the stone nearest to any of part `u`'s,
+## whose shape `u`'s stones can take: in `u`'s own group if it has one,
+## else anywhere it doesn't blur into a neighbor's color; {} if none.
+static func _nearest_unit(ctx: Dictionary, u: Dictionary, units: Dictionary, unit_keys: Array,
+		allowed: Dictionary) -> Dictionary:
+	var own := _combo(u)
+	var fam := _family(u["shape"], allowed)
+	var best := {}
+	var best_d := INF
+	var best_own := {}
+	var best_own_d := INF
+	for key in unit_keys:
+		var v: Dictionary = units[key]
+		if _combo(v) == own or not v["shape"] in fam:
+			continue
+		var d := INF
+		for a: Dictionary in u["slots"]:
+			var pa := Vector2(a["x"], a["y"])
+			for b: Dictionary in v["slots"]:
+				d = minf(d, pa.distance_squared_to(Vector2(b["x"], b["y"])))
+		if v["group"] == u["group"]:
+			if d < best_own_d:
+				best_own_d = d
+				best_own = v
+		elif d < best_d and not _folds_into_neighbor(ctx, [u], v):
+			best_d = d
+			best = v
+	return best_own if not best_own.is_empty() else best
 
 
 ## Whether folding `parts` into part `v`'s type would give any of them a new

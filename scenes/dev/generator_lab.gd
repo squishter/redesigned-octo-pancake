@@ -534,8 +534,10 @@ func _process(_delta: float) -> void:
 				setting = "gem lines (%s, %s colors, %d bold)" % [p["line_gems"], p["line_colors"], p["bold_lines"]]
 			if p["dropped"] > 0:
 				setting += ", %d left out for stone count" % p["dropped"]
-			if p.get("layout", "classic") == "dense":
-				setting += ", dense layout (%.0f%% of patterns and lines)" % (p["dense"] * 100.0)
+			if p.get("layout", "classic") in ["dense", "fine"]:
+				setting += ", %s layout (%.0f%% of patterns and lines dense)" % [p["layout"], p["dense"] * 100.0]
+			elif p.get("layout", "classic") == "cluster":
+				setting += ", cluster layout (%d loose stones left out)" % p.get("loose_dropped", 0)
 			_say("Collage · %d stones · %d gem types · pattern %d · %d ms" % [p["slots"].size(), p["gem_types"],
 					p["pattern_seed"], ms], ("Collage%s: %s, pattern %d, %d regions (%d too thin), %d slots, %d gem types, "
 					+ "%.0f%% avg coverage, lines %s, fills %s, patterns %s%s%s — %d ms") % [
