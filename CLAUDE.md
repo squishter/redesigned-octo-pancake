@@ -20,8 +20,8 @@ test and render command.
   fail with `Identifier "X" not declared in the current scope`.
 - Quick parse check of one script (catches the type errors below without
   running anything): `godot --headless --check-only -s <path>`.
-- `gdlint`/`gdformat` are not installed here; the repo's style is in `gdlintrc`
-  (tabs, 120 columns, typed variables).
+- `gdlint`/`gdformat` are not installed here. `gdlintrc` sets lines to at most
+  130 columns; the code itself uses tabs and typed variables throughout.
 
 ## GDScript traps that cost retries
 
