@@ -10,6 +10,10 @@ test and render command.
 - `render-sheets`: render and stitch pictures to look at; use for any visual change.
 - `add-picture-source`: the checklist for wiring a new picture type.
 - `branch-and-merge`: start branches, merge main before testing, commit, merge.
+- `triage-player-report`: turn what the player saw (in their words) into code, a cause and a plan.
+- `test-play-input`: reproduce and regression-test taps, strokes, zoom and other play gestures.
+- `measure-board-performance`: count what the 3D board draws per frame, before and after a change.
+- `add-unlockable`: the checklist for a new color, theme, animation, finale, finish or power-up.
 
 ## Godot
 
