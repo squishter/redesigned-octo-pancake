@@ -766,7 +766,14 @@ your own Godot settings:
 It imports the project first (so `class_name` scripts are registered),
 checks that every script compiles (`tools/check_scripts.gd`; Godot's export
 would otherwise pack a broken script without complaint, and the build stops
-here instead), and then runs `godot --headless --export-debug Android`. Install with
+here instead), stamps the build and then runs `godot --headless --export-debug Android`.
+The stamp is `game/build_stamp.json` (git-ignored, packed through the presets'
+`include_filter`, deleted again after the export): the commit, branch, whether
+there were uncommitted changes, and the build time. `BuildInfo` (`game/build_info.gd`)
+reads it, and the bottom of Settings shows it as "Build 657adc2 · 27 Nov 2026
+14:05 UTC" ("+ changes" for uncommitted work, "Development build" with no
+stamp, as in the editor). The preset's version stays 0.1.0, so the stamp is
+what tells builds apart. Install with
 `adb install -r build/paint-with-gems-debug.apk`.
 
 For a release APK, make a keystore (never commit it; `*.keystore` and

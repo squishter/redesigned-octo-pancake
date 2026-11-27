@@ -57,17 +57,22 @@ which one you took.
 
 ## 3. Which build do they have?
 
-APKs aren't stamped with a commit: `version/name` stays `"0.1.0"` and
-`version/code` stays `1` in `export_presets.cfg`. Their build can only be
-placed by when it was made or installed. Ask for the date if it matters,
-then:
+APKs from `tools/build_apk.sh` carry a build stamp (`BuildInfo`). The bottom
+of Settings reads "Build 657adc2 · 27 Nov 2026 14:05 UTC", with "+ changes"
+when the build had uncommitted work. Ask the user for that line. Builds
+made before the stamp existed show no line: place them by the date they
+were built or installed instead (`git rev-list -1 --before="<date>" origin/main`).
 
 ```bash
 git fetch origin main
-base=$(git rev-list -1 --before="<date>" origin/main)
+base=<commit from Settings>                            # or the dated rev-list above
 git log --oneline "$base"..origin/main                 # everything since their build
 git log --oneline "$base"..origin/main -- <files you found in step 1>
 ```
+
+"+ changes" means some of what was built was never committed, so the
+commit is only a close match. The `version/name` in `export_presets.cfg`
+stays `0.1.0` and tells you nothing.
 
 Tell the user whether something since then already addresses the report.
 If nothing does, say so plainly, so they know updating alone won't help.

@@ -597,6 +597,15 @@ func _test_settings() -> void:
 	await _layout_frames()
 	_check(menu._settings_panel.body.find_child("UnlockAll", true, false) == null, "Production settings hide debug unlocks")
 	_check(menu._settings_panel.body.find_child("FreePurchases", true, false) == null, "Production settings hide free purchases")
+	var build_line := menu._settings_panel.body.find_child("BuildLine", true, false) as Label
+	_check(build_line != null and build_line.text == BuildInfo.line(), "Settings shows which build this is")
+	_check(not FileAccess.file_exists(BuildInfo.STAMP_PATH) and BuildInfo.line() == "Development build",
+		"Without a stamp it's a development build")
+	_check(BuildInfo.line({"commit": "657adc2", "dirty": false, "built": "2026-11-27T14:05:09Z"})
+		== "Build 657adc2 · 27 Nov 2026 14:05 UTC", "A stamp reads as its commit and build time: %s" % BuildInfo.line(
+			{"commit": "657adc2", "built": "2026-11-27T14:05:09Z"}))
+	_check(BuildInfo.line({"commit": "657adc2", "dirty": true, "built": "2026-01-03T09:00:00Z"})
+		== "Build 657adc2 + changes · 3 Jan 2026 09:00 UTC", "A build from uncommitted work says so")
 	_check_dialog(menu._settings_panel)
 	_check_button_widths(menu, menu.size.x)
 	for cap: int in SaveStore.FPS_CAPS:

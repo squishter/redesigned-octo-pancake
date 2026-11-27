@@ -167,6 +167,17 @@ else
 	PRESET="Android"
 	EXPORT="$MODE"
 fi
+# The build stamp (BuildInfo): which commit this is and when it was built,
+# shown at the bottom of Settings. Only the APK gets it; removed afterwards.
+STAMP="$ROOT/game/build_stamp.json"
+trap 'rm -f "$STAMP"' EXIT
+COMMIT="$(git -C "$ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+DIRTY=false
+if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then DIRTY=true; fi
+printf '{"commit": "%s", "branch": "%s", "dirty": %s, "built": "%s", "mode": "%s"}\n' \
+	"$COMMIT" "$BRANCH" "$DIRTY" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MODE" >"$STAMP"
+echo "Stamping build $COMMIT$([ "$DIRTY" = true ] && echo ' + changes')"
 echo "Exporting $APK"
 "$GODOT" --headless --path "$ROOT" "--export-$EXPORT" "$PRESET" "$APK"
 [ -s "$APK" ] || { echo "Export failed: no APK written" >&2; exit 1; }

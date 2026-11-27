@@ -4,6 +4,8 @@
 *.apk
 *.aab
 /build/
+# Written by tools/build_apk.sh for the APK only (see BuildInfo)
+/game/build_stamp.json
 *.keystore
 *.jks
 
