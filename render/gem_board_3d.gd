@@ -12,7 +12,8 @@ extends SubViewportContainer
 ## the light's direction only, so they hold still when it does.
 ##
 ## Stones of one shape, cut and size share a mesh and draw as one
-## MultiMesh, so thousands stay cheap; tiny ones on screen draw as a flat
+## MultiMesh (big batches split into tiles, so zoomed in only the tiles in
+## view draw), so thousands stay cheap; tiny ones on screen draw as a flat
 ## outline each (IMPOSTOR_PX). Pinch to zoom, drag to pan, double-tap to fit
 ## (mouse wheel on desktop), like PreviewCanvas.
 ##
@@ -43,6 +44,10 @@ const LINE_FINISHES := ["metal", "matte", "glossy", "glitter", "chalk", "rope", 
 const PAINT_SPEED := 700.0
 const PAINT_MIN_TIME := 0.45
 const PAINT_MAX_TIME := 1.3
+## Big batches of stones split into tiles of about this many stones, at most
+## TILE_GRID a side (see _tiles).
+const TILE_STONES := 400
+const TILE_GRID := 12
 const DOUBLE_TAP_MS := 300
 const DOUBLE_TAP_SLOP := 60.0
 ## Room around the picture when fitted, as a share of its size.
@@ -179,6 +184,10 @@ var input_enabled := true
 ## that touch a stroke (stroke_started, stroke_moved, stroke_ended) instead
 ## of a pan. Unset, every touch pans.
 var stroke_filter := Callable()
+## Called with the board point of a lone tap that isn't a stroke: false
+## keeps it from counting toward a double tap to fit (and breaks one under
+## way). Unset, any two quick taps in one place fit.
+var fit_filter := Callable()
 ## How many frames the board has rendered (for performance readouts).
 var render_count := 0
 ## Gems look the studio up in a map rendered once a frame (on) or work it
@@ -258,9 +267,9 @@ var _layer_slots := []
 ## length or width (board units), the MultiMeshInstance3D drawing it, its
 ## flat outline for when it's tiny].
 var _gem_layers := []
-## The shadows' layer, and the board's largest stone (length or width, in
-## board units): when even it is under SHADOW_GONE_PX, no shadow shows.
-var _shadow_layer: MultiMeshInstance3D
+## The shadows' layers (one a tile), and the board's largest stone (length or
+## width, in board units): when even it is under SHADOW_GONE_PX, no shadow shows.
+var _shadow_layers: Array[MultiMeshInstance3D] = []
 var _largest := 0.0
 ## Rendering (see IDLE_FPS): render this frame regardless; how much of an
 ## idle frame has come due; the process frame last rendered, and the lights
@@ -785,32 +794,35 @@ func _build(slots: Array, board: Vector2, lines: PackedByteArray, lines_size: Ve
 	_facets.prepare(profiles.size())
 	for key: String in by_mesh:
 		var parts := key.split("|")
-		var which: Array = by_mesh[key]
 		var ratio := float(parts[2])
 		var mesh := GemMesh.get_mesh(parts[0], parts[1], ratio)
-		_add_layer(mesh, _gem_material, slots, which, "gem",
-				GemCuts.SHADER_STYLE.get(parts[1], 0))
-		var largest := 0.0
-		for i: int in which:
-			largest = maxf(largest, maxf(slots[i]["size"], slots[i]["width"]))
-		var added: Array = _layer_slots[_layer_slots.size() - 1]
-		# The outline sits above the girdle (stone's local units), over its shadow.
-		_gem_layers.append([added[0], mesh, GemMesh.mesh_key(parts[0], parts[1], ratio), largest,
-				added[3], GemMesh.get_outline_mesh(parts[0], 0.25, ratio)])
-	var all := range(slots.size())
+		for which: Array in _tiles(slots, by_mesh[key], board):
+			_add_layer(mesh, _gem_material, slots, which, "gem",
+					GemCuts.SHADER_STYLE.get(parts[1], 0))
+			var largest := 0.0
+			for i: int in which:
+				largest = maxf(largest, maxf(slots[i]["size"], slots[i]["width"]))
+			var added: Array = _layer_slots[_layer_slots.size() - 1]
+			# The outline sits above the girdle (stone's local units), over its shadow.
+			_gem_layers.append([added[0], mesh, GemMesh.mesh_key(parts[0], parts[1], ratio), largest,
+					added[3], GemMesh.get_outline_mesh(parts[0], 0.25, ratio)])
+	var all_tiles := _tiles(slots, range(slots.size()), board)
 	var shadow_plane := PlaneMesh.new()
 	shadow_plane.size = Vector2(2.0, 2.0) * SHADOW_SPAN
 	var reach := SHADOW_SPAN + SHADOW_SHIFT
 	shadow_plane.custom_aabb = AABB(Vector3(-reach, -0.1, -reach), Vector3(reach * 2.0, 0.2, reach * 2.0))
-	_add_layer(shadow_plane, _shadow_material, slots, all, "shadow")
-	_shadow_layer = _layer_slots[_layer_slots.size() - 1][3]
+	_shadow_layers = []
+	for which: Array in all_tiles:
+		_add_layer(shadow_plane, _shadow_material, slots, which, "shadow")
+		_shadow_layers.append(_layer_slots[_layer_slots.size() - 1][3])
 	_largest = 0.0
 	for s: Dictionary in slots:
 		_largest = maxf(_largest, maxf(s["size"], s["width"]))
 	if _flares:
 		var sparkle_plane := PlaneMesh.new()
 		sparkle_plane.size = Vector2(2.0, 2.0)
-		_add_layer(sparkle_plane, _sparkle_material, slots, all, "sparkle")
+		for which: Array in all_tiles:
+			_add_layer(sparkle_plane, _sparkle_material, slots, which, "sparkle")
 	_apply_debug_test()
 	update_light()
 	reset_view()
@@ -1001,6 +1013,29 @@ func _apply_debug_test() -> void:
 			stretch_shrink = 2
 
 
+## Splits slots `which` into square tiles of the board, each a MultiMesh of
+## its own, so a zoomed-in view only draws the tiles it sees (a MultiMesh is
+## culled whole). Few stones stay in one; a grid takes about TILE_STONES a
+## tile, at most TILE_GRID tiles a side. Empty tiles are left out.
+static func _tiles(slots: Array, which: Array, board: Vector2) -> Array:
+	var n := clampi(ceili(sqrt(which.size() / float(TILE_STONES))), 1, TILE_GRID)
+	if n == 1:
+		return [which]
+	var side := maxf(board.x, board.y) / n
+	var by_tile := {}
+	for i: int in which:
+		var s: Dictionary = slots[i]
+		var tx := clampi(floori(float(s["x"]) / side), 0, n - 1)
+		var ty := clampi(floori(float(s["y"]) / side), 0, n - 1)
+		by_tile.get_or_add(ty * n + tx, []).append(i)
+	var keys := by_tile.keys()
+	keys.sort()
+	var out := []
+	for k: int in keys:
+		out.append(by_tile[k])
+	return out
+
+
 ## One MultiMesh: `mesh` for the given slots, as gems, shadows or sparkles.
 ## For gems, `cut` is the cut's shader style (GemCuts.SHADER_STYLE).
 func _add_layer(mesh: Mesh, material: ShaderMaterial, slots: Array, which: Array, kind: String, cut := 0) -> void:
@@ -1142,8 +1177,8 @@ func _apply_view() -> void:
 	_camera.size = seen.y
 	_camera.position = Vector3(_center.x, maxf(_board.x, _board.y), _center.y)
 	_pick_meshes(scale_px)
-	if _shadow_layer != null:
-		_shadow_layer.visible = _largest * scale_px >= SHADOW_GONE_PX and debug_test != "no shadows"
+	for shadows: MultiMeshInstance3D in _shadow_layers:
+		shadows.visible = _largest * scale_px >= SHADOW_GONE_PX and debug_test != "no shadows"
 	_redraw()
 	view_changed.emit()
 
@@ -1167,7 +1202,12 @@ func _input(event: InputEvent) -> void:
 			if _touches.size() == 1:
 				if stroke_filter.is_valid() and stroke_filter.call(screen_to_board(p)):
 					_stroke = event.index
+					# A stroke breaks a double tap: quick taps placing stones never fit.
+					_last_tap_ms = -DOUBLE_TAP_MS
 					stroke_started.emit(screen_to_board(p))
+					return
+				if fit_filter.is_valid() and not fit_filter.call(screen_to_board(p)):
+					_last_tap_ms = -DOUBLE_TAP_MS
 					return
 				var now := Time.get_ticks_msec()
 				if now - _last_tap_ms < DOUBLE_TAP_MS and p.distance_to(_last_tap_pos) < DOUBLE_TAP_SLOP:

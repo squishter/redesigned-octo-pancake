@@ -154,15 +154,15 @@ func place(i: int) -> void:
 
 ## The open slot of `gem_type` (-1: any) under board point `at` (within
 ## `tolerance` board units of its outline), nearest its center first; -1 if
-## none.
-func slot_at(at: Vector2, gem_type: int, tolerance: float) -> int:
+## none. `filled_too` counts filled slots as well.
+func slot_at(at: Vector2, gem_type: int, tolerance: float, filled_too := false) -> int:
 	var cell := Vector2i((at / _cell).floor())
 	var best := -1
 	var best_q := INF
 	for gy in range(cell.y - 1, cell.y + 2):
 		for gx in range(cell.x - 1, cell.x + 2):
 			for i: int in _grid.get(Vector2i(gx, gy), []):
-				if placed[i] != 0 or (gem_type >= 0 and type_of[i] != gem_type):
+				if (placed[i] != 0 and not filled_too) or (gem_type >= 0 and type_of[i] != gem_type):
 					continue
 				var s: Dictionary = slots[i]
 				var d := (at - Vector2(s["x"], s["y"])).rotated(-float(s["rotation"]))

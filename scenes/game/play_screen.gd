@@ -317,6 +317,7 @@ func _ready() -> void:
 	_perf.position = Vector2(16.0, 16.0)
 	_area.add_child(_perf)
 	_board.stroke_filter = _can_stroke
+	_board.fit_filter = _can_fit
 	_board.stroke_started.connect(_on_stroke_started)
 	_board.stroke_moved.connect(_on_stroke_moved)
 	_board.stroke_ended.connect(func() -> void: _stroke_type = -1)
@@ -920,6 +921,14 @@ func _stroke_gem(at: Vector2) -> int:
 
 func _can_stroke(at: Vector2) -> bool:
 	return _stroke_gem(at) >= 0
+
+
+## Whether a tap at board point `at` may count toward a double tap to fit:
+## while playing, only off the stones (filled or not), so quick taps placing
+## stones, landing on filled ones or just missing never zoom out. The Fit
+## button always does.
+func _can_fit(at: Vector2) -> bool:
+	return _done or _overlay.slot_at(at, -1, TAP_SLOP / _board.scale_px(), true) < 0
 
 
 func _on_stroke_started(at: Vector2) -> void:
