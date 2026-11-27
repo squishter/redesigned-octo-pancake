@@ -38,6 +38,7 @@ func _run() -> void:
 	await _test_completion_rewards()
 	await _test_stroke_limit()
 	await _test_pen_carry()
+	await _test_double_tap_fit()
 	await _test_line_paint()
 	await _test_light_finales()
 	await _test_unlock_all()
@@ -596,6 +597,15 @@ func _test_settings() -> void:
 	await _layout_frames()
 	_check(menu._settings_panel.body.find_child("UnlockAll", true, false) == null, "Production settings hide debug unlocks")
 	_check(menu._settings_panel.body.find_child("FreePurchases", true, false) == null, "Production settings hide free purchases")
+	var build_line := menu._settings_panel.body.find_child("BuildLine", true, false) as Label
+	_check(build_line != null and build_line.text == BuildInfo.line(), "Settings shows which build this is")
+	_check(not FileAccess.file_exists(BuildInfo.STAMP_PATH) and BuildInfo.line() == "Development build",
+		"Without a stamp it's a development build")
+	_check(BuildInfo.line({"commit": "657adc2", "dirty": false, "built": "2026-11-27T14:05:09Z"})
+		== "Build 657adc2 · 27 Nov 2026 14:05 UTC", "A stamp reads as its commit and build time: %s" % BuildInfo.line(
+			{"commit": "657adc2", "built": "2026-11-27T14:05:09Z"}))
+	_check(BuildInfo.line({"commit": "657adc2", "dirty": true, "built": "2026-01-03T09:00:00Z"})
+		== "Build 657adc2 + changes · 3 Jan 2026 09:00 UTC", "A build from uncommitted work says so")
 	_check_dialog(menu._settings_panel)
 	_check_button_widths(menu, menu.size.x)
 	for cap: int in SaveStore.FPS_CAPS:
@@ -944,6 +954,71 @@ func _test_line_paint() -> void:
 	await process_frame
 	SaveStore.delete_puzzle(profile, meta["id"])
 	_check(not FileAccess.file_exists("user://saves/%s.lines" % meta["id"]), "Deleting a puzzle deletes its kept grouping")
+
+
+## Quick taps while placing stones never zoom out; a double tap off the
+## stones still fits the whole picture.
+func _test_double_tap_fit() -> void:
+	print("Double tap to fit while playing")
+	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
+	var slots := []
+	for k in 6:
+		var ruby := k % 2 == 0
+		slots.append({"id": k, "region": 0 if ruby else 1, "shape": "round", "cut": "brilliant",
+			"x": 20 + k * 12, "y": 50, "rotation": 0.0, "size": 10.0, "width": 10.0,
+			"target_gem": "ruby" if ruby else "sapphire", "target_color": Color.RED if ruby else Color.BLUE})
+	var picture := {"type": "collage", "width": 100, "height": 100, "slots": slots,
+		"regions": [{"id": 0, "color": Color.RED}, {"id": 1, "color": Color.BLUE}],
+		"puzzle": {"type": "mandala", "theme": "rainbow"}}
+	var meta := SaveStore.add_puzzle(profile, picture)
+	var play := PlayScreen.new()
+	play.profile = profile
+	play.puzzle_id = meta["id"]
+	root.add_child(play)
+	await _layout_frames()
+	var board: GemBoard3D = play._board
+	var on_screen := func(at: Vector2) -> Vector2:
+		return board.get_global_transform_with_canvas() * (board.view_transform() * at)
+	var slot_at := func(i: int) -> Vector2:
+		return on_screen.call(Vector2(slots[i]["x"], slots[i]["y"]))
+	var zoom_in := func() -> void:
+		board.reset_view()
+		board._zoom_at(board.size / 2.0, 2.5)
+	play._select(play._type_of[0])
+	zoom_in.call()
+	_check(Rect2(Vector2.ZERO, board.size).has_point(board.view_transform() * Vector2(68, 50)),
+		"The stones under test are on screen")
+	await _tap(slot_at.call(2))
+	await _tap(slot_at.call(2))
+	_check(play._overlay.placed[2] != 0 and board._zoom > 2.4,
+		"Tapping a stone in, then tapping it again at once, stays zoomed in (%.1f)" % board._zoom)
+	await _tap(slot_at.call(3))
+	await _tap(slot_at.call(3))
+	_check(play._overlay.placed[3] == 0 and board._zoom > 2.4,
+		"Two quick taps on another gem's slot stay zoomed in (%.1f)" % board._zoom)
+	# Just outside another gem's stone, inside the reach of a tap.
+	var beside: Vector2 = slot_at.call(3) + Vector2(0.0, 5.0 * board.scale_px() + PlayScreen.TAP_SLOP * 0.5)
+	await _tap(beside)
+	await _tap(beside)
+	_check(play._overlay.placed[3] == 0 and board._zoom > 2.4,
+		"Two quick near misses beside a stone stay zoomed in (%.1f)" % board._zoom)
+	var paper: Vector2 = on_screen.call(Vector2(50, 30))
+	await _tap(paper)
+	await _tap(paper)
+	_check(board._zoom < 1.01, "A double tap on bare paper fits the whole picture (%.1f)" % board._zoom)
+	play.queue_free()
+	await process_frame
+	SaveStore.delete_puzzle(profile, meta["id"])
+
+
+## A finger tapping screen point `at` (in the stretched 1080×2400 px).
+func _tap(at: Vector2) -> void:
+	for pressed: bool in [true, false]:
+		var e := InputEventScreenTouch.new()
+		e.position = root.get_final_transform() * at
+		e.pressed = pressed
+		Input.parse_input_event(e)
+		await process_frame
 
 
 ## The pen touching down or lifting at `at`, as Android reports it: the left

@@ -68,5 +68,11 @@ every picture type goes through them. Before a merge into main, run `@all`.
   (overlapping stones, empty regions) usually show up there first, under
   `test_collages` with the seed and variant in the message. Reproduce one seed
   with a small script rather than re-running the whole suite.
+- Before blaming your change, check whether main fails the same way: run
+  the suite in a worktree of `origin/main`
+  (`git worktree add <scratchpad>/wt-main origin/main`, then
+  `<scratchpad>/wt-main/.claude/skills/run-tests/run_suites.sh --import --out <scratchpad>/tests-main <suite>`;
+  the runner works in the checkout it sits in). Report a failure that's already on main as
+  such, with its count.
 - Report failures with the exact failing lines; never skip or loosen a check
   to get green without saying so.

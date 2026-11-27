@@ -26,6 +26,11 @@ func _ready() -> void:
 		_unlock_all_setting()
 		_free_purchases_setting()
 		_performance_settings()
+	# Which build this is, so she can say which one she has.
+	var build := UI.label(BuildInfo.line(), 26, GameTheme.TEXT_DIM)
+	build.name = "BuildLine"
+	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(build)
 	var done := GameTheme.button(done_text, true)
 	done.pressed.connect(close)
 	actions.add_child(done)
