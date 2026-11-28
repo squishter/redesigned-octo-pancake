@@ -14,7 +14,11 @@ static func generate(seed_value: int, options: Dictionary = {}) -> Dictionary:
 	var min_region: Variant = options.get("min_region", 0.0)
 	if not (min_region is float or min_region is int) or min_region < 0.0 or min_region > 0.05:
 		return {}
-	var result := PlantSurfaceProjection.project(built.data, recipe.camera, recipe.projection_size, {}, min_region)
+	var veins: Variant = options.get("veins", false)
+	if not veins is bool:
+		return {}
+	var result := PlantSurfaceProjection.project(built.data, recipe.camera, recipe.projection_size, {}, min_region,
+			veins)
 	if result.is_empty():
 		return {}
 	var design: Dictionary = result.design

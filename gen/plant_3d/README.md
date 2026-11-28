@@ -46,6 +46,7 @@ empty, or `"random"` choices are picked deterministically from the seed.
 | `flowers` | `one`, `few`, `many`: 1, 5, or 15 flower heads |
 | `pose` | `upright`, `reaching`, `nodding` |
 | `camera` | `front`, `three_quarter`, `side`, `back`, `high` |
+| `veins` | Bool, default false: open lines inside leaves and petals (below); not part of the recipe |
 | `projection_size` | Integer 64–512, default 320; distinct from final puzzle resolution |
 | `recent` | Optional array of prior `{flower, leaf}` records; avoids the last three of each |
 | `controls` | Optional continuous growth/organ controls below |
@@ -135,6 +136,19 @@ own flower head or leaf (`PlantSurfaceProjection._simplify`, the generator's
 picture takes the plant's shape, between 0.6 and 1.25 wide for its height,
 with the usual size as its longer side, and the plant is moved and scaled to
 fill it. And plant collages always use gem lines, with no sparse or bare areas.
+
+Folded areas would read as bare outlines, so a picture's plant also gets
+**veins** (`PLANT_PICTURE.veins`, the picture's `plant_veins` option, the
+generator's `veins`): each leaf's midrib with three pairs of side veins, and a
+line down the middle of each petal (`PlantSurfaceProjection._veins`). They
+are traced on the 3D surface (the authored midrib, the middle of each slice
+of a petal) and kept only where that leaf or petal is in view and at least
+`VEIN_MARGIN` of the projection inside its area. So they are open lines that
+never meet an outline: no area is split, colors don't change, and area marks
+are moved off them. Pieces under `VEIN_MIN` are dropped, so thin leaves and
+tiny petals stay plain, and a petal's line that would touch another vein is
+left out (crossing lines could close off a patch with no color). Like
+`min_region`, this is how a plant is drawn, not part of its recipe.
 
 Colors follow the plant: each flower head (its petals, its center) is a color
 group of its own and takes any of the theme colors that stand out from the

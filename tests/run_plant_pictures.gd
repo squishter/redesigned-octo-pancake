@@ -80,11 +80,14 @@ func _line_art() -> void:
 	_check(folded["polylines"].size() < fine["polylines"].size() * 0.6 and folded["polylines"].size() > 4,
 			"small patches are folded into their neighbors (%d lines from %d)" % [folded["polylines"].size(),
 			fine["polylines"].size()])
-	var head_lines := PictureSources.mandala_lines(32, {"variant": "plant_mesh", "flower": "hydrangea"})
+	# Without veins, which add lines of their own inside areas.
+	var head_lines := PictureSources.mandala_lines(32, {"variant": "plant_mesh", "flower": "hydrangea",
+			"plant_veins": false})
 	var on_lines := 0
 	for v in head_lines["mask"]:
 		on_lines += int(v != 0)
-	var raw_lines := PictureSources.mandala_lines(32, {"variant": "plant_mesh", "flower": "hydrangea", "plant_min_region": 0.0})
+	var raw_lines := PictureSources.mandala_lines(32, {"variant": "plant_mesh", "flower": "hydrangea", "plant_min_region": 0.0,
+			"plant_veins": false})
 	var raw_on := 0
 	for v in raw_lines["mask"]:
 		raw_on += int(v != 0)
@@ -356,7 +359,8 @@ func _colors() -> void:
 	_check(head_colors_differ >= 1, "heads of one plant can differ in color")
 	# The painted picture (for kits) follows the same roles.
 	var kit_lines := PictureSources.mandala_lines(1, {"variant": "plant_mesh", "theme": "garden"})
-	var image := PictureSources.mandala_image(1, {"variant": "plant_mesh", "theme": "garden"}, kit_lines)
+	# Every area full: sparse fills fade a color toward the paper by design.
+	var image := PictureSources.mandala_image(1, {"variant": "plant_mesh", "theme": "garden", "sparsity": 0.0}, kit_lines)
 	var seen_bold := false
 	var seen_quiet := false
 	var others := 0

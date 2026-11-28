@@ -38,6 +38,7 @@ func _run() -> void:
 			_pipeline(design)
 		AnimalSurfaceProjection.line_image(design, 512).save_png(out.path_join(view + ".png"))
 		print(view, ": ", design.polylines.size(), " paths, ", Time.get_ticks_msec() - start, "ms")
+	_veins(base)
 	if not reference.is_empty():
 		# Same serialized recipe after other requests, then on a worker thread.
 		var saved := PatternIO.from_json(PatternIO.to_json({"source": {"plant_mesh": reference.recipe}}))
@@ -213,6 +214,40 @@ func _pipeline(design: Dictionary) -> void:
 	var restored: Dictionary = PatternIO.from_json(PatternIO.to_json(collage)).source.plant_mesh
 	_check(PlantParameters.resolve(81, {"recipe": restored}) == design.recipe, "puzzle persists recipe")
 	image.save_png(out.path_join("game_colors.png"))
+
+
+## Veins are open lines inside leaves and petals: they add lines but never
+## split or merge an area, and no area's mark lands on one.
+func _veins(base: Dictionary) -> void:
+	var options := base.duplicate()
+	options.min_region = .004
+	var plain := PlantMeshGenerator.generate(81, options)
+	options.veins = true
+	var veined := PlantMeshGenerator.generate(81, options)
+	_check(PlantMeshGenerator.generate(81, {"veins": "yes"}).is_empty(), "invalid veins rejected")
+	if plain.is_empty() or veined.is_empty():
+		_check(false, "veined design")
+		return
+	_projection(veined, "veins")
+	var added: int = veined.polylines.size() - plain.polylines.size()
+	_check(added >= 4, "veins add lines (%d)" % added)
+	var open := true
+	for i in range(plain.polylines.size(), veined.polylines.size()):
+		open = open and veined.closed[i] == 0 and veined.families[i] in [3, 6]
+	_check(open, "veins are open leaf or petal lines")
+	var a := _lines(plain)
+	var b := _lines(veined)
+	var areas := func(lines: Dictionary) -> int:
+		var map := RegionMap.build(lines.mask, lines.width, lines.height, 0)
+		var on_line := 0
+		for mark: Dictionary in lines.motifs.areas:
+			var point: Vector2 = mark.at
+			if map.labels[int(point.y) * map.width + int(point.x)] < 0:
+				on_line += 1
+		_check(on_line == 0, "no mark on a line")
+		return map.regions.size()
+	_check(areas.call(a) == areas.call(b), "veins split no area")
+	AnimalSurfaceProjection.line_image(veined, 512).save_png(out.path_join("veins.png"))
 
 
 func _same_design(a: Dictionary, b: Dictionary) -> bool:

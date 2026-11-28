@@ -30,6 +30,9 @@ const PLANT_PICTURE := {
 	# Patches of the plant under this share of its projection are folded
 	# into their neighbors (PlantSurfaceProjection): too small for gems.
 	"min_region": 0.004,
+	# Lines inside leaves (midrib, side veins) and down petals, so they are
+	# more than outlines (PlantSurfaceProjection._veins); `plant_veins` sets it.
+	"veins": true,
 	# An unframed plant's picture (see _fit_plant): its width / height at
 	# the narrowest and widest, and the room around the plant for its
 	# collar, in unit space (1 is half the picture's shorter side).
@@ -219,7 +222,8 @@ static func _fit_plant(design: Dictionary) -> void:
 ## stem with few branches (PLANT_PICTURE), unless `plant_natural` is true.
 static func _plant_options(options: Dictionary) -> Dictionary:
 	var given: Dictionary = options["plant"] if options.get("plant") is Dictionary else options
-	var out := {"min_region": float(options.get("plant_min_region", PLANT_PICTURE["min_region"]))}
+	var out := {"min_region": float(options.get("plant_min_region", PLANT_PICTURE["min_region"])),
+			"veins": str(options.get("plant_veins", PLANT_PICTURE["veins"])).to_lower() in ["true", "1"]}
 	if given.get("recipe") is Dictionary:
 		out["recipe"] = given["recipe"]
 		return out
