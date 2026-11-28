@@ -36,7 +36,9 @@ const COMPLETED_OPEN_KEY := "menu_completed_open"
 
 ## The player's profile (SaveStore), shared with the app; set before adding.
 var profile: Dictionary = {}
-var show_developer_tools := OS.has_feature("editor")
+## The way into the generator lab: in the editor and debug builds (the
+## APKs tools/build_apk.sh makes), never in release exports.
+var show_developer_tools := OS.is_debug_build()
 var show_debug_settings := OS.is_debug_build()
 ## The app has granted and saved today's opening reward before creating this menu.
 var daily_pick_awarded := false
