@@ -3,7 +3,8 @@ extends Control
 ## Drawn over the GemBoard3D while playing: every open slot as a thin
 ## outline of its shape with its gem type's number in it. The selected
 ## type's open slots stand out (darker outlines over a tint of its color, or
-## of medium light gray for white and pale gray stones).
+## of medium light gray for white and pale gray stones; strong and bright on
+## kits' dark paper).
 ## Numbers are drawn at screen size, scaling with the zoom, and hide where a
 ## slot is too small to hold them.
 ##
@@ -17,7 +18,7 @@ const OUTLINE := Color(0.33, 0.28, 0.4, 0.38)
 const OUTLINE_SELECTED := Color(0.13, 0.08, 0.2, 0.95)
 const NUMBER := Color(0.3, 0.25, 0.36, 0.7)
 const NUMBER_SELECTED := Color(0.1, 0.05, 0.16, 1.0)
-const TINT_ALPHA := 0.32
+const TINT_ALPHA := 0.4
 ## White and pale gray stones would tint the paper with nearly its own
 ## color, so their slots take a medium light gray instead: stones at least
 ## this light and at most this saturated.
@@ -25,15 +26,23 @@ const PALE_LUMINANCE := 0.7
 const PALE_SATURATION := 0.2
 const PALE_TINT := Color(0.55, 0.55, 0.58, 0.45)
 ## Kits lie on charcoal paper (GemBoard3D.KIT_PAPER_COLOR), where the dark
-## outlines and numbers above wouldn't show: light ones instead, and dark
-## stones' slots (at most this light) take a medium gray tint, as pale
-## stones' do on white paper.
-const DARK_OUTLINE := Color(0.82, 0.8, 0.88, 0.38)
-const DARK_OUTLINE_SELECTED := Color(0.96, 0.94, 1.0, 0.95)
-const DARK_NUMBER := Color(0.86, 0.84, 0.92, 0.75)
+## outlines and numbers above wouldn't show: light ones instead, the open
+## slots of other types kept faint so the selected ones stand out. There the
+## selected type's tint is strong and lifted to at least DARK_TINT_VALUE
+## (so deep blues and greens still glow against the charcoal), and nearly
+## black stones (at most this light and PALE_SATURATION saturated) take a
+## light gray tint instead.
+const DARK_OUTLINE := Color(0.82, 0.8, 0.88, 0.26)
+const DARK_OUTLINE_SELECTED := Color(1.0, 1.0, 1.0, 1.0)
+const DARK_NUMBER := Color(0.86, 0.84, 0.92, 0.55)
 const DARK_NUMBER_SELECTED := Color(1.0, 1.0, 1.0, 1.0)
+## Selected numbers over a tint lighter than this turn dark instead.
+const NUMBER_ON_LIGHT := Color(0.06, 0.04, 0.1, 1.0)
+const LIGHT_TINT_LUMINANCE := 0.4
 const DARK_LUMINANCE := 0.25
-const DARK_TINT := Color(0.5, 0.5, 0.54, 0.45)
+const DARK_TINT := Color(0.66, 0.66, 0.7, 0.72)
+const DARK_TINT_ALPHA := 0.72
+const DARK_TINT_VALUE := 0.8
 ## Numbers show when the slot is at least this many px across (the font is
 ## about half of it, up to MAX_FONT).
 const MIN_LABEL_PX := 44.0
@@ -298,14 +307,27 @@ func _follow_view() -> void:
 
 
 ## The selected gem's tint over its open slots: its own color, faint, or
-## PALE_TINT for white and pale gray stones (on `dark` paper, DARK_TINT for
-## dark stones instead).
+## PALE_TINT for white and pale gray stones. On `dark` paper: its color
+## strong and lifted to DARK_TINT_VALUE, or DARK_TINT for nearly black stones.
 static func tint_for(color: Color, dark := false) -> Color:
 	if dark:
-		return DARK_TINT if color.get_luminance() <= DARK_LUMINANCE else Color(color, TINT_ALPHA)
+		if color.get_luminance() <= DARK_LUMINANCE and color.s <= PALE_SATURATION:
+			return DARK_TINT
+		return Color.from_hsv(color.h, color.s, maxf(color.v, DARK_TINT_VALUE), DARK_TINT_ALPHA)
 	if color.get_luminance() >= PALE_LUMINANCE and color.s <= PALE_SATURATION:
 		return PALE_TINT
 	return Color(color, TINT_ALPHA)
+
+
+## The selected type's numbers: dark over a light tint on `dark` paper
+## (its color as it shows over the paper), else NUMBER_SELECTED or
+## DARK_NUMBER_SELECTED.
+static func selected_number_for(color: Color, dark := false) -> Color:
+	if not dark:
+		return NUMBER_SELECTED
+	var tint := tint_for(color, true)
+	var shown := GemBoard3D.KIT_PAPER_COLOR.lerp(Color(tint, 1.0), tint.a)
+	return NUMBER_ON_LIGHT if shown.get_luminance() > LIGHT_TINT_LUMINANCE else DARK_NUMBER_SELECTED
 
 
 func _draw_shapes() -> void:
@@ -326,6 +348,9 @@ func _draw_labels() -> void:
 	if _max_minor * k < MIN_LABEL_PX:
 		return
 	var font := get_theme_default_font()
+	var picked_color := NUMBER_SELECTED
+	if selected >= 0 and selected < type_colors.size():
+		picked_color = selected_number_for(type_colors[selected], dark_paper)
 	var xf := board.view_transform()
 	var lo := Vector2i((board.screen_to_board(Vector2.ZERO) / _cell).floor()) - Vector2i.ONE
 	var hi := Vector2i((board.screen_to_board(size) / _cell).floor()) + Vector2i.ONE
@@ -341,9 +366,7 @@ func _draw_labels() -> void:
 				var font_size := mini(int(across * 0.5), MAX_FONT)
 				var text := str(type_of[i] + 1)
 				var at := xf * Vector2(s["x"], s["y"])
-				var color := NUMBER_SELECTED if type_of[i] == selected else NUMBER
-				if dark_paper:
-					color = DARK_NUMBER_SELECTED if type_of[i] == selected else DARK_NUMBER
+				var color := picked_color if type_of[i] == selected else (DARK_NUMBER if dark_paper else NUMBER)
 				var line := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 				var baseline := at + Vector2(-line.x / 2.0, (font.get_ascent(font_size) - font.get_descent(font_size)) / 2.0)
 				_labels.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
