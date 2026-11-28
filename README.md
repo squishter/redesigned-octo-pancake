@@ -268,7 +268,8 @@ mode for trying out new pattern generation.
   gem layout, including for photo collages and kits. Cancelling the color
   selector leaves the original's picture, progress, thumbnail and metadata
   untouched. *Generator lab
-  (debug)* at the bottom opens the lab in editor builds and in **Gem Lab**,
+  (debug)* at the bottom opens the lab in debug builds (the editor and the
+  game's debug APKs, never release exports), and **Gem Lab** is
   a debug-only app of its own (the *Android Lab* export preset: package
   `com.squishter.paintwithgems.lab`, the "lab" feature, a teal gem icon with
   a flask) that installs beside the game and opens straight into the lab
