@@ -51,7 +51,7 @@
 		},
 		"farm_cow": {
 			"anatomy": "bovine",
-			"data_sha256": "448f6e550275c344cfe0d19becff828f1f1e6e8a0496231cbe53944a61e52d99",
+			"data_sha256": "e40340ecab2a70f9767248bf18bf04be87639bb5514e58a8421a8ad814f8868c",
 			"file": "res://assets/animals/posed/farm_cow.dat",
 			"name": "Cow (Farm)",
 			"presets": [
@@ -66,7 +66,7 @@
 		},
 		"farm_horse": {
 			"anatomy": "equine",
-			"data_sha256": "d50a79542ba7fda6360fa056923f863074bd5e31a8e44a0bfa3be75ef4ec0f3c",
+			"data_sha256": "1f4ae4d3e84b24ef105c2f851c52253b77d2960395dc815b1f91f2b75802ef82",
 			"file": "res://assets/animals/posed/farm_horse.dat",
 			"name": "Horse (Farm)",
 			"presets": [
@@ -82,7 +82,7 @@
 		},
 		"farm_llama": {
 			"anatomy": "camelid",
-			"data_sha256": "ddb0934af3c24b8ec872a1aa3d67cbc6bb3581b11d4434ae109bcd9a6d0ef878",
+			"data_sha256": "8b190dc6ead03dc9bb9dd46be591c5f44ebde07c0ffcfb5fc6509347c9798928",
 			"file": "res://assets/animals/posed/farm_llama.dat",
 			"name": "Llama",
 			"presets": [
@@ -97,7 +97,7 @@
 		},
 		"farm_pig": {
 			"anatomy": "porcine",
-			"data_sha256": "10c8e319201f0087eb990967fcd86499645368f71062e7d78f16cf059358af89",
+			"data_sha256": "19c39ec261462a71b88607c6c591bae2285fbb8a2e10be6df2b879476a8d6408",
 			"file": "res://assets/animals/posed/farm_pig.dat",
 			"name": "Pig",
 			"presets": [
@@ -112,7 +112,7 @@
 		},
 		"farm_pug": {
 			"anatomy": "canine",
-			"data_sha256": "2d69217c95ec8d5a98215d12d13528e6474ce238de56da105e725c87b15e0c90",
+			"data_sha256": "e1e0c90e0ec7a11b1b58e0af83cbf2b1283ce59859a3e6a2b7389e9070e85d48",
 			"file": "res://assets/animals/posed/farm_pug.dat",
 			"name": "Pug",
 			"presets": [
@@ -132,7 +132,7 @@
 		},
 		"farm_sheep": {
 			"anatomy": "ovine",
-			"data_sha256": "2519bef7106407cd17232e29f4cd2758044a97962c61b5beab8309d703beb4bd",
+			"data_sha256": "05a79cb6fc0161cda833a93f0952ba0f2a0a20ceb101dc6150e00d3b5aac338e",
 			"file": "res://assets/animals/posed/farm_sheep.dat",
 			"name": "Sheep",
 			"presets": [
@@ -147,7 +147,7 @@
 		},
 		"farm_zebra": {
 			"anatomy": "equine",
-			"data_sha256": "fba155b76932c9361077d7192674a6b80b13929a77188c1f42694545972c17cd",
+			"data_sha256": "08cbb9280a8ca8e3a5d1ac01652f63e96a74223481c24ebeb50c8df5fec5c17b",
 			"file": "res://assets/animals/posed/farm_zebra.dat",
 			"name": "Zebra",
 			"presets": [
@@ -293,7 +293,7 @@
 		},
 		"shepherd_shepherd": {
 			"anatomy": "canine",
-			"data_sha256": "66a7298d620481f7f8bd2488b8ca13d364dd91c5b0c2beef608d4853f55d1613",
+			"data_sha256": "f4fe69f16b82732a81c8d022f5dfe2fbe7ecf27c82d646c87946e79d6ca3fe68",
 			"file": "res://assets/animals/posed/shepherd_shepherd.dat",
 			"name": "German Shepherd",
 			"presets": [
@@ -350,7 +350,7 @@
 		},
 		"ultimate_alpaca": {
 			"anatomy": "camelid",
-			"data_sha256": "2d4a12b333eab55b9a8172da90ce7af3b9e2cbb58dd63e1777b20d6da5e47f6b",
+			"data_sha256": "5b678071c158e8a3fb667efca355b248ffa53c7c976487123d8d661090181300",
 			"file": "res://assets/animals/posed/ultimate_alpaca.dat",
 			"name": "Alpaca",
 			"presets": [
@@ -370,7 +370,7 @@
 		},
 		"ultimate_bull": {
 			"anatomy": "bovine",
-			"data_sha256": "278d77ce20ac865b738424a1652b21982398628873a24504eebbaac1a9010d66",
+			"data_sha256": "68e632aa1c564ade85ecd60eb97b6df43bfe63a95d483255ab63cb6519aa94ce",
 			"file": "res://assets/animals/posed/ultimate_bull.dat",
 			"name": "Bull",
 			"presets": [
@@ -391,7 +391,7 @@
 		},
 		"ultimate_cow": {
 			"anatomy": "bovine",
-			"data_sha256": "cd3a45de6620b47dade37833aaf6424aa1bc37af9e290faf7b00403a1fdc6258",
+			"data_sha256": "a373402ff480fbbaa034d7631ceccbd909a56eab1bda8e8d864e5a5dbebaf654",
 			"file": "res://assets/animals/posed/ultimate_cow.dat",
 			"name": "Cow",
 			"presets": [
@@ -412,7 +412,7 @@
 		},
 		"ultimate_deer": {
 			"anatomy": "cervid",
-			"data_sha256": "82af7ccacbd5fa1546063ca74e6e37c79d9c260795c6c7495e98a323063645be",
+			"data_sha256": "7ff5c41edebcbe19da768fc0eb71f83b2ca75101e9df6726497205a6360fb107",
 			"file": "res://assets/animals/posed/ultimate_deer.dat",
 			"name": "Deer",
 			"presets": [
@@ -433,7 +433,7 @@
 		},
 		"ultimate_donkey": {
 			"anatomy": "equine",
-			"data_sha256": "8cc5a0fab0c63f18ba5918c9a069e9c01e89b268107ba1c5db52f35ca1b66e5a",
+			"data_sha256": "d44a455d38d523d8ac31880ed0e2bd10ea3f4cd6f1fd5ed7c8399e76c8433089",
 			"file": "res://assets/animals/posed/ultimate_donkey.dat",
 			"name": "Donkey",
 			"presets": [
@@ -454,7 +454,7 @@
 		},
 		"ultimate_fox": {
 			"anatomy": "canine",
-			"data_sha256": "2039c7b66caf938a82c207932fb8d672a62659107152facd449abab544381d3b",
+			"data_sha256": "fbfce96517134745d2c4e3686b5a58b5202dab1a33793c42bfaf9d0fa0ad5e38",
 			"file": "res://assets/animals/posed/ultimate_fox.dat",
 			"name": "Fox",
 			"presets": [
@@ -478,7 +478,7 @@
 		},
 		"ultimate_horse": {
 			"anatomy": "equine",
-			"data_sha256": "ea9cdb7f20dacf55227e2820b0e36d530286953c664f50afa84ec06bfbda8be7",
+			"data_sha256": "c53840c50cdfa06f9f616d2ca6bff339a2b4f536163e42385a77c2eed425bf39",
 			"file": "res://assets/animals/posed/ultimate_horse.dat",
 			"name": "Horse",
 			"presets": [
@@ -499,7 +499,7 @@
 		},
 		"ultimate_horse_white": {
 			"anatomy": "equine",
-			"data_sha256": "bbd9a568fdcb818e89e6c8eeddd556abeac5091331e38cb2dd090a85d12321c2",
+			"data_sha256": "3491b6a489cd12afa7a53f7e2ec67ac9668332f19e5f1af07843a033c84f6374",
 			"file": "res://assets/animals/posed/ultimate_horse_white.dat",
 			"name": "Horse White",
 			"presets": [
@@ -520,7 +520,7 @@
 		},
 		"ultimate_husky": {
 			"anatomy": "canine",
-			"data_sha256": "179cb06b3216dce0b394f7a8c5e2754383162262858d3c2367238e8fd7418419",
+			"data_sha256": "df0067becfe38a04523e9ac009d630f38d00746ae87255db32533c054e099977",
 			"file": "res://assets/animals/posed/ultimate_husky.dat",
 			"name": "Husky",
 			"presets": [
@@ -544,7 +544,7 @@
 		},
 		"ultimate_shibainu": {
 			"anatomy": "canine",
-			"data_sha256": "e18f8e48f1a3e38351b72049ddc611d1f84619c44b3abdf40176bd99b99ec137",
+			"data_sha256": "97f6cc30388c5050993a0ccf40e29475394370313296126c4369283cb07fbda9",
 			"file": "res://assets/animals/posed/ultimate_shibainu.dat",
 			"name": "Shiba Inu",
 			"presets": [
@@ -568,7 +568,7 @@
 		},
 		"ultimate_stag": {
 			"anatomy": "cervid",
-			"data_sha256": "d542ea0175de8362b236bc88cee1aab693c4bfdbe1084d5ee043e784d47e5843",
+			"data_sha256": "972ad8c43e07bb05eddad06a91cf62c970c58b335f3072d1c0cf1b4057a3ae40",
 			"file": "res://assets/animals/posed/ultimate_stag.dat",
 			"name": "Stag",
 			"presets": [
@@ -589,7 +589,7 @@
 		},
 		"ultimate_wolf": {
 			"anatomy": "canine",
-			"data_sha256": "cff35fd8b48a9c662d17908ce6407bffd627b76afe98b978eb783e846eb57c5b",
+			"data_sha256": "3ed703ec0cd6731c887a41a8379c2d3b8ea8b0f9560f2dc85161b5699861fff2",
 			"file": "res://assets/animals/posed/ultimate_wolf.dat",
 			"name": "Wolf",
 			"presets": [

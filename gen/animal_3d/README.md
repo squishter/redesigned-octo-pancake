@@ -176,6 +176,13 @@ low poses back off their depth if needed. These folded-pose recipes reject
 unreachable targets or skin penetration deeper than 2% of neutral height before
 final floor alignment. Trot body height uses actual limb reach at each phase.
 
+The quaternius and farm rigs hang each hoof or paw off the root rather than the
+lower leg. A planted foot keeps its level angle when a leg is refitted; a lifted
+foot turns with its cannon, keeping its fetlock angle, so a swinging leg never
+flips the hoof forward. A target's optional `flex` (degrees, up to 90) then folds
+a lifted fetlock back; the trot folds it up to `TROT_FLEX` (45) mid-swing.
+`run_animal_poses.gd` checks that no equine trot frame bends a fetlock forward.
+
 `pose_targets(definition, seed, amount, overrides)` provides the solver for manual
 poses on meshes with four mapped multi-joint legs. Points are in the normalized
 model's local Y-up space, before heading variation. Targets are explicit; the
@@ -190,8 +197,8 @@ var result := animal.pose_targets({
 ```
 
 The four keys are `front_left`, `front_right`, `hind_left`, `hind_right`.
-Each foot entry requires `at: Vector3`, with optional `contact: bool` and
-`pole: Vector3` bend hint. Unspecified feet keep their neutral targets. Optional
+Each foot entry requires `at: Vector3`, with optional `contact: bool`,
+`pole: Vector3` bend hint and `flex` (degrees, ±90, lifted feet only). Unspecified feet keep their neutral targets. Optional
 body fields are `pivot`, `translation` (Vector3), and angles in degrees:
 `pitch`, `roll`, `yaw`, `hips_pitch`, `shoulders_pitch`, `neck_pitch`, `neck_yaw`,
 `head_pitch`, `head_yaw`, `tail_pitch`. Angles must be finite and within ±85°.

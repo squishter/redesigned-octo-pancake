@@ -157,6 +157,8 @@ func _run() -> void:
 			not extremes.is_empty() and extremes.amount == 1 and extremes.controls.look_yaw == 1,
 			id + " oversized finite controls clamped"
 		)
+		if id in AnimalCustomPoses.EQUINES:
+			_check_fetlocks(animal, id)
 		if not preview.snapshots.is_empty():
 			FileAccess.open(out.path_join(id + ".json"), FileAccess.WRITE).store_string(
 				JSON.stringify(preview)
@@ -190,6 +192,44 @@ func _run() -> void:
 		)
 	)
 	quit(1 if failures else 0)
+
+
+## A trotting hoof in the air must fold back at the fetlock, never flip
+## forward: its rigs hang the hoof off the root, so the solver has to carry it.
+func _check_fetlocks(animal: AnimalPoseModel, id: String) -> void:
+	animal.pose("rest", 1, 0.0)
+	var rest := {}
+	for leg: Dictionary in animal._legs:
+		rest[leg.key] = _fetlock(animal, leg)
+	var worst := -INF
+	var folded := INF
+	for phase in [0.125, 0.25, 0.375, 0.625, 0.875]:
+		var record := animal.pose("trot", 12, 0.75, {"phase": phase})
+		for foot: Dictionary in record.get("feet", []):
+			for leg: Dictionary in animal._legs:
+				if _foot_name(animal, leg) != foot.bone:
+					continue
+				var turn := wrapf(_fetlock(animal, leg) - rest[leg.key], -180, 180)
+				worst = maxf(worst, turn)
+				if not foot.contact:
+					folded = minf(folded, turn)
+	_check(worst < 32.0, id + " trot fetlocks never bend forward (%.0f degrees)" % worst)
+	_check(folded < -15.0, id + " a lifted trotting hoof folds back (%.0f degrees)" % folded)
+
+
+func _foot_name(animal: AnimalPoseModel, leg: Dictionary) -> String:
+	return animal.skeleton.get_bone_name(leg.foot)
+
+
+## Fetlock angle (degrees, flexion negative) from the cannon to the hoof bone.
+func _fetlock(animal: AnimalPoseModel, leg: Dictionary) -> float:
+	var foot: Transform3D = animal._bone(leg.foot)
+	var cannon: Vector3 = foot.origin - animal._bone(leg.lower).origin
+	var hoof: Vector3 = foot.basis.orthonormalized().y
+	var side: Vector3 = animal._right
+	cannon -= side * cannon.dot(side)
+	hoof -= side * hoof.dot(side)
+	return rad_to_deg(cannon.signed_angle_to(hoof, side))
 
 
 func _check(ok: bool, message: String) -> void:

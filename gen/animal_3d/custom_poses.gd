@@ -17,6 +17,8 @@ const FELINES := ["vol2_cat", "toon_cat_toon_cat_free", "tuxedo_cat_tuxedo_cat",
 const EQUINES := [
 	"ultimate_horse", "ultimate_horse_white", "farm_horse", "farm_zebra", "ultimate_donkey"
 ]
+## How far (degrees) a trotting foot's fetlock folds back at the top of its swing.
+const TROT_FLEX := 45.0
 
 
 static func available(animal) -> PackedStringArray:
@@ -71,6 +73,9 @@ static func solve(animal, spec: Dictionary) -> Dictionary:
 		if not point is Vector3 or not point.is_finite():
 			return {}
 		if not targets[key].get("contact", true) is bool:
+			return {}
+		var flex: Variant = targets[key].get("flex", 0.0)
+		if not (flex is float or flex is int) or not is_finite(float(flex)) or absf(flex) > 90:
 			return {}
 		if (
 			targets[key].has("pole")
@@ -129,6 +134,8 @@ static func solve(animal, spec: Dictionary) -> Dictionary:
 		var entry: Dictionary = targets.get(row.leg.key, {"at": row.c, "contact": true})
 		var target: Vector3 = entry.at
 		var solving := row.duplicate()
+		solving.contact = entry.get("contact", true)
+		solving.flex = float(entry.get("flex", 0.0))
 		if entry.has("pole"):
 			solving.a = animal._bone(row.leg.upper).origin
 			solving.b = entry.pole
@@ -315,9 +322,11 @@ static func _trot(animal, phase: float) -> Dictionary:
 			lerpf(stride, -stride, progress) if contact else lerpf(-stride, stride, progress)
 		)
 		var target: Vector3 = row.c + animal._forward * forward_offset
+		var flex := 0.0
 		if not contact:
 			target.y += sin(progress * PI) * animal._height * 0.11
-		feet[row.leg.key] = {"at": target, "contact": contact}
+			flex = sin(progress * PI) * TROT_FLEX
+		feet[row.leg.key] = {"at": target, "contact": contact, "flex": flex}
 		# A straight neutral leg cannot step horizontally at its full standing
 		# height. Lower the body enough for every target to remain reachable,
 		# using this rig's actual lengths rather than a species-wide guess.

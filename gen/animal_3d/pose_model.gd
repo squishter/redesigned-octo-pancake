@@ -549,9 +549,24 @@ func _solve_leg(row: Dictionary, target: Vector3) -> void:
 	b = _bone(leg.lower).origin
 	tip = _bone(leg.foot).origin if leg.direct else _bone(leg.lower) * row.tip_offset
 	_align(leg.lower, tip - b, target - b)
+	var rotation := _bone(leg.foot).basis.orthonormalized().get_rotation_quaternion()
 	if leg.direct:
-		var rotation := _bone(leg.foot).basis.orthonormalized().get_rotation_quaternion()
 		_apply_rotation(leg.foot, row.foot_rotation * rotation.inverse())
+		return
+	# Some rigs (quaternius, farm) skin the hoof or paw to a foot bone that
+	# hangs off the root, not off the lower leg. A planted foot stays level, as
+	# it was; a lifted one turns with its leg, keeping its fetlock's angle, so
+	# a swinging cannon can't flip the hoof forward. "flex" (degrees) then
+	# folds a lifted fetlock back, toe trailing.
+	if row.get("contact", true):
+		return
+	var before: Vector3 = row.c - row.b
+	var after: Vector3 = target - _bone(leg.lower).origin
+	if minf(before.length(), after.length()) < _height * 0.0001:
+		return
+	var carried: Quaternion = Quaternion(before.normalized(), after.normalized()) * row.foot_rotation
+	var flex := Quaternion(_right, deg_to_rad(-float(row.get("flex", 0.0))))
+	_apply_rotation(leg.foot, (flex * carried).normalized() * rotation.inverse())
 
 
 func _set_position(bone: int, position: Vector3) -> void:
