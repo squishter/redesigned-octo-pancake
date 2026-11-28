@@ -617,6 +617,15 @@ func _test_settings() -> void:
 		SaveStore.apply_settings(loaded)
 		_check(Engine.max_fps == cap, "Saved frame cap applies on startup: %d" % cap)
 	_choose_setting(menu._settings_panel, "FpsCap", 60)
+	var fit_toggle := menu._settings_panel.body.find_child("DoubleTapFit", true, false) as Button
+	var fit_was: bool = menu.profile["settings"]["double_tap_fit"]
+	_check(fit_toggle != null and fit_toggle.text.ends_with("On" if fit_was else "Off"),
+		"Settings offers double tap to fit, showing whether it's on")
+	fit_toggle.pressed.emit()
+	_check(SaveStore.load_profile()["settings"]["double_tap_fit"] != fit_was and fit_toggle.text.ends_with(
+		"Off" if fit_was else "On"), "Turning double tap to fit on or off is saved")
+	fit_toggle.pressed.emit()
+	_check(SaveStore.load_profile()["settings"]["double_tap_fit"] == fit_was, "And it turns back")
 	menu.queue_free()
 	await process_frame
 
@@ -956,8 +965,9 @@ func _test_line_paint() -> void:
 	_check(not FileAccess.file_exists("user://saves/%s.lines" % meta["id"]), "Deleting a puzzle deletes its kept grouping")
 
 
-## Quick taps while placing stones never zoom out; a double tap off the
-## stones still fits the whole picture.
+## Double tap to fit is off until turned on in Settings; then quick taps
+## placing stones never zoom out, and a double tap off the stones fits the
+## whole picture.
 func _test_double_tap_fit() -> void:
 	print("Double tap to fit while playing")
 	var profile := SaveStore.upgrade({"wallet": {"coins": 0, "picks": 0}})
@@ -988,6 +998,12 @@ func _test_double_tap_fit() -> void:
 	zoom_in.call()
 	_check(Rect2(Vector2.ZERO, board.size).has_point(board.view_transform() * Vector2(68, 50)),
 		"The stones under test are on screen")
+	var paper: Vector2 = on_screen.call(Vector2(50, 30))
+	_check(profile["settings"]["double_tap_fit"] == false, "Double tap to fit starts off")
+	await _tap(paper)
+	await _tap(paper)
+	_check(board._zoom > 2.4, "With the setting off, a double tap on bare paper stays zoomed in (%.1f)" % board._zoom)
+	profile["settings"]["double_tap_fit"] = true
 	await _tap(slot_at.call(2))
 	await _tap(slot_at.call(2))
 	_check(play._overlay.placed[2] != 0 and board._zoom > 2.4,
@@ -1002,7 +1018,6 @@ func _test_double_tap_fit() -> void:
 	await _tap(beside)
 	_check(play._overlay.placed[3] == 0 and board._zoom > 2.4,
 		"Two quick near misses beside a stone stay zoomed in (%.1f)" % board._zoom)
-	var paper: Vector2 = on_screen.call(Vector2(50, 30))
 	await _tap(paper)
 	await _tap(paper)
 	_check(board._zoom < 1.01, "A double tap on bare paper fits the whole picture (%.1f)" % board._zoom)

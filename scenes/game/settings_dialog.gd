@@ -21,6 +21,7 @@ func _ready() -> void:
 	_setting("Grand finale", "finale", GemCatalog.FINALES, "finales")
 	_setting("Line finish", "line_finish", GemCatalog.LINE_FINISHES, "line_finishes")
 	_frame_rate_setting()
+	_double_tap_fit_setting()
 	if show_debug_settings and OS.is_debug_build():
 		preferred_height = 2080
 		_unlock_all_setting()
@@ -73,6 +74,24 @@ func _frame_rate_setting() -> void:
 		SaveStore.apply_settings(profile)
 		SaveStore.save_profile(profile)
 		settings_changed.emit())
+
+
+func _double_tap_fit_setting() -> void:
+	var settings: Dictionary = profile["settings"]
+	var toggle := GameTheme.button("")
+	toggle.name = "DoubleTapFit"
+	toggle.theme_type_variation = "QuietButton"
+	var refresh := func() -> void:
+		toggle.text = "Double tap to fit: %s" % ("On" if settings.get("double_tap_fit", false) == true else "Off")
+	refresh.call()
+	toggle.pressed.connect(func() -> void:
+		settings["double_tap_fit"] = settings.get("double_tap_fit", false) != true
+		SaveStore.save_profile(profile)
+		refresh.call()
+		settings_changed.emit())
+	body.add_child(toggle)
+	body.add_child(UI.label("Two quick taps on the paper, off the stones, zoom out to the whole picture. "
+			+ "The Fit button always does.", 29, GameTheme.TEXT_DIM))
 
 
 ## Only the menu offers debug unlocks: changing a collection rebuilds that screen.

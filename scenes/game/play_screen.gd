@@ -924,10 +924,13 @@ func _can_stroke(at: Vector2) -> bool:
 
 
 ## Whether a tap at board point `at` may count toward a double tap to fit:
-## while playing, only off the stones (filled or not), so quick taps placing
+## never unless she turned it on in Settings (`double_tap_fit`); then, while
+## playing, only off the stones (filled or not), so quick taps placing
 ## stones, landing on filled ones or just missing never zoom out. The Fit
 ## button always does.
 func _can_fit(at: Vector2) -> bool:
+	if profile.get("settings", {}).get("double_tap_fit", false) != true:
+		return false
 	return _done or _overlay.slot_at(at, -1, TAP_SLOP / _board.scale_px(), true) < 0
 
 

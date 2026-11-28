@@ -28,7 +28,7 @@ const VERSION := 2
 ## finale's wave (unlocked ones of GemCatalog.ANIMATIONS and FINALES), frame cap,
 ## stones per gesture and painted lines' finish (GemCatalog.LINE_FINISHES).
 const DEFAULT_SETTINGS := {"fill_animation": "fly", "finale": "light_shimmer", "fps_cap": 30, "stroke_limit": 0,
-		"line_finish": "metal"}
+		"line_finish": "metal", "double_tap_fit": false}
 ## Player frame caps, with 0 leaving the rate uncapped by the engine.
 const FPS_CAPS := [30, 45, 60, 90, 120, 0]
 ## Debug builds only: the setting that lends her everything for testing.
@@ -111,6 +111,7 @@ static func upgrade(profile: Dictionary) -> Dictionary:
 	settings["fps_cap"] = fps_cap(settings)
 	# Saved as JSON, it comes back a float; an int keeps upgrading idempotent.
 	settings["stroke_limit"] = int(settings["stroke_limit"])
+	settings["double_tap_fit"] = settings["double_tap_fit"] == true
 	profile["settings"] = settings
 	var wallet: Dictionary = profile.get("wallet", {})
 	for key in ["coins", "picks"]:
